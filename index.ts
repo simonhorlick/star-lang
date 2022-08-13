@@ -321,34 +321,36 @@ export const parenthesis = (between: Parser): Parser =>
     return r[1];
   });
 
-// application is a parser for function application `f(x)`; `f(x)(y)`.
+// application is a parser for function application `f(x)`; `f(x)(y)`; `f (x(t))`.
 export const application = (term: () => Parser): Parser =>
   block(
     map(
       andThen(
         // f(x) or (some term)(x)
         choice(reference, parenthesis(lazy(term))),
+        // allow `f(x)` and `f (x)`.
+        optional(whitespace),
         // args
         map(many(parenthesis(lazy(term))), (r: any) => {
-          return r;
+          return [r];
         })
       ),
       (result: any[]) => {
+        const terms = [result[0], result[2]].flat();
         // Application is left-associative, so form the following tree of
-        // applications:
-        // f(x)(y)
+        // applications, i.e. f(x)(y) == (f(x))(y):
         //      ap
         //     /  \
         //    ap   y
         //   /  \
         //  f    x
-        return tail(result).reduce(
+        return tail(terms).reduce(
           (prev, curr) => ({
             type: "app",
             name: prev,
             arg: curr,
           }),
-          head(result)
+          head(terms)
         );
       }
     )
