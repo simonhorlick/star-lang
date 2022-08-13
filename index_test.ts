@@ -251,10 +251,17 @@ function RunAllTests() {
     for (let i = 0; i < s.tests.length; i++) {
       const t = s.tests[i];
       if (!_.isEqual(t.expected, t.actual)) {
+        let expected = JSON.stringify(t.expected);
+        let actual = JSON.stringify(t.actual);
+
+        // If the output is long place them on their own lines.
+        if (expected.length > 60) {
+          expected = `\n${expected}`;
+          actual = `\n${actual}`;
+        }
+
         console.log(
-          `failed: ${s.name} test ${i} expected ${JSON.stringify(
-            t.expected
-          )}; got ${JSON.stringify(t.actual)}`
+          `failed: ${s.name} test ${i} expected ${expected}; got ${actual}`
         );
       } else {
         passed++;
