@@ -1,7 +1,6 @@
 #!/usr/bin/env ./node_modules/.bin/ts-node-script
 
 var _ = require("lodash");
-var util = require("util");
 
 import {
   char,
@@ -19,11 +18,9 @@ import {
   definition,
   indexToLineCol,
   parenthesis,
-  parseFile,
   parseLineComment,
   parsePackage,
   reference,
-  s,
   term,
   identifier,
   type,
