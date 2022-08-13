@@ -16,6 +16,12 @@ const head = (l: any[]) => l[0];
 // tail gives all elements of a list except the head.
 const tail = (l: any[]) => l.splice(1);
 
+// last gives the last element of a list.
+const last = (l: any[]) => l[l.length - 1];
+
+// front gives all elements of a list except the last element.
+const front = (l: any[]) => l.slice(0, -1);
+
 // Stream tracks where a parser is currently reading.
 export type Stream = {
   src: string;
@@ -297,7 +303,65 @@ export const lazy =
     // Create this parser lazily at parse-time.
     g()(input);
 
-// abstraction parses a lambda abstraction `λx.t`.
+// parenthesis is a parser that requires an opening and closing parenthesis to
+// surround the given parser.
+export const parenthesis = (between: Parser): Parser =>
+  map(andThen(char("("), between, char(")")), (r: any) => {
+    return r[1];
+  });
+
+export const arrow: (type: () => Parser) => (s: Stream) => Result = (type) =>
+  map(
+    and(
+      // (A->B)->C
+      choice(reference, parenthesis(lazy(type))),
+
+      map(
+        many(
+          map(
+            andThen(str("->"), choice(lazy(type), parenthesis(lazy(type)))),
+            (r: any) => r[1] // ignore the arrow, just return the type.
+          )
+        ),
+        // Mapping for arrows. We've already parsed the LHS, this is the first
+        // arrow and onwards  ... ->B->C->D.
+        //
+        // A->(B->C)
+        //      ar
+        //     /  \
+        //    A   ar
+        //       /  \
+        //      B    C
+        (r: any[]) =>
+          front(r).reduceRight(
+            (prev, curr) => ({
+              type: "arrow",
+              from: curr,
+              to: prev,
+            }),
+            last(r)
+          )
+      )
+    ),
+    (r: any) => {
+      const from = r[0];
+      const to = r[1];
+
+      return {
+        type: "arrow",
+        from: from,
+        to: to,
+      };
+    }
+  );
+
+export const type = any(
+  arrow(() => type),
+  parenthesis(lazy(() => type)),
+  reference
+);
+
+// abstraction parses a lambda abstraction `λx:X. t`.
 export const abstraction = (term: () => Parser) =>
   block(
     map(
@@ -306,20 +370,22 @@ export const abstraction = (term: () => Parser) =>
         optional(whitespace),
         identifier,
         optional(whitespace),
+        char(":"),
+        optional(whitespace),
+        type,
+        optional(whitespace),
         char("."),
         optional(whitespace),
         lazy(term)
       ),
-      (result: any[]) => ({ type: "lam", name: result[2], body: result[6] })
+      (result: any[]) => ({
+        type: "lam",
+        name: result[2], // name of the binder
+        typ: result[6], // type of the bound variable
+        body: result[10], // the body of the lambda
+      })
     )
   );
-
-// parenthesis is a parser that requires an opening and closing parenthesis to
-// surround the given parser.
-export const parenthesis = (between: Parser): Parser =>
-  map(andThen(char("("), between, char(")")), (r: any) => {
-    return r[1];
-  });
 
 // application is a parser for function application `f(x)`; `f(x)(y)`; `f (x(t))`.
 export const application = (term: () => Parser): Parser =>
@@ -375,12 +441,16 @@ export const definition = block(
       str("func"),
       whitespace,
       identifier,
-      whitespace,
+      optional(whitespace),
+      char(":"),
+      optional(whitespace),
+      type,
+      optional(whitespace),
       char("="),
       whitespace,
       term
     ),
-    (r: any[]) => ({ type: "def", name: r[2], term: r[6] })
+    (r: any[]) => ({ type: "def", name: r[2], term: r[10], typ: r[6] })
   )
 );
 

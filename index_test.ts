@@ -26,6 +26,8 @@ import {
   s,
   term,
   identifier,
+  type,
+  arrow,
 } from ".";
 
 const parseA = char("A");
@@ -50,7 +52,24 @@ const ts = (s: string): Stream => ({
   origins: false,
 });
 
-const result = (x: Result) => x.type == "outputvalue" && x.value;
+const result = (x: Result) => {
+  if (x.type == "parseerror") {
+    return x.error;
+  } else {
+    return x.value;
+  }
+};
+
+const resultC = (x: Result) => {
+  if (x.type == "parseerror") {
+    return x.error;
+  } else {
+    if (x.stream.idx != x.stream.src.length) {
+      return "stream not consumed";
+    }
+    return x.value;
+  }
+};
 
 function GetParserTestSuite() {
   const parserTests = [
@@ -135,8 +154,13 @@ function GetParserTestSuite() {
       actual: success(parenthesis(char("a"))(ts("(a)"))),
     },
     {
-      expected: { type: "lam", name: "x", body: { type: "ref", name: "t" } },
-      actual: result(abstraction(() => term)(ts("λx.t"))),
+      expected: {
+        type: "lam",
+        name: "x",
+        typ: { type: "ref", name: "X" },
+        body: { type: "ref", name: "t" },
+      },
+      actual: result(abstraction(() => term)(ts("λx:X.t"))),
     },
     {
       expected: {
@@ -182,9 +206,15 @@ function GetParserTestSuite() {
       expected: {
         type: "lam",
         name: "t",
-        body: { type: "lam", name: "f", body: { type: "ref", name: "t" } },
+        typ: { type: "ref", name: "Bool" },
+        body: {
+          type: "lam",
+          name: "f",
+          typ: { type: "ref", name: "Bool" },
+          body: { type: "ref", name: "t" },
+        },
       },
-      actual: result(term(ts("λt. λf. t"))),
+      actual: result(term(ts("λt:Bool. λf:Bool. t"))),
     },
     {
       expected: {
@@ -198,41 +228,127 @@ function GetParserTestSuite() {
       },
       actual: result(term(ts("x (y (z))"))),
     },
-    // {
-    //   expected: {
-    //     type: "lam",
-    //     name: "z",
-    //     body: {
-    //       type: "lam",
-    //       name: "x",
-    //       body: {
-    //         type: "lam",
-    //         name: "y",
-    //         body: {
-    //           type: "app",
-    //           name: { type: "ref", name: "x" },
-    //           arg: {
-    //             type: "app",
-    //             name: { type: "ref", name: "y" },
-    //             arg: { type: "ref", name: "z" },
-    //           },
-    //         },
-    //       },
-    //     },
-    //   },
-    //   actual: result(term(ts("λz. λx. λy. x (y (z))"))),
-    // },
+    {
+      expected: {
+        type: "lam",
+        name: "z",
+        typ: { type: "ref", name: "Z" },
+        body: {
+          type: "lam",
+          name: "x",
+          typ: { type: "ref", name: "X" },
+          body: {
+            type: "lam",
+            name: "y",
+            typ: { type: "ref", name: "Y" },
+            body: {
+              type: "app",
+              name: { type: "ref", name: "x" },
+              arg: {
+                type: "app",
+                name: { type: "ref", name: "y" },
+                arg: { type: "ref", name: "z" },
+              },
+            },
+          },
+        },
+      },
+      actual: result(term(ts("λz:Z. λx:X. λy:Y. x (y (z))"))),
+    },
     {
       expected: {
         type: "def",
         name: "id",
-        term: { type: "lam", name: "x", body: { type: "ref", name: "x" } },
+        term: {
+          type: "lam",
+          name: "x",
+          body: { type: "ref", name: "x" },
+          typ: { type: "ref", name: "X" },
+        },
+        typ: { type: "ref", name: "X" },
       },
-      actual: result(definition(ts("func id = λx. x"))),
+      actual: result(definition(ts("func id:X = λx:X. x"))),
     },
     {
       expected: { type: "ref", name: "ex2" },
       actual: result(reference(ts("ex2"))),
+    },
+    {
+      expected: { type: "ref", name: "Bool" },
+      actual: result(type(ts("Bool"))),
+    },
+    {
+      expected: { type: "ref", name: "Bool" },
+      actual: result(type(ts("(Bool)"))),
+    },
+    {
+      expected: {
+        type: "arrow",
+        from: { type: "ref", name: "A" },
+        to: { type: "ref", name: "B" },
+      },
+      actual: result(arrow(() => type)(ts("A->B"))),
+    },
+    {
+      expected: {
+        type: "arrow",
+        from: { type: "ref", name: "A" },
+        to: {
+          type: "arrow",
+          from: { type: "ref", name: "B" },
+          to: { type: "ref", name: "C" },
+        },
+      },
+      actual: result(type(ts("A->B->C"))),
+    },
+    {
+      expected: {
+        type: "arrow",
+        from: { type: "ref", name: "B" },
+        to: { type: "ref", name: "C" },
+      },
+      actual: result(type(ts("B->C"))),
+    },
+    {
+      expected: {
+        type: "arrow",
+        from: { type: "ref", name: "A" },
+        to: {
+          type: "arrow",
+          from: { type: "ref", name: "B" },
+          to: { type: "ref", name: "C" },
+        },
+      },
+      actual: result(arrow(() => type)(ts("A->(B->C)"))),
+    },
+    {
+      expected: {
+        type: "arrow",
+        from: {
+          type: "arrow",
+          from: { type: "ref", name: "A" },
+          to: { type: "ref", name: "B" },
+        },
+        to: { type: "ref", name: "C" },
+      },
+      actual: resultC(arrow(() => type)(ts("(A->B)->C"))),
+    },
+
+    {
+      expected: {
+        type: "arrow",
+        from: {
+          type: "arrow",
+          from: { type: "ref", name: "A" },
+          to: { type: "ref", name: "B" },
+        },
+        to: {
+          type: "arrow",
+          from: { type: "ref", name: "C" },
+          to: { type: "ref", name: "D" },
+        },
+      },
+      actual: result(arrow(() => type)(ts("(A->B)->(C->D)"))),
     },
   ];
 
@@ -302,40 +418,3 @@ function RunAllTests() {
 }
 
 RunAllTests();
-
-const src = `// Package bool contains an implementation of Church booleans.
-package bool
-
-// The terms tru and fls can be viewed as representing the boolean values
-// “true” and “false,” in the sense that we can use these terms to perform the
-// operation of testing the truth of a boolean value. [quote from TAPL]
-func tru = λt. λf. t
-func fls = λt. λf. f
-
-// test takes two arguments and chooses the first (if b is tru) or the second
-// (if b is fls).
-func test = λb. λv. λw. (b(v))(w)
-
-// and is a function that, given two boolean values b and c, returns c if b is
-// tru and fls if b is fls; thus and b c yields tru if both b and c are tru
-// and fls if either b or c is fls. [quote from TAPL]
-func and = λb. λc. b(c)(fls)
-
-func ex2 = and(tru)(tru) // -> (λt. λf. t)
-
-func ex3 = and(tru)(fls) // -> (λt. λf. f)
-
-func main = test(ex2)(fls)(tru) // should be fls
-`;
-
-const t = parseFile(s(src));
-
-if (t.type == "parseerror") {
-  const lc = indexToLineCol(src, t.idx);
-  console.log(`error at line ${lc.line} col ${lc.col}`);
-}
-
-// console.log(util.inspect(t, { showHidden: false, depth: null, colors: true }));
-
-// const t = term(ts("λt. λf. t"));
-// console.log(util.inspect(t, { showHidden: false, depth: null, colors: true }));
