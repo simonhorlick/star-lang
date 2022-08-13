@@ -242,8 +242,36 @@ function GetParserTestSuite() {
   };
 }
 
+function GetUtilTestSuite() {
+  const file = `abcdefghijklmnopqrstuvwxyz\nabcdefghijklmnopqrstuvwxyz\nabcdefghijklmnopqrstuvwxyz\n`;
+
+  const utilTests = [
+    {
+      expected: { line: 0, col: 0 },
+      actual: indexToLineCol(file, 0),
+    },
+    {
+      expected: { line: 0, col: 5 },
+      actual: indexToLineCol(file, 5),
+    },
+    {
+      expected: { line: 1, col: 0 },
+      actual: indexToLineCol(file, 27),
+    },
+    {
+      expected: { line: 1, col: 3 },
+      actual: indexToLineCol(file, 30),
+    },
+  ];
+
+  return {
+    name: "util",
+    tests: utilTests,
+  };
+}
+
 function RunAllTests() {
-  let suites = [GetParserTestSuite()];
+  let suites = [GetParserTestSuite(), GetUtilTestSuite()];
 
   let passed = 0;
   let total = 0;

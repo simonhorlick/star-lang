@@ -421,22 +421,27 @@ export const parseFile = map(
   (r: any[]) => ({ type: "file", content: r })
 );
 
+// Loc is a location in a source file.
+type Loc = {
+  col: number;
+  line: number;
+};
+
 // indexToLineCol converts an index into a pair (line,col) describing the line
 // number and character where idx appears in src.
-export const indexToLineCol = (src: string, idx: number) => {
-  let col = 0;
-  let line = 0;
-  for (let i = 0; i < idx; i++) {
-    if (src[i] == "\n") {
-      line++;
-      col = 0;
-    } else {
-      col++;
-    }
-  }
-
-  return {
-    line: line,
-    col: col,
-  };
-};
+export const indexToLineCol = (src: string, idx: number) =>
+  src
+    .split("")
+    .slice(0, idx)
+    .reduce(
+      (accumulator: Loc, char: string) => {
+        // While scanning through the string check for newlines and update the
+        // counters.
+        if (char == "\n") {
+          return { col: 0, line: accumulator.line + 1 };
+        } else {
+          return { col: accumulator.col + 1, line: accumulator.line };
+        }
+      },
+      { col: 0, line: 0 }
+    );
