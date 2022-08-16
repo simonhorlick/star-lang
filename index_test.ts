@@ -1,63 +1,54 @@
 #!/usr/bin/env ./node_modules/.bin/ts-node-script
 
 var _ = require("lodash");
+var util = require("util");
 
 import {
   char,
-  choice,
-  and,
+  either,
   str,
   many,
   optional,
-  andThen,
   line,
   Result,
   Stream,
+  bind,
+  pure,
+  seq,
+  many1,
+  indexToLineCol,
+} from ".";
+import {
+  parsePackage,
+  parseLineComment,
+  identifier,
+  parenthesis,
   abstraction,
+  term,
   application,
   definition,
-  indexToLineCol,
-  parenthesis,
-  parseLineComment,
-  parsePackage,
   reference,
-  term,
-  identifier,
   type,
   arrow,
-} from ".";
+} from "./ast";
 
-const parseA = char("A");
-const parseB = char("B");
-const parseAorB = choice(parseA, parseB);
-
-const parseAandB = and(parseA, parseB);
-
-const parseAB = str("AB");
-
-const parseManyA = many(char("a"));
-
-const parseOptionalB = optional(char("b"));
-
-const parseAoptionalB = andThen(char("a"), parseOptionalB, char("a"));
-
-const success = (x: Result) => x.type == "outputvalue";
+const success = <T>(x: Result<T>) => x.type == "outputvalue";
 
 const ts = (s: string): Stream => ({
   src: `parsed${s}`,
   idx: 6,
-  origins: false,
 });
 
-const result = (x: Result) => {
+const result = <T>(x: Result<T>) => {
   if (x.type == "parseerror") {
-    return x.error;
+    const loc = indexToLineCol(x.stream.src, x.stream.idx);
+    return `parsing failed at line ${loc.line} col ${loc.col}: ${x.error}`;
   } else {
     return x.value;
   }
 };
 
-const resultC = (x: Result) => {
+const resultC = <T>(x: Result<T>) => {
   if (x.type == "parseerror") {
     return x.error;
   } else {
@@ -69,6 +60,22 @@ const resultC = (x: Result) => {
 };
 
 function GetParserTestSuite() {
+  const parseA = char("A");
+  const parseB = char("B");
+  const parseAorB = either(parseA, parseB);
+
+  const parseAandB = seq(parseA, parseB);
+
+  const parseAB = str("AB");
+
+  const parseManyA = many(char("a"));
+
+  const parseOptionalB = optional(char("b"));
+
+  const parseAoptionalB = bind(char("a"), (a) =>
+    bind(parseOptionalB, (b) => bind(char("a"), (a2) => pure([a, b, a2])))
+  );
+
   const parserTests = [
     {
       expected: true,
@@ -97,6 +104,14 @@ function GetParserTestSuite() {
     {
       expected: ["a", "a", "a"],
       actual: result(parseManyA(ts("aaabbb"))),
+    },
+    {
+      expected: [],
+      actual: result(many(char("a"))(ts(""))),
+    },
+    {
+      expected: false,
+      actual: success(many1(char("a"))(ts(""))),
     },
     {
       expected: "b",

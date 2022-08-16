@@ -11,16 +11,16 @@
 // We must then type-check the AST to ensure consistency.
 
 // head gives the first element of a list.
-const head = (l: any[]) => l[0];
+export const head = <T>(l: T[]) => l[0];
 
 // tail gives all elements of a list except the head.
-const tail = (l: any[]) => l.splice(1);
+export const tail = <T>(l: T[]) => l.slice(1);
 
 // last gives the last element of a list.
-const last = (l: any[]) => l[l.length - 1];
+export const last = <T>(l: T[]) => l[l.length - 1];
 
 // front gives all elements of a list except the last element.
-const front = (l: any[]) => l.slice(0, -1);
+export const front = <T>(l: T[]) => l.slice(0, -1);
 
 // Stream tracks where a parser is currently reading.
 export type Stream = {
@@ -28,435 +28,225 @@ export type Stream = {
 
   // The index of the reader within the src string.
   idx: number;
-
-  // If true, attach origin information to the parse tree.
-  origins: boolean;
 };
 
 // s constructs a new stream from a string.
-export const s = (s: string): Stream => ({ src: s, idx: 0, origins: true });
+export const s = (s: string): Stream => ({ src: s, idx: 0 });
 
 // A successful parse result.
-export interface OutputValue {
+export interface OutputValue<T> {
   type: "outputvalue";
   stream: Stream;
-  value: any;
+  value: T;
 }
 
 // Parse error with its location.
 export interface ParseError {
   type: "parseerror";
+  stream: Stream;
   error: string;
-  idx: number;
 }
 
-export type Result = OutputValue | ParseError;
-export type Parser = (s: Stream) => Result;
-export type ParserGenerator = (s: string) => Parser;
+export type Result<T> = OutputValue<T> | ParseError;
 
-// line matches until either a newline character is encountered, or EOF.
-export const line: Parser = ({ src, idx, origins }) => {
-  let n = src.indexOf("\n", idx);
-  if (n == -1) {
-    n = src.length;
-  }
+export type Parser<T> = (s: Stream) => Result<T>;
 
-  return {
+// pure is a parser that succeeds without consuming any of the input string, and
+// returns the single result x.
+export const pure =
+  <A>(x: A): Parser<A> =>
+  (s: Stream): Result<A> => ({
     type: "outputvalue",
-    stream: { src, idx: n + 1, origins: origins },
-    value: src.substring(idx, n),
+    stream: s,
+    value: x,
+  });
+
+// bind allows sequencing/chaining of parsers. If the first parser succeeds, the
+// resulting value is passed to f, however if the parser fails the error is
+// returned immediately. This allows users to form chains of bind callbacks that
+// behave naturally in the presence of parse errors:
+//
+//   bind(p1, (v1) => bind(p2, (v2) => ...))
+//
+export const bind =
+  <A, B>(p: Parser<A>, f: (v: A) => Parser<B>): Parser<B> =>
+  (input: Stream) => {
+    const parsed = p(input);
+    if (parsed.type == "outputvalue") {
+      return f(parsed.value)(parsed.stream);
+    } else {
+      return parsed;
+    }
   };
-};
+
+// seq sequences two parsers one after another and returns both of their
+// results.
+export const seq = <P, Q>(p: Parser<P>, q: Parser<Q>): Parser<[P, Q]> =>
+  bind(p, (x) => bind(q, (y) => pure([x, y])));
+
+// seq3 is the same as seq. This is so typescript can infer the type arguments.
+export const seq3 = <P, Q, R>(
+  p: Parser<P>,
+  q: Parser<Q>,
+  r: Parser<R>
+): Parser<[P, Q, R]> =>
+  bind(p, (x) => bind(q, (y) => bind(r, (z) => pure([x, y, z]))));
+
+// zero constructs a parser that always fails with the message err.
+export const zero =
+  <T>(err: string): Parser<T> =>
+  (s: Stream) => ({
+    type: "parseerror",
+    stream: s,
+    error: err,
+    idx: s.idx,
+  });
+
+// advance increments returns the stream s incremented by n characters.
+export const advance = (n: number, s: Stream): Stream => ({
+  src: s.src,
+  idx: s.idx + n,
+});
+
+// pos returns the stream s with the position reset to character n.
+export const pos = (n: number, s: Stream): Stream => ({
+  src: s.src,
+  idx: n,
+});
+
+// item reads a single character from the stream and advances the stream by one
+// character.
+export const item: Parser<string> = (cs) =>
+  cs.idx < cs.src.length
+    ? pure(cs.src[cs.idx])(advance(1, cs))
+    : zero<string>("EOF")(cs);
+
+// reads a single character then checks whether it satisfies the given
+// predicate.
+export const sat = (p: (x: string) => boolean) =>
+  bind(item, (x) => (p(x) ? pure(x) : zero<string>("not satisfied")));
+
+export const digit = sat((x) => x >= "0" && x <= "9");
+export const lower = sat((x) => x >= "a" && x <= "z");
+export const upper = sat((x) => x >= "A" && x <= "Z");
 
 // char matches a single character.
-export const char: ParserGenerator =
-  (c) =>
-  ({ src, idx, origins }) =>
-    c === src?.[idx]
-      ? {
-          type: "outputvalue",
-          stream: { src, idx: idx + 1, origins },
-          value: src[idx],
-        }
-      : {
-          type: "parseerror",
-          error: `expected "${c}"; got "${src?.[idx]}"`,
-          idx: idx,
-        };
+export const char =
+  (c: string): Parser<string> =>
+  (s: Stream): Result<string> =>
+    c === s.src[s.idx]
+      ? pure(s.src[s.idx])(advance(1, s))
+      : zero<string>(`expected "${c}"; got "${s.src[s.idx]}"`)(s);
 
 // str returns a Parser that matches on the provided string.
-export const str: ParserGenerator =
-  (s) =>
-  ({ src, idx, origins }) =>
-    src.startsWith(s, idx)
-      ? {
-          type: "outputvalue",
-          stream: { src, idx: idx + s.length, origins },
-          value: s,
-        }
-      : {
-          type: "parseerror",
-          error: `expected "${s}"; got "${src.substring(idx, idx + s.length)}"`,
-          idx: idx,
-        };
+export const str =
+  (st: string): Parser<string> =>
+  (s: Stream): Result<string> =>
+    s.src.startsWith(st, s.idx)
+      ? pure(st)(advance(st.length, s))
+      : zero<string>(
+          `expected "${st}"; got "${s.src.substring(s.idx, s.idx + st.length)}"`
+        )(s);
 
-type Combinator = (...parsers: Parser[]) => Parser;
-
-// identity is an example parser combinator that does nothing.
-const identity: Combinator = (parser: Parser): Parser => {
+// identity is an parser that does the same as parser.
+const identity = <T>(parser: Parser<T>): Parser<T> => {
   return (s: Stream) => {
     return parser(s);
   };
 };
 
-// choice is successful if either of the two parsers are successful.
-export const choice: Combinator = (p1, p2) => (input) => {
-  const left = p1(input);
-  if (left.type == "outputvalue") {
-    return left;
-  }
-  return p2(input);
-};
-
-// and combines two parsers in order.
-export const and: Combinator = (p1, p2) => (input) => {
-  const r = p1(input);
-  if (r.type == "outputvalue") {
-    const r2 = p2(r.stream);
-    if (r2.type == "outputvalue") {
-      return {
-        type: "outputvalue",
-        stream: r2.stream,
-        value: [r.value, r2.value].flat(),
-      };
-    } else {
-      return r2;
+// either is successful if p1 or p2 are successful.
+export const either =
+  <A, B>(p1: Parser<A>, p2: Parser<B>): Parser<A | B> =>
+  (input): Result<A | B> => {
+    const left = p1(input);
+    if (left.type == "outputvalue") {
+      return left;
     }
-  } else {
-    return r;
-  }
-};
+    return p2(input);
+  };
+
+// alpha is a Parser that matches a single upper, or lower case character.
+export const alpha = either(lower, upper);
 
 // any succeeds if any of the given parsers succeed.
-export const any: Combinator = (...ps) => ps.reduce((p1, p2) => choice(p1, p2));
+export const any = <T>(...ps: Parser<T>[]): Parser<T> =>
+  ps.reduce((p1, p2) => either(p1, p2));
+
+// see any
+export const any3 = <A, B, C>(p1: Parser<A>, p2: Parser<B>, p3: Parser<C>) =>
+  either(p1, either(p2, p3));
+
+// see any
+export const any5 = <A, B, C, D, E>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>,
+  p5: Parser<E>
+) => either(p1, either(p2, either(p3, either(p4, p5))));
 
 // optional returns a parser that attempts to use the supplied parser, but
 // if it fails it doesn't return a parse error and instead allows the parsing to
 // continue.
-export const optional: Combinator = (parser) => (input) => {
-  const result = parser(input);
-
-  if (result.type == "parseerror") {
-    // Return success, but continue from the same starting position.
-    return {
-      type: "outputvalue",
-      stream: input,
-      value: null,
-    };
-  }
-
-  return {
-    type: "outputvalue",
-    stream: result.stream,
-    value: result.value,
-  };
-};
+export const optional = <T>(parser: Parser<T>): Parser<T | null> =>
+  either(parser, pure(null));
 
 // Parses as many times as possible, but at least once.
-export const many: Combinator = (parser) => (input) => {
-  const result = parser(input);
+export const many1 = <A>(p: Parser<A>): Parser<A[]> =>
+  // Run the parser once initially and fail immediately if it's not possible.
+  bind(p, (x) =>
+    // Then parse as many times as possible.
+    bind(many(p), (xs) =>
+      // Combine all the values into a list.
+      pure([x, ...xs])
+    )
+  );
 
-  if (result.type == "parseerror") {
-    return result;
-  }
+// Parses as many times as possible, including zero.
+export const many = <T>(parser: Parser<T>) =>
+  // Either return at least one element from the parser, or return an empty
+  // list.
+  either(many1(parser), pure<T[]>([]));
 
-  // Run the parser again and if it succeeds combine the results.
-  const next = many(parser)(result.stream);
-  if (next.type == "parseerror") {
-    return {
-      type: "outputvalue",
-      stream: result.stream,
-      value: [result.value],
-    };
-  }
-
-  return {
-    type: "outputvalue",
-    stream: next.stream,
-    value: [result.value, next.value].flat(),
-  };
-};
-
-// anyChar matches a character from the string of characters.
-export const anyChar: ParserGenerator =
-  (str): Parser =>
-  (input) =>
-    any(...str.split("").map(char))(input);
-
-// andThen combines multiple parsers in order.
-export const andThen: Combinator = (...ps) =>
-  ps.reduce((p1, p2) => and(p1, p2));
+// oneOf matches a single character from any of the characters in the string.
+export const oneOf = (str: string): Parser<string> =>
+  any(...str.split("").map(char));
 
 // If the parser succeeds, run it's matched value through the function.
-export const map =
-  (parser: Parser, fn: Function) =>
-  (input: Stream): Result => {
-    const out = parser(input);
+export const map = <S, T>(parser: Parser<T>, f: (t: T) => S) =>
+  bind(parser, (x) => pure(f(x)));
 
-    if (out.type == "parseerror") {
-      return out;
-    }
-
-    return {
-      type: "outputvalue",
-      stream: out.stream,
-      value: fn(out.value),
-    };
-  };
-
-const digit = anyChar("0123456789");
-
-const alpha = anyChar("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
-
-const quote = char(`"`);
-const whitespace = char(" ");
-const newline = char("\n");
-
-// identifier parses a letter from the alphabet followed by letters, numbers and
-// other allowed special characters.
-export const identifier = map(
-  andThen(
-    alpha,
-    map(optional(many(any(alpha, digit, anyChar("_")))), (r: any[] | null) => {
-      if (r == null) {
-        return "";
-      }
-      return r.join("");
-    })
-  ),
-  (v: string[]) => {
-    return v.join("");
-  }
+// line matches until either a newline character is encountered, or EOF.
+export const line: Parser<string> = bind(
+  many1(sat((c) => c !== "\n")),
+  (chars) =>
+    bind(
+      // consume the newline, if it exists (could be EOF).
+      optional(item),
+      (_) => pure(chars.join(""))
+    )
 );
 
-// block is a parser that adds origin information into the parse tree. It can be
-// disabled by setting origins to false in the stream.
-export const block: Combinator = (parser: Parser): Parser => {
-  return (s: Stream): Result => {
-    const start = s.idx;
-    const result = parser(s);
+export const whitespace = char(" ");
+export const newline = char("\n");
 
-    if (result.type == "parseerror") {
-      return result;
-    }
-
-    if (!s.origins) {
-      return result;
-    }
-
-    return {
-      type: "outputvalue",
-      stream: result.stream,
-      value: {
-        type: "ori",
-        start: start,
-        end: result.stream.idx,
-        child: result.value,
-      },
-    };
-  };
-};
-
-// parsePackage parses a package declaration such as `package abc`.
-export const parsePackage = map(
-  andThen(
-    str("package"),
-    whitespace,
-    block(map(identifier, (r: string) => ({ type: "pkg", name: r })))
-  ),
-  (r: any[]) => r[2]
-);
-
-// parseLineComment parses an end-of-line comment and stops either at the end of
-// the line or EOF.
-export const parseLineComment = block(
-  map(andThen(str("//"), line), (r: any[]) => ({
-    type: "com",
-    text: r[1],
-  }))
-);
-
-// reference parses a "variable" in the programming language.
-export const reference = block(
-  map(identifier, (result: any) => ({
-    type: "ref",
-    name: result,
-  }))
-);
+// orFail raises a specific parse error if the parser is unsuccessful.
+export const orFail = <A>(msg: string, p: Parser<A>): Parser<A> =>
+  either(p, zero<A>(msg));
 
 // lazy is a parser that takes a parser generator and generates the parser at
 // parse-time rather than when constructing the parsers. This allows for
 // recursive parsers to be defined.
 export const lazy =
-  (g: () => Parser): Parser =>
-  (input): Result =>
+  <T>(g: () => Parser<T>): Parser<T> =>
+  (input): Result<T> =>
     // Create this parser lazily at parse-time.
     g()(input);
 
-// parenthesis is a parser that requires an opening and closing parenthesis to
-// surround the given parser.
-export const parenthesis = (between: Parser): Parser =>
-  map(andThen(char("("), between, char(")")), (r: any) => {
-    return r[1];
-  });
-
-export const arrow: (type: () => Parser) => (s: Stream) => Result = (type) =>
-  map(
-    and(
-      // (A->B)->C
-      choice(reference, parenthesis(lazy(type))),
-
-      map(
-        many(
-          map(
-            andThen(str("->"), choice(lazy(type), parenthesis(lazy(type)))),
-            (r: any) => r[1] // ignore the arrow, just return the type.
-          )
-        ),
-        // Mapping for arrows. We've already parsed the LHS, this is the first
-        // arrow and onwards  ... ->B->C->D.
-        //
-        // A->(B->C)
-        //      ar
-        //     /  \
-        //    A   ar
-        //       /  \
-        //      B    C
-        (r: any[]) =>
-          front(r).reduceRight(
-            (prev, curr) => ({
-              type: "arrow",
-              from: curr,
-              to: prev,
-            }),
-            last(r)
-          )
-      )
-    ),
-    (r: any) => {
-      const from = r[0];
-      const to = r[1];
-
-      return {
-        type: "arrow",
-        from: from,
-        to: to,
-      };
-    }
-  );
-
-export const type = any(
-  arrow(() => type),
-  parenthesis(lazy(() => type)),
-  reference
-);
-
-// abstraction parses a lambda abstraction `λx:X. t`.
-export const abstraction = (term: () => Parser) =>
-  block(
-    map(
-      andThen(
-        char("λ"),
-        optional(whitespace),
-        identifier,
-        optional(whitespace),
-        char(":"),
-        optional(whitespace),
-        type,
-        optional(whitespace),
-        char("."),
-        optional(whitespace),
-        lazy(term)
-      ),
-      (result: any[]) => ({
-        type: "lam",
-        name: result[2], // name of the binder
-        typ: result[6], // type of the bound variable
-        body: result[10], // the body of the lambda
-      })
-    )
-  );
-
-// application is a parser for function application `f(x)`; `f(x)(y)`; `f (x(t))`.
-export const application = (term: () => Parser): Parser =>
-  block(
-    map(
-      andThen(
-        // f(x) or (some term)(x)
-        choice(reference, parenthesis(lazy(term))),
-        // allow `f(x)` and `f (x)`.
-        optional(whitespace),
-        // args
-        map(many(parenthesis(lazy(term))), (r: any) => {
-          return [r];
-        })
-      ),
-      (result: any[]) => {
-        const terms = [result[0], result[2]].flat();
-        // Application is left-associative, so form the following tree of
-        // applications, i.e. f(x)(y) == (f(x))(y):
-        //      ap
-        //     /  \
-        //    ap   y
-        //   /  \
-        //  f    x
-        return tail(terms).reduce(
-          (prev, curr) => ({
-            type: "app",
-            name: prev,
-            arg: curr,
-          }),
-          head(terms)
-        );
-      }
-    )
-  );
-
-// term is a parser for terms in the programming language - i.e. the expressions
-// that can be evaluated.
-export const term = any(
-  // abstraction `λx.t`
-  abstraction(() => term),
-  // application `f(x)`
-  application(() => term),
-  // a reference for example `t`
-  reference
-);
-
-// definition parses a top-level function definition, for example
-// `func id = λx.x`.
-export const definition = block(
-  map(
-    andThen(
-      str("func"),
-      whitespace,
-      identifier,
-      optional(whitespace),
-      char(":"),
-      optional(whitespace),
-      type,
-      optional(whitespace),
-      char("="),
-      whitespace,
-      term
-    ),
-    (r: any[]) => ({ type: "def", name: r[2], term: r[10], typ: r[6] })
-  )
-);
-
 // consumeAll raises a parse error if the parser doesn't consume all of its
 // input.
-export const consumeAll = (parser: Parser): Parser => {
+export const consumeAll = <T>(parser: Parser<T>): Parser<T> => {
   return function (input) {
     const result = parser(input);
 
@@ -464,32 +254,12 @@ export const consumeAll = (parser: Parser): Parser => {
       result.type == "outputvalue" &&
       result.stream.idx < result.stream.src.length
     ) {
-      return {
-        type: "parseerror",
-        idx: result.stream.idx,
-        error: "unexpected input",
-      };
+      return zero<T>("unexpected input")(result.stream);
     }
 
     return result;
   };
 };
-
-// parseFile is a parser for a source file.
-export const parseFile = map(
-  consumeAll(
-    many(
-      any(
-        map(whitespace, () => ({ type: "sp" })),
-        map(newline, () => ({ type: "nl" })),
-        parsePackage,
-        definition,
-        parseLineComment
-      )
-    )
-  ),
-  (r: any[]) => ({ type: "file", content: r })
-);
 
 // Loc is a location in a source file.
 type Loc = {
