@@ -102,6 +102,17 @@ export const zero =
     idx: s.idx,
   });
 
+// error constructs a parser that always fails and returns an error message
+// indicating what it expected.
+export const error =
+  <T>(expected: string): Parser<T> =>
+  (s: Stream) => ({
+    type: "parseerror",
+    stream: s,
+    error: `expected "${expected}"; got "${s.src[s.idx]}"`,
+    idx: s.idx,
+  });
+
 // advance increments returns the stream s incremented by n characters.
 export const advance = (n: number, s: Stream): Stream => ({
   src: s.src,
@@ -118,8 +129,17 @@ export const pos = (n: number, s: Stream): Stream => ({
 // character.
 export const item: Parser<string> = (cs) =>
   cs.idx < cs.src.length
-    ? pure(cs.src[cs.idx])(advance(1, cs))
-    : zero<string>("EOF")(cs);
+    ? {
+        type: "outputvalue",
+        stream: advance(1, cs),
+        value: cs.src[cs.idx],
+      }
+    : {
+        type: "parseerror",
+        stream: cs,
+        error: "EOF",
+        idx: cs.idx,
+      };
 
 // reads a single character then checks whether it satisfies the given
 // predicate.
@@ -131,22 +151,17 @@ export const lower = sat((x) => x >= "a" && x <= "z");
 export const upper = sat((x) => x >= "A" && x <= "Z");
 
 // char matches a single character.
-export const char =
-  (c: string): Parser<string> =>
-  (s: Stream): Result<string> =>
-    c === s.src[s.idx]
-      ? pure(s.src[s.idx])(advance(1, s))
-      : zero<string>(`expected "${c}"; got "${s.src[s.idx]}"`)(s);
+export const char = (c: string): Parser<string> =>
+  bind(item, (x) => (x === c ? pure(x) : error(c)));
 
 // str returns a Parser that matches on the provided string.
-export const str =
-  (st: string): Parser<string> =>
-  (s: Stream): Result<string> =>
-    s.src.startsWith(st, s.idx)
-      ? pure(st)(advance(st.length, s))
-      : zero<string>(
-          `expected "${st}"; got "${s.src.substring(s.idx, s.idx + st.length)}"`
-        )(s);
+export const str = (st: string): Parser<string> =>
+  st == ""
+    ? pure("")
+    : orFail(
+        `expected ${st}`,
+        bind(char(st[0]), (x) => bind(str(st.substring(1)), (y) => pure(x + y)))
+      );
 
 // identity is an parser that does the same as parser.
 const identity = <T>(parser: Parser<T>): Parser<T> => {
@@ -285,3 +300,14 @@ export const indexToLineCol = (src: string, idx: number) =>
       },
       { col: 0, line: 0 }
     );
+
+const printLine = (src: string, line: number) => src.split("\n")[line];
+
+export const parseErrorDiagnostic = (err: ParseError) => {
+  const lc = indexToLineCol(err.stream.src, err.stream.idx);
+  return (
+    `error at line ${lc.line} col ${lc.col}: ${err.error}\n` +
+    `  ${printLine(err.stream.src, lc.line)}\n` +
+    `  ${" ".repeat(lc.col)}^`
+  );
+};
