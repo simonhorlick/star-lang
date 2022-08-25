@@ -27,6 +27,14 @@ import {
   whitespace,
 } from ".";
 
+type Type = Arrow | Ref;
+
+type Arrow = {
+  type: "arrow";
+  from: Type;
+  to: Type;
+};
+
 type Abs = {
   type: "lam";
   name: string; // name of the binder
@@ -46,6 +54,22 @@ type Ref = {
 };
 
 type Term = Abs | App | Ref;
+
+type Def = {
+  type: "def";
+  name: string;
+  term: Term;
+  typ: Type;
+};
+
+type Pkg = { type: "pkg"; name: string };
+
+type Com = { type: "com"; text: string };
+
+type Space = { type: "sp" };
+type Newline = { type: "nl" };
+
+type File = { type: "file"; content: (Pkg | Com | Def | Space | Newline)[] };
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
@@ -87,7 +111,7 @@ export const block =
   };
 
 // parsePackage parses a package declaration such as `package abc`.
-export const parsePackage = bind(str("package"), (_) =>
+export const parsePackage: Parser<Pkg> = bind(str("package"), (_) =>
   bind(whitespace, (_) =>
     bind(identifier, (a) => pure({ type: "pkg", name: a }))
   )
@@ -95,7 +119,7 @@ export const parsePackage = bind(str("package"), (_) =>
 
 // parseLineComment parses an end-of-line comment and stops either at the end of
 // the line or EOF.
-export const parseLineComment = bind(str("//"), (_) =>
+export const parseLineComment: Parser<Com> = bind(str("//"), (_) =>
   bind(line, (l) =>
     pure({
       type: "com",
@@ -114,14 +138,6 @@ export const reference: Parser<Ref> = map(identifier, (result: string) => ({
 // surround the given parser.
 export const parenthesis = <T>(between: Parser<T>): Parser<T> =>
   bind(char("("), (_) => bind(between, (x) => bind(char(")"), (_) => pure(x))));
-
-type Type = Arrow | Ref;
-
-type Arrow = {
-  type: "arrow";
-  from: Type;
-  to: Type;
-};
 
 export const arrow: (
   type: () => Parser<Type>
@@ -250,7 +266,7 @@ export const term: Parser<Term> = any3(
 
 // definition parses a top-level function definition, for example
 // `func id = λx.x`.
-export const definition = bind(str("func"), (_) =>
+export const definition: Parser<Def> = bind(str("func"), (_) =>
   bind(whitespace, (_) =>
     bind(identifier, (name) =>
       bind(optional(whitespace), (_) =>
@@ -279,13 +295,16 @@ export const definition = bind(str("func"), (_) =>
   )
 );
 
+const parseWhitespace: Parser<Space> = map(whitespace, () => ({ type: "sp" }));
+const parseNewline: Parser<Newline> = map(newline, () => ({ type: "nl" }));
+
 // parseFile is a parser for a source file.
-export const parseFile = map(
+export const parseFile: Parser<File> = map(
   consumeAll(
     many(
       any5(
-        map(whitespace, () => ({ type: "sp" })),
-        map(newline, () => ({ type: "nl" })),
+        parseWhitespace,
+        parseNewline,
         parsePackage,
         definition,
         parseLineComment
