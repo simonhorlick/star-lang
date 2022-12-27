@@ -17,7 +17,7 @@ import {
   seq,
   many1,
   indexToLineCol,
-} from ".";
+} from "./parser";
 import {
   parsePackage,
   parseLineComment,
