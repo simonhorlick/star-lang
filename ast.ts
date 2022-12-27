@@ -27,7 +27,11 @@ import {
   whitespace,
 } from "./parser";
 
-type Type = Arrow | Ref;
+export type Type = Arrow | Ref | Erased;
+
+type Erased = {
+  type: "ers";
+};
 
 type Arrow = {
   type: "arrow";
@@ -51,11 +55,12 @@ type App = {
 type Ref = {
   type: "ref";
   name: string;
+  index: number | undefined;
 };
 
-type Term = Abs | App | Ref;
+export type Term = Abs | App | Ref;
 
-type Def = {
+export type Def = {
   type: "def";
   name: string;
   term: Term;
@@ -135,6 +140,7 @@ export const parseLineComment: Parser<Com> = bind(str("//"), (_) =>
 export const reference: Parser<Ref> = map(identifier, (result: string) => ({
   type: "ref",
   name: result,
+  index: undefined,
 }));
 
 // parenthesis is a parser that requires an opening and closing parenthesis to
@@ -316,3 +322,49 @@ export const parseFile: Parser<File> = map(
   ),
   (r) => ({ type: "file", content: r })
 );
+
+function getDeBruijinIndex(
+  ctx: Array<{ name: string; typ: Type }>,
+  name: string
+): number | undefined {
+  let idx = -1;
+  for (let i = 0; i < ctx.length; i++) {
+    if (ctx[i].name == name) {
+      idx = i;
+      break;
+    }
+  }
+  // binder not found in context, this will be an external reference.
+  if (idx == -1) {
+    return undefined;
+  }
+  return ctx.length - 1 - idx;
+}
+
+export function transformDebriujin(
+  ctx: Array<{ name: string; typ: Type }>,
+  term: Term
+): Term {
+  switch (term.type) {
+    case "app":
+      return {
+        type: "app",
+        name: transformDebriujin(ctx, term.name),
+        arg: transformDebriujin(ctx, term.arg),
+      } as App;
+    case "lam":
+      const newCtx = [...ctx, { name: term.name, typ: term.typ }];
+      return {
+        type: "lam",
+        name: term.name,
+        body: transformDebriujin(newCtx, term.body),
+        typ: term.typ,
+      } as Abs;
+    case "ref":
+      return {
+        type: "ref",
+        name: term.name,
+        index: getDeBruijinIndex(ctx, term.name),
+      };
+  }
+}
