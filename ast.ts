@@ -25,7 +25,7 @@ import {
   optional,
   orFail,
   whitespace,
-} from ".";
+} from "./parser";
 
 type Type = Arrow | Ref;
 
@@ -69,7 +69,10 @@ type Com = { type: "com"; text: string };
 type Space = { type: "sp" };
 type Newline = { type: "nl" };
 
-type File = { type: "file"; content: (Pkg | Com | Def | Space | Newline)[] };
+export type File = {
+  type: "file";
+  content: (Pkg | Com | Def | Space | Newline)[];
+};
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
