@@ -48,8 +48,8 @@ type Abs = {
 
 type App = {
   type: "app";
-  name: Term;
-  arg: Term;
+  left: Term;
+  right: Term;
 };
 
 type Ref = {
@@ -247,13 +247,13 @@ export const application = (term: () => Parser<Term>): Parser<App> =>
         const expr = terms.slice(2).reduce<App>(
           (acc, t) => ({
             type: "app",
-            name: acc,
-            arg: t,
+            left: acc,
+            right: t,
           }),
           {
             type: "app",
-            name: terms[0],
-            arg: terms[1],
+            left: terms[0],
+            right: terms[1],
           }
         );
 
@@ -349,8 +349,8 @@ export function transformDebriujin(
     case "app":
       return {
         type: "app",
-        name: transformDebriujin(ctx, term.name),
-        arg: transformDebriujin(ctx, term.arg),
+        left: transformDebriujin(ctx, term.left),
+        right: transformDebriujin(ctx, term.right),
       } as App;
     case "lam":
       const newCtx = [...ctx, { name: term.name, typ: term.typ }];

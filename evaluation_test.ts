@@ -25,7 +25,7 @@ function reduceOnce(ctx: Def[], term: Term): Term {
   switch (term.type) {
     case "app":
       // if we can reduce the left side of an App, then do so first.
-      if (!isValue(term.name)) {
+      if (!isValue(term.left)) {
       }
       break;
     case "lam":
@@ -142,12 +142,12 @@ function GetEvaluationTestSuite() {
           typ: { type: "ers" },
           body: {
             type: "app",
-            name: {
+            left: {
               type: "app",
-              name: { type: "ref", name: "l", index: undefined },
-              arg: { type: "ref", name: "m", index: undefined },
+              left: { type: "ref", name: "l", index: undefined },
+              right: { type: "ref", name: "m", index: undefined },
             },
-            arg: { type: "ref", name: "n", index: undefined },
+            right: { type: "ref", name: "n", index: undefined },
           },
         },
       },
@@ -159,16 +159,16 @@ function GetEvaluationTestSuite() {
   // ((test(tru))(v))(w)
   const term: Term = {
     type: "app",
-    name: {
+    left: {
       type: "app",
-      name: {
+      left: {
         type: "app",
-        name: { type: "ref", name: "test", index: undefined },
-        arg: { type: "ref", name: "tru", index: undefined },
+        left: { type: "ref", name: "test", index: undefined },
+        right: { type: "ref", name: "tru", index: undefined },
       },
-      arg: { type: "ref", name: "v", index: undefined },
+      right: { type: "ref", name: "v", index: undefined },
     },
-    arg: { type: "ref", name: "w", index: undefined },
+    right: { type: "ref", name: "w", index: undefined },
   };
 
   console.log(reduceOnce(ctx, term));
