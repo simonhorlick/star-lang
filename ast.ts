@@ -39,11 +39,12 @@ type Arrow = {
   to: Type;
 };
 
+// Abs is a lambda abstraction.
 type Abs = {
   type: "lam";
   name: string; // name of the binder
   typ: Type; // type of the bound variable
-  body: Term; // the body of the lambda
+  body: Term; // the body of the abstraction
 };
 
 type App = {
@@ -54,8 +55,16 @@ type App = {
 
 type Ref = {
   type: "ref";
+
+  // The variable name for pretty printing.
   name: string;
+
+  // The de Bruijn index of this node. The number index stands for “the variable
+  // bound by the index’th enclosing λ.”
   index: number | undefined;
+
+  // The length of the current context, as a consistency check.
+  contextLength: number | undefined;
 };
 
 export type Term = Abs | App | Ref;
@@ -141,6 +150,7 @@ export const reference: Parser<Ref> = map(identifier, (result: string) => ({
   type: "ref",
   name: result,
   index: undefined,
+  contextLength: undefined,
 }));
 
 // parenthesis is a parser that requires an opening and closing parenthesis to
@@ -365,6 +375,7 @@ export function transformDebriujin(
         type: "ref",
         name: term.name,
         index: getDeBruijinIndex(ctx, term.name),
+        contextLength: ctx.length,
       };
   }
 }
