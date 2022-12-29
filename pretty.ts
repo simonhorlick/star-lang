@@ -19,15 +19,20 @@ export function pretty(term: Term): string {
   switch (term.type) {
     case "lam":
       const type = term.typ.type == "ers" ? "" : ":" + prettyT(term.typ);
-      return "λ" + term.name + type + ". " + pretty(term.body);
+      return "λ" + term.name + type + ". " + pretty(term.body) + "";
     case "app":
-      if (term.left.type == "ref") {
-        return pretty(term.left) + "(" + pretty(term.right) + ")";
-      } else {
-        return "(" + pretty(term.left) + ")(" + pretty(term.right) + ")";
+      let l = pretty(term.left);
+      let r = "(" + pretty(term.right) + ")";
+
+      if (term.left.type == "lam") {
+        l = "(" + l + ")";
       }
+
+      return l + r;
     case "ref":
       return term.name;
+    case "var":
+      return /*term.name*/ `${term.index}`;
     default:
       return "<unknown>";
   }

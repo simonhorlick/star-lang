@@ -29,45 +29,52 @@ import {
 
 export type Type = Arrow | Ref | Erased;
 
-type Erased = {
+export type Erased = {
   type: "ers";
 };
 
-type Arrow = {
+export type Arrow = {
   type: "arrow";
   from: Type;
   to: Type;
 };
 
 // Abs is a lambda abstraction.
-type Abs = {
+export type Abs = {
   type: "lam";
   name: string; // name of the binder
   typ: Type; // type of the bound variable
   body: Term; // the body of the abstraction
 };
 
-type App = {
+export type App = {
   type: "app";
   left: Term;
   right: Term;
 };
 
-type Ref = {
-  type: "ref";
+export type Var = {
+  type: "var";
 
   // The variable name for pretty printing.
   name: string;
 
   // The de Bruijn index of this node. The number index stands for “the variable
   // bound by the index’th enclosing λ.”
-  index: number | undefined;
+  index: number;
 
   // The length of the current context, as a consistency check.
-  contextLength: number | undefined;
+  contextLength: number;
 };
 
-export type Term = Abs | App | Ref;
+export type Ref = {
+  type: "ref";
+
+  // The name of the definition being referenced.
+  name: string;
+};
+
+export type Term = Abs | App | Var | Ref;
 
 export type Def = {
   type: "def";
@@ -76,12 +83,12 @@ export type Def = {
   typ: Type;
 };
 
-type Pkg = { type: "pkg"; name: string };
+export type Pkg = { type: "pkg"; name: string };
 
-type Com = { type: "com"; text: string };
+export type Com = { type: "com"; text: string };
 
-type Space = { type: "sp" };
-type Newline = { type: "nl" };
+export type Space = { type: "sp" };
+export type Newline = { type: "nl" };
 
 export type File = {
   type: "file";
@@ -336,7 +343,7 @@ export const parseFile: Parser<File> = map(
 function getDeBruijinIndex(
   ctx: Array<{ name: string; typ: Type }>,
   name: string
-): number | undefined {
+): number {
   let idx = -1;
   for (let i = 0; i < ctx.length; i++) {
     if (ctx[i].name == name) {
@@ -344,9 +351,9 @@ function getDeBruijinIndex(
       break;
     }
   }
-  // binder not found in context, this will be an external reference.
+  // binder not found in context.
   if (idx == -1) {
-    return undefined;
+    console.error("failed to find binder for " + name);
   }
   return ctx.length - 1 - idx;
 }
@@ -370,12 +377,20 @@ export function transformDebriujin(
         body: transformDebriujin(newCtx, term.body),
         typ: term.typ,
       } as Abs;
+    case "var":
+      return term;
     case "ref":
-      return {
-        type: "ref",
-        name: term.name,
-        index: getDeBruijinIndex(ctx, term.name),
-        contextLength: ctx.length,
-      };
+      // If this name exists in the context then compute its index. If it
+      // doesn't exist, leave it as a ref.
+      if (ctx.some((x) => x.name == term.name)) {
+        return {
+          type: "var",
+          name: term.name,
+          index: getDeBruijinIndex(ctx, term.name),
+          contextLength: ctx.length,
+        };
+      } else {
+        return term;
+      }
   }
 }

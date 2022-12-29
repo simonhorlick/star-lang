@@ -1,35 +1,65 @@
-import { Term, Def, Type } from "./ast";
+import {
+  Term,
+  Type,
+  App as AppT,
+  Abs as AbsT,
+  Var as VarT,
+  Ref as RefT,
+  Def as DefT,
+} from "./ast";
 
 export function isValue(term: Term): boolean {
-  return term.type == "lam";
+  // FIXME: I'm not sure if Var should be considered a value. In the book it
+  // isn't.
+  return term.type == "lam" || term.type == "var";
 }
 
-const App = (left: Term, right: Term): Term => ({
+export const App = (left: Term, right: Term): AppT => ({
   type: "app",
   left: left,
   right: right,
 });
 
-const Abs = (name: string, body: Term, typ: Type): Term => ({
+export const Abs = (
+  name: string,
+  body: Term,
+  typ: Type = { type: "ers" }
+): AbsT => ({
   type: "lam",
   name: name,
   body: body,
   typ: typ,
 });
 
-const Var = (name: string, index: number, contextLength: number): Term => ({
+export const Var = (
+  name: string,
+  index: number,
+  contextLength: number = -1
+): VarT => ({
   type: "var",
   name: name,
   index: index,
   contextLength: contextLength,
 });
 
+export const Ref = (name: string): RefT => ({
+  type: "ref",
+  name: name,
+});
+
+export const Def = (name: string, term: Term): DefT => ({
+  type: "def",
+  name: name,
+  typ: { type: "ers" },
+  term: term,
+});
+
 // The shifting function below takes a “cutoff” parameter c that controls which variables should
 // be shifted.
 function walk(d: number, c: number, t: Term): Term {
   if (t.type == "var") {
-    let n = t.contextLength!;
-    let x = t.index!;
+    let n = t.contextLength;
+    let x = t.index;
     if (x >= c) {
       return Var(t.name, x + d, n + d);
     } else {
@@ -84,7 +114,7 @@ function termSubstTop(s: Term, t: Term): Term {
 }
 
 // reduce takes a term and reduces it to normal form.
-export function reduceOnce(defs: Def[], term: Term): Term {
+export function reduceOnce(defs: DefT[], term: Term): Term {
   if (term.type == "app") {
     if (term.left.type == "lam" && isValue(term.right)) {
       // E-AppAbs

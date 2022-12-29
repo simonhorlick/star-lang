@@ -1,161 +1,28 @@
 #!/usr/bin/env ./node_modules/.bin/ts-node-script
 
-import { Def, Term, Type } from "./ast";
+import { Def as DefT, Term, Type } from "./ast";
+import { Abs, App, Def, Ref, Var } from "./evaluation";
 import { pretty } from "./pretty";
 
 var _ = require("lodash");
 
 function GetPrettyTestSuite() {
   // tru = λt. λf. t
-  const tru: Def = {
-    type: "def",
-    name: "tru",
-    typ: { type: "ers" },
-    term: {
-      type: "lam",
-      name: "t",
-      typ: { type: "ers" },
-      body: {
-        type: "lam",
-        name: "f",
-        typ: { type: "ers" },
-        body: {
-          type: "ref",
-          name: "t",
-          index: undefined,
-          contextLength: undefined,
-        },
-      },
-    },
-  };
+  const tru = Def("tru", Abs("t", Abs("f", Ref("t"))));
 
   // fls = λt. λf. f
-  const fls: Def = {
-    type: "def",
-    name: "fls",
-    typ: { type: "ers" },
-    term: {
-      type: "lam",
-      name: "t",
-      typ: { type: "ers" },
-      body: {
-        type: "lam",
-        name: "f",
-        typ: { type: "ers" },
-        body: {
-          type: "ref",
-          name: "f",
-          index: undefined,
-          contextLength: undefined,
-        },
-      },
-    },
-  };
+  const fls = Def("fls", Abs("t", Abs("f", Ref("f"))));
 
   // test = λl. λm. λn. (l(m))(n)
-  const test: Def = {
-    type: "def",
-    name: "test",
-    typ: { type: "ers" },
-    term: {
-      type: "lam",
-      name: "l",
-      typ: { type: "ers" },
-      body: {
-        type: "lam",
-        name: "m",
-        typ: { type: "ers" },
-        body: {
-          type: "lam",
-          name: "n",
-          typ: { type: "ers" },
-          body: {
-            type: "app",
-            left: {
-              type: "app",
-              left: {
-                type: "ref",
-                name: "l",
-                index: undefined,
-                contextLength: undefined,
-              },
-              right: {
-                type: "ref",
-                name: "m",
-                index: undefined,
-                contextLength: undefined,
-              },
-            },
-            right: {
-              type: "ref",
-              name: "n",
-              index: undefined,
-              contextLength: undefined,
-            },
-          },
-        },
-      },
-    },
-  };
+  const test = Def(
+    "test",
+    Abs("l", Abs("m", Abs("n", App(App(Ref("l"), Ref("m")), Ref("n")))))
+  );
 
   // fst: Nat = λn:Nat. λm:Nat. n
-  const fst: Def = {
-    type: "def",
-    name: "fst",
-    typ: {
-      type: "ref",
-      name: "Nat",
-      index: undefined,
-      contextLength: undefined,
-    },
-    term: {
-      type: "lam",
-      name: "n",
-      typ: {
-        type: "ref",
-        name: "Nat",
-        index: undefined,
-        contextLength: undefined,
-      },
-      body: {
-        type: "lam",
-        name: "m",
-        typ: {
-          type: "ref",
-          name: "Nat",
-          index: undefined,
-          contextLength: undefined,
-        },
-        body: {
-          type: "ref",
-          name: "n",
-          index: undefined,
-          contextLength: undefined,
-        },
-      },
-    },
-  };
+  const fst = Def("fst", Abs("n", Abs("m", Ref("n"), Ref("Nat")), Ref("Nat")));
 
-  const id: Term = {
-    type: "app",
-    left: {
-      type: "lam",
-      name: "x",
-      body: {
-        type: "ref",
-        name: "x",
-        index: undefined,
-        contextLength: undefined,
-      },
-      typ: { type: "ers" },
-    },
-    right: {
-      type: "ref",
-      name: "y",
-      index: undefined,
-      contextLength: undefined,
-    },
-  };
+  const id = App(Abs("x", Ref("x")), Ref("y"));
 
   const prettyTests = [
     {
@@ -167,7 +34,7 @@ function GetPrettyTestSuite() {
       actual: pretty(fls.term),
     },
     {
-      expected: "λl. λm. λn. (l(m))(n)",
+      expected: "λl. λm. λn. l(m)(n)",
       actual: pretty(test.term),
     },
     {
@@ -177,6 +44,23 @@ function GetPrettyTestSuite() {
     {
       expected: "(λx. x)(y)",
       actual: pretty(id),
+    },
+    {
+      expected: "(λx. 0)(λz. 0)",
+      actual: pretty(App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)))),
+    },
+    {
+      expected: "λs. λz. 1(0)",
+      actual: pretty(Abs("s", Abs("z", App(Var("s", 1, 2), Var("z", 0, 2))))),
+    },
+    {
+      expected: "λs. λz. 1(1(0))",
+      actual: pretty(
+        Abs(
+          "s",
+          Abs("z", App(Var("s", 1, 2), App(Var("s", 1, 2), Var("z", 0, 2))))
+        )
+      ),
     },
   ];
 
