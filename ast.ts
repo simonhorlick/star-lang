@@ -358,23 +358,23 @@ function getDeBruijinIndex(
   return ctx.length - 1 - idx;
 }
 
-export function transformDebriujin(
-  ctx: Array<{ name: string; typ: Type }>,
-  term: Term
+export function transformDebruijin(
+  term: Term,
+  ctx: Array<{ name: string; typ: Type }> = []
 ): Term {
   switch (term.type) {
     case "app":
       return {
         type: "app",
-        left: transformDebriujin(ctx, term.left),
-        right: transformDebriujin(ctx, term.right),
+        left: transformDebruijin(term.left, ctx),
+        right: transformDebruijin(term.right, ctx),
       } as App;
     case "lam":
       const newCtx = [...ctx, { name: term.name, typ: term.typ }];
       return {
         type: "lam",
         name: term.name,
-        body: transformDebriujin(newCtx, term.body),
+        body: transformDebruijin(term.body, newCtx),
         typ: term.typ,
       } as Abs;
     case "var":

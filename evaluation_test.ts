@@ -1,12 +1,12 @@
 #!/usr/bin/env ./node_modules/.bin/ts-node-script
 
-import { Def, Term, transformDebriujin as transformDebruijin } from "./ast";
-import { Abs, App, isValue, reduceOnce, Ref, Var } from "./evaluation";
+import { Def as DefT, Term, transformDebruijin } from "./ast";
+import { Abs, App, Def, isValue, reduceOnce, Ref, Var } from "./evaluation";
 import { pretty } from "./pretty";
 
 var _ = require("lodash");
 
-function reduce(defs: Def[], t: Term): Term {
+function reduce(defs: DefT[], t: Term): Term {
   while (true) {
     console.log(pretty(t));
 
@@ -21,86 +21,18 @@ function reduce(defs: Def[], t: Term): Term {
 }
 
 // tru = λt. λf. t
-const tru: Def = {
-  type: "def",
-  name: "tru",
-  typ: { type: "ers" },
-  term: transformDebruijin([], {
-    type: "lam", // should this be called abs?
-    name: "t",
-    typ: { type: "ers" },
-    body: {
-      type: "lam",
-      name: "f",
-      typ: { type: "ers" },
-      body: {
-        type: "ref",
-        name: "t",
-      },
-    },
-  }),
-};
+const tru: DefT = Def("tru", transformDebruijin(Abs("t", Abs("f", Ref("t")))));
 
 // fls = λt. λf. f
-const fls: Def = {
-  type: "def",
-  name: "fls",
-  typ: { type: "ers" },
-  term: transformDebruijin([], {
-    type: "lam",
-    name: "t",
-    typ: { type: "ers" },
-    body: {
-      type: "lam",
-      name: "f",
-      typ: { type: "ers" },
-      body: {
-        type: "ref",
-        name: "f",
-      },
-    },
-  }),
-};
+const fls: DefT = Def("fls", transformDebruijin(Abs("t", Abs("f", Ref("f")))));
 
 // test = λl. λm. λn. (l(m))(n)
-const test: Def = {
-  type: "def",
-  name: "test",
-  typ: { type: "ers" },
-  term: transformDebruijin([], {
-    type: "lam",
-    name: "l",
-    typ: { type: "ers" },
-    body: {
-      type: "lam",
-      name: "m",
-      typ: { type: "ers" },
-      body: {
-        type: "lam",
-        name: "n",
-        typ: { type: "ers" },
-        body: {
-          type: "app",
-          left: {
-            type: "app",
-            left: {
-              type: "ref",
-              name: "l",
-            },
-            right: {
-              type: "ref",
-              name: "m",
-            },
-          },
-          right: {
-            type: "ref",
-            name: "n",
-          },
-        },
-      },
-    },
-  }),
-};
+const test = Def(
+  "test",
+  transformDebruijin(
+    Abs("l", Abs("m", Abs("n", App(App(Ref("l"), Ref("m")), Ref("n")))))
+  )
+);
 
 // λs. λz. z
 const zero = Abs("s", Abs("z", Var("z", 0, 2)));
@@ -115,12 +47,7 @@ const two = Abs(
 );
 
 // λx. x
-const id: Def = {
-  type: "def",
-  name: "id",
-  typ: { type: "ers" },
-  term: transformDebruijin([], Abs("x", Ref("x"))),
-};
+const id = Def("id", transformDebruijin(Abs("x", Ref("x"))));
 
 // What are we testing here?
 // - beta reduction
@@ -209,10 +136,9 @@ const TestComputeDebruijinIndicesSingleBinder = (t: T) => {
   // λ.1
   const expected: Term = Abs("x", Var("t", 1, 2));
 
-  const actual = transformDebruijin(
-    [{ name: "t", typ: { type: "ers" } }],
-    Abs("x", Ref("t"))
-  );
+  const actual = transformDebruijin(Abs("x", Ref("t")), [
+    { name: "t", typ: { type: "ers" } },
+  ]);
 
   if (!equal(expected, actual)) {
     t.fail(dbg(expected, actual));
@@ -228,7 +154,6 @@ const TestComputeDebruijinIndicesIdApp = (t: T) => {
     Abs("z", Var("z", 0, 1))
   );
   const actual = transformDebruijin(
-    [],
     App(Abs("x", Ref("x")), Abs("z", Ref("z")))
   );
 
@@ -244,7 +169,6 @@ const TestComputeDebruijinIndicesChurchNat = (t: T) => {
   const expected = two;
 
   const actual = transformDebruijin(
-    [],
     Abs("s", Abs("z", App(Ref("s"), App(Ref("s"), Ref("z")))))
   );
 
@@ -259,11 +183,10 @@ const EvaluationTestSuite: ((t: T) => void)[] = [];
 // (λx. x)(λz. z) -> (λz. z)
 const TestReduceIdentity = (t: T) => {
   const identity = transformDebruijin(
-    [],
     App(Abs("x", Ref("x")), Abs("z", Ref("z")))
   );
 
-  const expected: Term = transformDebruijin([], Abs("z", Ref("z")));
+  const expected: Term = transformDebruijin(Abs("z", Ref("z")));
 
   const actual = reduce([], identity);
 
@@ -285,7 +208,6 @@ EvaluationTestSuite.push(TestSubstituteDef);
 const TestReduceIfElse = (t: T) => {
   // ((test(tru))(1))(2)
   const ifElse: Term = transformDebruijin(
-    [],
     App(App(App(Ref("test"), Ref("tru")), one), two)
   );
 
