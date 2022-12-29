@@ -1,45 +1,48 @@
-import { Term, Def } from "./ast";
+import { Term, Def, Type } from "./ast";
 
 export function isValue(term: Term): boolean {
-  return term.type != "app";
+  return term.type == "lam";
 }
+
+const App = (left: Term, right: Term): Term => ({
+  type: "app",
+  left: left,
+  right: right,
+});
+
+const Abs = (name: string, body: Term, typ: Type): Term => ({
+  type: "lam",
+  name: name,
+  body: body,
+  typ: typ,
+});
+
+const Var = (name: string, index: number, contextLength: number): Term => ({
+  type: "var",
+  name: name,
+  index: index,
+  contextLength: contextLength,
+});
 
 // The shifting function below takes a “cutoff” parameter c that controls which variables should
 // be shifted.
 function walk(d: number, c: number, t: Term): Term {
-  if (t.type == "ref") {
+  if (t.type == "var") {
     let n = t.contextLength!;
     let x = t.index!;
     if (x >= c) {
-      return {
-        type: "ref",
-        name: t.name,
-        index: x + d,
-        contextLength: n + d,
-      };
+      return Var(t.name, x + d, n + d);
     } else {
-      return {
-        type: "ref",
-        name: t.name,
-        index: x,
-        contextLength: n + d,
-      };
+      return Var(t.name, x, n + d);
     }
   } else if (t.type == "lam") {
     let t1 = t.body;
     let ty = t.typ;
-    return {
-      type: "lam",
-      name: t.name,
-      body: walk(d, c + 1, t1),
-      typ: ty,
-    };
-  } /*if (t.type == "app")*/ else {
-    return {
-      type: "app",
-      left: walk(d, c, t.left),
-      right: walk(d, c, t.right),
-    };
+    return Abs(t.name, walk(d, c + 1, t1), ty);
+  } else if (t.type == "app") {
+    return App(walk(d, c, t.left), walk(d, c, t.right));
+  } else {
+    return t;
   }
 }
 
@@ -49,34 +52,22 @@ function termShift(d: number, t: Term): Term {
 }
 
 function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
-  if (t.type == "ref") {
+  if (t.type == "var") {
     let n = t.contextLength;
     let x = t.index;
     if (x == j + c) {
       return termShift(c, s);
     } else {
-      return {
-        type: "ref",
-        name: t.name,
-        index: x,
-        contextLength: n,
-      };
+      return Var(t.name, x, n);
     }
   } else if (t.type == "lam") {
     let t1 = t.body;
     let ty = t.typ;
-    return {
-      type: "lam",
-      name: t.name,
-      body: termSubstWalk(j, s, c + 1, t1),
-      typ: ty,
-    };
-  } /*if (t.type == "app")*/ else {
-    return {
-      type: "app",
-      left: termSubstWalk(j, s, c, t.left),
-      right: termSubstWalk(j, s, c, t.right),
-    };
+    return Abs(t.name, termSubstWalk(j, s, c + 1, t1), ty);
+  } else if (t.type == "app") {
+    return App(termSubstWalk(j, s, c, t.left), termSubstWalk(j, s, c, t.right));
+  } else {
+    return t;
   }
 }
 
@@ -93,40 +84,27 @@ function termSubstTop(s: Term, t: Term): Term {
 }
 
 // reduce takes a term and reduces it to normal form.
-export function reduceOnce(ctx: Def[], term: Term): Term {
+export function reduceOnce(defs: Def[], term: Term): Term {
   if (term.type == "app") {
     if (term.left.type == "lam" && isValue(term.right)) {
+      // E-AppAbs
       let t12 = term.left.body;
       let v2 = term.right;
       return termSubstTop(v2, t12);
     } else if (isValue(term.left)) {
-      return {
-        type: "app",
-        left: term.left,
-        right: reduceOnce(ctx, term.right),
-      };
+      // E-App2
+      return App(term.left, reduceOnce(defs, term.right));
     } else {
-      return {
-        type: "app",
-        left: reduceOnce(ctx, term.left),
-        right: term.right,
-      };
+      // E-App1
+      return App(reduceOnce(defs, term.left), term.right);
     }
   } else if (term.type == "lam") {
-    console.log("cannot reduce Abs");
-    return {
-      type: "ref",
-      name: "__not_found__",
-      index: undefined,
-      contextLength: undefined,
-    };
+    throw "cannot reduce Abs";
   } else {
-    console.log("cannot reduce Ref");
-    return {
-      type: "ref",
-      name: "__not_found__",
-      index: undefined,
-      contextLength: undefined,
-    };
+    const match = defs.filter((d) => d.name == term.name);
+    if (match.length == 0) {
+      return term;
+    }
+    return match[0].term;
   }
 }
