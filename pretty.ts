@@ -18,7 +18,8 @@ export function prettyT(type: Type): string {
 export function pretty(term: Term): string {
   switch (term.type) {
     case "lam":
-      const type = term.typ.type == "ers" ? "" : ":" + prettyT(term.typ);
+      const type =
+        term.bindType.type == "ers" ? "" : ":" + prettyT(term.bindType);
       return "λ" + term.name + type + ". " + pretty(term.body) + "";
     case "app":
       let l = pretty(term.left);

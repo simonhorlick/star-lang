@@ -1,3 +1,4 @@
+import { Abs } from "./evaluation";
 import {
   Parser,
   bind,
@@ -45,7 +46,7 @@ export type Arrow = {
 export type Abs = {
   type: "lam";
   name: string; // name of the binder
-  typ: Type; // type of the bound variable
+  bindType: Type; // type of the bound variable
   body: Term; // the body of the abstraction
 };
 
@@ -221,14 +222,7 @@ export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
                 bind(optional(whitespace), () =>
                   bind(char("."), () =>
                     bind(optional(whitespace), () =>
-                      bind(lazy(term), (body) =>
-                        pure({
-                          type: "lam",
-                          name: name, // name of the binder
-                          typ: typ, // type of the bound variable
-                          body: body, // the body of the lambda
-                        })
-                      )
+                      bind(lazy(term), (body) => pure(Abs(name, body, typ)))
                     )
                   )
                 )
@@ -364,12 +358,12 @@ export function transformDebruijin(term: Term, ctx: Context = []): Term {
         right: transformDebruijin(term.right, ctx),
       } as App;
     case "lam":
-      const newCtx = [...ctx, { name: term.name, typ: term.typ }];
+      const newCtx = [...ctx, { name: term.name, typ: term.bindType }];
       return {
         type: "lam",
         name: term.name,
         body: transformDebruijin(term.body, newCtx),
-        typ: term.typ,
+        bindType: term.bindType,
       } as Abs;
     case "var":
       return term;

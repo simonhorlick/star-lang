@@ -29,7 +29,7 @@ export const Abs = (
   type: "lam",
   name: name,
   body: body,
-  typ: typ,
+  bindType: typ,
 });
 
 export const Var = (
@@ -78,7 +78,7 @@ function walk(d: number, c: number, t: Term): Term {
     }
   } else if (t.type == "lam") {
     let t1 = t.body;
-    let ty = t.typ;
+    let ty = t.bindType;
     return Abs(t.name, walk(d, c + 1, t1), ty);
   } else if (t.type == "app") {
     return App(walk(d, c, t.left), walk(d, c, t.right));
@@ -103,7 +103,7 @@ function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
     }
   } else if (t.type == "lam") {
     let t1 = t.body;
-    let ty = t.typ;
+    let ty = t.bindType;
     return Abs(t.name, termSubstWalk(j, s, c + 1, t1), ty);
   } else if (t.type == "app") {
     return App(termSubstWalk(j, s, c, t.left), termSubstWalk(j, s, c, t.right));
@@ -124,7 +124,8 @@ function termSubstTop(s: Term, t: Term): Term {
   return termShift(-1, termSubst(0, termShift(1, s), t));
 }
 
-// reduce takes a term and reduces it to normal form.
+// Evaluate this term by a single step. When applied to a term that is not yet a value, it yields
+// the next step of evaluation for that term. When applied to a value an exception is thrown.
 export function reduceOnce(defs: DefT[], term: Term): Term {
   if (term.type == "app") {
     if (term.left.type == "lam" && isValue(term.right)) {

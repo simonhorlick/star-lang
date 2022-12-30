@@ -58,41 +58,35 @@ import { Abs, App, Arrow, Ref, Var } from "./evaluation";
 // Γ ⊢ t:[t/x]T
 
 describe("typechecker", () => {
-  test("T-App rejects argument of wrong type from context", () => {
-    // Γ ⊢ a:A
-    // Γ ⊢ ab:A->B
-    const ctx: Context = [
-      { name: "a", typ: Ref("A") },
-      { name: "ab", typ: Arrow(Ref("A"), Ref("B")) },
-    ];
+  test("should accept well-typed application", () => {
+    const ctx: Context = [];
+
+    // λa:A. λf:A->B. f(a)
     const program = Abs(
       "a",
-      Abs("ab", App(Var("ab", 0), Var("a", 1)), Arrow(Ref("A"), Ref("B"))),
+      Abs("f", App(Var("f", 0), Var("a", 1)), Arrow(Ref("A"), Ref("B"))),
       Ref("A")
     );
 
     expect(Check(ctx, program)).toBe(true);
   });
 
-  test("T-App rejects argument of wrong type from binders", () => {
-    const ctx: Context = [];
-
-    // λa:A. λab:A->B. ab(a)
-    const program = Abs(
-      "a",
-      Abs("ab", App(Var("ab", 0), Var("a", 1)), Arrow(Ref("A"), Ref("B"))),
-      Ref("A")
-    );
-
-    expect(Check(ctx, program)).toBe(true);
-  });
-
-  test("T-Abs", () => {
-    const ctx: Context = [];
-
-    // typeof(λa:A. a) is A->A
+  test("should calculate type of lambda body (id)", () => {
+    // The type of λa:A. a is A->A.
     const program = Abs("a", Var("a", 0), Ref("A"));
+    expect(GetType([], program)).toStrictEqual(Arrow(Ref("A"), Ref("A")));
+  });
 
-    expect(GetType(ctx, program)).toBe(Arrow(Ref("A"), Ref("A")));
+  test("should calculate type of lambda body using variable from context", () => {
+    // The type of λa:A. b is A->B.
+    const ctx: Context = [{ name: "b", typ: Ref("B") }];
+    const program = Abs("a", Var("b", 1), Ref("A"));
+    expect(GetType(ctx, program)).toStrictEqual(Arrow(Ref("A"), Ref("B")));
+  });
+
+  test("bound variable must exist", () => {
+    const ctx: Context = [];
+    const program = Abs("a", Var("b", 1), Ref("A"));
+    expect(Check(ctx, program)).toBe(false);
   });
 });
