@@ -1,10 +1,7 @@
-#!/usr/bin/env ./node_modules/.bin/ts-node-script
-
+import { describe, expect, test } from "@jest/globals";
 import { Def as DefT, Term, transformDebruijin } from "./ast";
 import { Abs, App, Def, isValue, reduceOnce, Ref, Var } from "./evaluation";
 import { pretty } from "./pretty";
-
-var _ = require("lodash");
 
 function reduce(defs: DefT[], t: Term): Term {
   while (true) {
@@ -27,7 +24,7 @@ const tru: DefT = Def("tru", transformDebruijin(Abs("t", Abs("f", Ref("t")))));
 const fls: DefT = Def("fls", transformDebruijin(Abs("t", Abs("f", Ref("f")))));
 
 // test = λl. λm. λn. (l(m))(n)
-const test = Def(
+const testfn = Def(
   "test",
   transformDebruijin(
     Abs("l", Abs("m", Abs("n", App(App(Ref("l"), Ref("m")), Ref("n")))))
@@ -49,10 +46,9 @@ const two = Abs(
 // λx. x
 const id = Def("id", transformDebruijin(Abs("x", Ref("x"))));
 
-// What are we testing here?
-// - beta reduction
-// - Under the normal order strategy, the leftmost, outermost redex is always reduced first
-// - Surely this should be on the untyped lambda calculus, i.e. after checking?
+//
+// Evaluation Rules
+//
 
 //     t1 → t1'
 // ---------------- E-App1
@@ -74,175 +70,99 @@ const id = Def("id", transformDebruijin(Abs("x", Ref("x"))));
 
 // (ΛX.t12)(T2) → [X/T2]t12    E-TappTabs
 
-// "if" reduction
-//
-// ctx contains (after typecheck has passed):
-//
-// tru = λt. λf. t
-// fls = λt. λf. f
-// test = λl. λm. λn. (l(m))(n)
-//
-// ((test(tru))(v))(w)
-// ------------------- def "test"
-// (((λl. λm. λn. (l(m))(n))(tru))(v))(w)
-// -------------------------------------- E-AppAbs
-// ((λm. λn. (tru(m))(n))(v))(w)
-// ----------------------------- E-AppAbs
-// (λn. (tru(v))(n))(w)
-// -------------------- E-AppAbs
-// (tru(v))(w)
-// ----------- def "tru"
-// ((λt. λf. t)(v))(w)
-// ------------------- E-AppAbs
-// (λf. v)(w)
-// ---------- E-AppAbs
-// v
+describe("debruijin", () => {
+  test("TestComputeDebruijinIndicesSingleBinder", () => {
+    // Γ = [t]; λx.t
+    // λ.1
+    const expected: Term = Abs("x", Var("t", 1, 2));
 
-class T {
-  pass: boolean = true;
-  msg: string = "";
+    const actual = transformDebruijin(Abs("x", Ref("t")), [
+      { name: "t", typ: { type: "ers" } },
+    ]);
 
-  fail(msg: string) {
-    this.pass = false;
-    this.msg = msg;
-  }
+    expect(actual).toStrictEqual(expected);
+  });
 
-  compare<T>(expected: T, actual: T) {
-    if (!equal(expected, actual)) {
-      this.fail(dbg(expected, actual));
-    }
-  }
-}
+  test("TestComputeDebruijinIndicesIdApp", () => {
+    // (λx. x)(λz. z)
+    // (λ. 0)(λ. 0)
+    const expected: Term = App(
+      Abs("x", Var("x", 0, 1)),
+      Abs("z", Var("z", 0, 1))
+    );
+    const actual = transformDebruijin(
+      App(Abs("x", Ref("x")), Abs("z", Ref("z")))
+    );
 
-const equal = <T>(a: T, b: T) => _.isEqual(a, b) as boolean;
+    expect(actual).toStrictEqual(expected);
+  });
 
-const dbg = <T>(expected: T, actual: T): string => {
-  let e = JSON.stringify(expected);
-  let a = JSON.stringify(actual);
+  test("TestComputeDebruijinIndicesChurchNat", () => {
+    // λs. λz. s (s z)
+    // λ. λ. 1 (1 0)
+    const expected = two;
 
-  // If the output is long place them on their own lines.
-  if (e.length > 60) {
-    e = `\n${e}`;
-    a = `\n${a}`;
-  }
+    const actual = transformDebruijin(
+      Abs("s", Abs("z", App(Ref("s"), App(Ref("s"), Ref("z")))))
+    );
 
-  return `expected ${e}; got ${a}`;
-};
+    expect(actual).toStrictEqual(expected);
+  });
+});
 
-const DeBruijinTestSuite: ((t: T) => void)[] = [];
+describe("evaluation", () => {
+  // (λx. x)(λz. z) -> (λz. z)
+  test("TestReduceIdentity", () => {
+    const identity = transformDebruijin(
+      App(Abs("x", Ref("x")), Abs("z", Ref("z")))
+    );
 
-const TestComputeDebruijinIndicesSingleBinder = (t: T) => {
-  // Γ = [t]; λx.t
-  // λ.1
-  const expected: Term = Abs("x", Var("t", 1, 2));
+    const expected: Term = transformDebruijin(Abs("z", Ref("z")));
 
-  const actual = transformDebruijin(Abs("x", Ref("t")), [
-    { name: "t", typ: { type: "ers" } },
-  ]);
+    const actual = reduce([], identity);
 
-  if (!equal(expected, actual)) {
-    t.fail(dbg(expected, actual));
-  }
-};
-DeBruijinTestSuite.push(TestComputeDebruijinIndicesSingleBinder);
+    expect(actual).toStrictEqual(expected);
+  });
 
-const TestComputeDebruijinIndicesIdApp = (t: T) => {
-  // (λx. x)(λz. z)
-  // (λ. 0)(λ. 0)
-  const expected: Term = App(
-    Abs("x", Var("x", 0, 1)),
-    Abs("z", Var("z", 0, 1))
-  );
-  const actual = transformDebruijin(
-    App(Abs("x", Ref("x")), Abs("z", Ref("z")))
-  );
+  // Test that substituting top level functions works properly.
+  test("TestSubstituteDef", () => {
+    const expected = Abs("z", Var("z", 0, 1));
+    const actual = reduce([id], App(Ref("id"), Abs("z", Var("z", 0, 1))));
+    expect(actual).toStrictEqual(expected);
+  });
 
-  if (!equal(expected, actual)) {
-    t.fail(dbg(expected, actual));
-  }
-};
-DeBruijinTestSuite.push(TestComputeDebruijinIndicesIdApp);
+  // "if" reduction
+  //
+  // top level defs (after typecheck has passed):
+  //
+  // tru = λt. λf. t
+  // fls = λt. λf. f
+  // test = λl. λm. λn. (l(m))(n)
+  //
+  // ((test(tru))(v))(w)
+  // ------------------- def "test"
+  // (((λl. λm. λn. (l(m))(n))(tru))(v))(w)
+  // -------------------------------------- E-AppAbs
+  // ((λm. λn. (tru(m))(n))(v))(w)
+  // ----------------------------- E-AppAbs
+  // (λn. (tru(v))(n))(w)
+  // -------------------- E-AppAbs
+  // (tru(v))(w)
+  // ----------- def "tru"
+  // ((λt. λf. t)(v))(w)
+  // ------------------- E-AppAbs
+  // (λf. v)(w)
+  // ---------- E-AppAbs
+  // v
+  test("TestReduceIfElse", () => {
+    // ((test(tru))(1))(2)
+    const ifElse: Term = transformDebruijin(
+      App(App(App(Ref("test"), Ref("tru")), one), two)
+    );
 
-const TestComputeDebruijinIndicesChurchNat = (t: T) => {
-  // λs. λz. s (s z)
-  // λ. λ. 1 (1 0)
-  const expected = two;
+    const expected = one;
+    const actual = reduce([tru, fls, testfn], ifElse);
 
-  const actual = transformDebruijin(
-    Abs("s", Abs("z", App(Ref("s"), App(Ref("s"), Ref("z")))))
-  );
-
-  if (!equal(expected, actual)) {
-    t.fail(dbg(expected, actual));
-  }
-};
-DeBruijinTestSuite.push(TestComputeDebruijinIndicesChurchNat);
-
-const EvaluationTestSuite: ((t: T) => void)[] = [];
-
-// (λx. x)(λz. z) -> (λz. z)
-const TestReduceIdentity = (t: T) => {
-  const identity = transformDebruijin(
-    App(Abs("x", Ref("x")), Abs("z", Ref("z")))
-  );
-
-  const expected: Term = transformDebruijin(Abs("z", Ref("z")));
-
-  const actual = reduce([], identity);
-
-  if (!equal(expected, actual)) {
-    t.fail(dbg(expected, actual));
-  }
-};
-EvaluationTestSuite.push(TestReduceIdentity);
-
-// Test that substituting top level functions works properly.
-const TestSubstituteDef = (t: T) =>
-  t.compare(
-    Abs("z", Var("z", 0, 1)),
-    reduce([id], App(Ref("id"), Abs("z", Var("z", 0, 1))))
-  );
-EvaluationTestSuite.push(TestSubstituteDef);
-
-// test(tru)(1)(2) -> 1
-const TestReduceIfElse = (t: T) => {
-  // ((test(tru))(1))(2)
-  const ifElse: Term = transformDebruijin(
-    App(App(App(Ref("test"), Ref("tru")), one), two)
-  );
-
-  const expected = one;
-  const actual = reduce([tru, fls, test], ifElse);
-
-  if (!equal(expected, actual)) {
-    t.fail(dbg(expected, actual));
-  }
-};
-EvaluationTestSuite.push(TestReduceIfElse);
-
-function RunAllTests() {
-  let suites = [
-    { name: "DeBruijinTestSuite", tests: DeBruijinTestSuite },
-    { name: "EvaluationTestSuite", tests: EvaluationTestSuite },
-  ];
-
-  let passed = 0;
-  let total = 0;
-  for (const s of suites) {
-    for (let i = 0; i < s.tests.length; i++) {
-      const test = s.tests[i];
-      const t = new T();
-      test(t);
-      if (!t.pass) {
-        console.log(`failed: ${s.name} test ${i}: ${t.msg}`);
-      } else {
-        passed++;
-      }
-    }
-    total += s.tests.length;
-  }
-
-  console.log(`passed ${passed}/${total}`);
-}
-
-RunAllTests();
+    expect(actual).toStrictEqual(expected);
+  });
+});

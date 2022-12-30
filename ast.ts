@@ -27,6 +27,8 @@ import {
   whitespace,
 } from "./parser";
 
+export type Context = Array<{ name: string; typ: Type }>;
+
 export type Type = Arrow | Ref | Erased;
 
 export type Erased = {
@@ -156,8 +158,6 @@ export const parseLineComment: Parser<Com> = bind(str("//"), (_) =>
 export const reference: Parser<Ref> = map(identifier, (result: string) => ({
   type: "ref",
   name: result,
-  index: undefined,
-  contextLength: undefined,
 }));
 
 // parenthesis is a parser that requires an opening and closing parenthesis to
@@ -340,10 +340,7 @@ export const parseFile: Parser<File> = map(
   (r) => ({ type: "file", content: r })
 );
 
-function getDeBruijinIndex(
-  ctx: Array<{ name: string; typ: Type }>,
-  name: string
-): number {
+function getDeBruijinIndex(ctx: Context, name: string): number {
   let idx = -1;
   for (let i = 0; i < ctx.length; i++) {
     if (ctx[i].name == name) {
@@ -358,10 +355,7 @@ function getDeBruijinIndex(
   return ctx.length - 1 - idx;
 }
 
-export function transformDebruijin(
-  term: Term,
-  ctx: Array<{ name: string; typ: Type }> = []
-): Term {
+export function transformDebruijin(term: Term, ctx: Context = []): Term {
   switch (term.type) {
     case "app":
       return {

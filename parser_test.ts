@@ -1,7 +1,4 @@
-#!/usr/bin/env ./node_modules/.bin/ts-node-script
-
-var _ = require("lodash");
-var util = require("util");
+import { describe, expect, test } from "@jest/globals";
 
 import {
   char,
@@ -31,6 +28,7 @@ import {
   type,
   arrow,
 } from "./ast";
+import { Abs, App, Arrow, Def, Ref } from "./evaluation";
 
 const success = <T>(x: Result<T>) => x.type == "outputvalue";
 
@@ -59,7 +57,7 @@ const resultC = <T>(x: Result<T>) => {
   }
 };
 
-function GetParserTestSuite() {
+describe("parser", () => {
   const parseA = char("A");
   const parseB = char("B");
   const parseAorB = either(parseA, parseB);
@@ -166,20 +164,11 @@ function GetParserTestSuite() {
       actual: success(parenthesis(char("a"))(ts("(a)"))),
     },
     {
-      expected: {
-        type: "lam",
-        name: "x",
-        typ: { type: "ref", name: "X" },
-        body: { type: "ref", name: "t" },
-      },
+      expected: Abs("x", Ref("t"), Ref("X")),
       actual: result(abstraction(() => term)(ts("λx:X.t"))),
     },
     {
-      expected: {
-        type: "app",
-        name: { type: "ref", name: "f" },
-        arg: { type: "ref", name: "x" },
-      },
+      expected: App(Ref("f"), Ref("x")),
       actual: result(application(() => term)(ts("f(x)"))),
     },
     // want to parse `f(x)(y)` as the following tree:
@@ -191,242 +180,90 @@ function GetParserTestSuite() {
     //  f    x
     //
     {
-      expected: {
-        type: "app",
-        name: {
-          type: "app",
-          name: { type: "ref", name: "f" },
-          arg: { type: "ref", name: "x" },
-        },
-        arg: { type: "ref", name: "y" },
-      },
+      expected: App(App(Ref("f"), Ref("x")), Ref("y")),
       actual: result(application(() => term)(ts("f(x)(y)"))),
     },
     {
-      expected: {
-        type: "app",
-        name: {
-          type: "app",
-          name: { type: "ref", name: "b" },
-          arg: { type: "ref", name: "v" },
-        },
-        arg: { type: "ref", name: "w" },
-      },
+      expected: App(App(Ref("b"), Ref("v")), Ref("w")),
       actual: result(application(() => term)(ts("(b(v))(w)"))),
     },
     {
-      expected: {
-        type: "lam",
-        name: "t",
-        typ: { type: "ref", name: "Bool" },
-        body: {
-          type: "lam",
-          name: "f",
-          typ: { type: "ref", name: "Bool" },
-          body: { type: "ref", name: "t" },
-        },
-      },
+      expected: Abs("t", Abs("f", Ref("t"), Ref("Bool")), Ref("Bool")),
       actual: result(term(ts("λt:Bool. λf:Bool. t"))),
     },
     {
-      expected: {
-        type: "app",
-        name: { type: "ref", name: "x" },
-        arg: {
-          type: "app",
-          name: { type: "ref", name: "y" },
-          arg: { type: "ref", name: "z" },
-        },
-      },
+      expected: App(Ref("x"), App(Ref("y"), Ref("z"))),
       actual: result(term(ts("x (y (z))"))),
     },
     {
-      expected: {
-        type: "lam",
-        name: "z",
-        typ: { type: "ref", name: "Z" },
-        body: {
-          type: "lam",
-          name: "x",
-          typ: { type: "ref", name: "X" },
-          body: {
-            type: "lam",
-            name: "y",
-            typ: { type: "ref", name: "Y" },
-            body: {
-              type: "app",
-              name: { type: "ref", name: "x" },
-              arg: {
-                type: "app",
-                name: { type: "ref", name: "y" },
-                arg: { type: "ref", name: "z" },
-              },
-            },
-          },
-        },
-      },
+      expected: Abs(
+        "z",
+        Abs(
+          "x",
+          Abs("y", App(Ref("x"), App(Ref("y"), Ref("z"))), Ref("Y")),
+          Ref("X")
+        ),
+        Ref("Z")
+      ),
       actual: result(term(ts("λz:Z. λx:X. λy:Y. x (y (z))"))),
     },
     {
-      expected: {
-        type: "def",
-        name: "id",
-        term: {
-          type: "lam",
-          name: "x",
-          body: { type: "ref", name: "x" },
-          typ: { type: "ref", name: "X" },
-        },
-        typ: { type: "ref", name: "X" },
-      },
+      expected: Def("id", Abs("x", Ref("x"), Ref("X")), Ref("X")),
       actual: result(definition(ts("func id:X = λx:X. x"))),
     },
     {
-      expected: { type: "ref", name: "ex2" },
+      expected: Ref("ex2"),
       actual: result(reference(ts("ex2"))),
     },
     {
-      expected: { type: "ref", name: "Bool" },
+      expected: Ref("Bool"),
       actual: result(type(ts("Bool"))),
     },
     {
-      expected: { type: "ref", name: "Bool" },
+      expected: Ref("Bool"),
       actual: result(type(ts("(Bool)"))),
     },
     {
-      expected: {
-        type: "arrow",
-        from: { type: "ref", name: "A" },
-        to: { type: "ref", name: "B" },
-      },
+      expected: Arrow(Ref("A"), Ref("B")),
       actual: result(arrow(() => type)(ts("A->B"))),
     },
     {
-      expected: {
-        type: "arrow",
-        from: { type: "ref", name: "A" },
-        to: {
-          type: "arrow",
-          from: { type: "ref", name: "B" },
-          to: { type: "ref", name: "C" },
-        },
-      },
+      expected: Arrow(Ref("A"), Arrow(Ref("B"), Ref("C"))),
       actual: result(type(ts("A->B->C"))),
     },
     {
-      expected: {
-        type: "arrow",
-        from: { type: "ref", name: "B" },
-        to: { type: "ref", name: "C" },
-      },
+      expected: Arrow(Ref("B"), Ref("C")),
       actual: result(type(ts("B->C"))),
     },
     {
-      expected: {
-        type: "arrow",
-        from: { type: "ref", name: "A" },
-        to: {
-          type: "arrow",
-          from: { type: "ref", name: "B" },
-          to: { type: "ref", name: "C" },
-        },
-      },
+      expected: Arrow(Ref("A"), Arrow(Ref("B"), Ref("C"))),
       actual: result(arrow(() => type)(ts("A->(B->C)"))),
     },
     {
-      expected: {
-        type: "arrow",
-        from: {
-          type: "arrow",
-          from: { type: "ref", name: "A" },
-          to: { type: "ref", name: "B" },
-        },
-        to: { type: "ref", name: "C" },
-      },
+      expected: Arrow(Arrow(Ref("A"), Ref("B")), Ref("C")),
       actual: resultC(arrow(() => type)(ts("(A->B)->C"))),
     },
 
     {
-      expected: {
-        type: "arrow",
-        from: {
-          type: "arrow",
-          from: { type: "ref", name: "A" },
-          to: { type: "ref", name: "B" },
-        },
-        to: {
-          type: "arrow",
-          from: { type: "ref", name: "C" },
-          to: { type: "ref", name: "D" },
-        },
-      },
+      expected: Arrow(Arrow(Ref("A"), Ref("B")), Arrow(Ref("C"), Ref("D"))),
       actual: result(arrow(() => type)(ts("(A->B)->(C->D)"))),
     },
   ];
 
-  return {
-    name: "parser",
-    tests: parserTests,
-  };
-}
+  for (let t of parserTests) {
+    test("", () => expect(t.actual).toStrictEqual(t.expected));
+  }
+});
 
-function GetUtilTestSuite() {
+describe("util", () => {
   const file = `abcdefghijklmnopqrstuvwxyz\nabcdefghijklmnopqrstuvwxyz\nabcdefghijklmnopqrstuvwxyz\n`;
 
-  const utilTests = [
-    {
-      expected: { line: 0, col: 0 },
-      actual: indexToLineCol(file, 0),
-    },
-    {
-      expected: { line: 0, col: 5 },
-      actual: indexToLineCol(file, 5),
-    },
-    {
-      expected: { line: 1, col: 0 },
-      actual: indexToLineCol(file, 27),
-    },
-    {
-      expected: { line: 1, col: 3 },
-      actual: indexToLineCol(file, 30),
-    },
-  ];
-
-  return {
-    name: "util",
-    tests: utilTests,
-  };
-}
-
-function RunAllTests() {
-  let suites = [GetParserTestSuite(), GetUtilTestSuite()];
-
-  let passed = 0;
-  let total = 0;
-  for (const s of suites) {
-    for (let i = 0; i < s.tests.length; i++) {
-      const t = s.tests[i];
-      if (!_.isEqual(t.expected, t.actual)) {
-        let expected = JSON.stringify(t.expected);
-        let actual = JSON.stringify(t.actual);
-
-        // If the output is long place them on their own lines.
-        if (expected.length > 60) {
-          expected = `\n${expected}`;
-          actual = `\n${actual}`;
-        }
-
-        console.log(
-          `failed: ${s.name} test ${i} expected ${expected}; got ${actual}`
-        );
-      } else {
-        passed++;
-      }
-    }
-    total += s.tests.length;
-  }
-
-  console.log(`passed ${passed}/${total}`);
-}
-
-RunAllTests();
+  test("1", () =>
+    expect(indexToLineCol(file, 0)).toStrictEqual({ line: 0, col: 0 }));
+  test("2", () =>
+    expect(indexToLineCol(file, 5)).toStrictEqual({ line: 0, col: 5 }));
+  test("3", () =>
+    expect(indexToLineCol(file, 27)).toStrictEqual({ line: 1, col: 0 }));
+  test("4", () =>
+    expect(indexToLineCol(file, 30)).toStrictEqual({ line: 1, col: 3 }));
+});

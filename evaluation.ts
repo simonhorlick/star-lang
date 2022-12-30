@@ -6,6 +6,7 @@ import {
   Var as VarT,
   Ref as RefT,
   Def as DefT,
+  Arrow as ArrowT,
 } from "./ast";
 
 export function isValue(term: Term): boolean {
@@ -47,11 +48,21 @@ export const Ref = (name: string): RefT => ({
   name: name,
 });
 
-export const Def = (name: string, term: Term): DefT => ({
+export const Def = (
+  name: string,
+  term: Term,
+  type: Type = { type: "ers" }
+): DefT => ({
   type: "def",
   name: name,
-  typ: { type: "ers" },
+  typ: type,
   term: term,
+});
+
+export const Arrow = (from: Type, to: Type): ArrowT => ({
+  type: "arrow",
+  from: from,
+  to: to,
 });
 
 // The shifting function below takes a “cutoff” parameter c that controls which variables should
