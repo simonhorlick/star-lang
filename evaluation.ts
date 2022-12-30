@@ -12,7 +12,7 @@ import {
 export function isValue(term: Term): boolean {
   // FIXME: I'm not sure if Var should be considered a value. In the book it
   // isn't.
-  return term.type == "lam" || term.type == "var";
+  return term.type == "lam"; // || term.type == "var";
 }
 
 export const App = (left: Term, right: Term): AppT => ({

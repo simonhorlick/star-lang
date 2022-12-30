@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context } from "./ast";
-import { Check } from "./check";
+import { Check, GetType } from "./check";
 import { Abs, App, Arrow, Ref, Var } from "./evaluation";
 
 // What are we testing here?
@@ -24,6 +24,10 @@ import { Abs, App, Arrow, Ref, Var } from "./evaluation";
 // TODO: For each of these come up with some example test cases.
 // TODO: Add Kinds
 // TODO: Add polymorphism (T-TAbs)
+
+//
+// Typing Rules
+//
 
 // x:T ∈ Γ
 // ------- T-Var
@@ -81,5 +85,14 @@ describe("typechecker", () => {
     );
 
     expect(Check(ctx, program)).toBe(true);
+  });
+
+  test("T-Abs", () => {
+    const ctx: Context = [];
+
+    // typeof(λa:A. a) is A->A
+    const program = Abs("a", Var("a", 0), Ref("A"));
+
+    expect(GetType(ctx, program)).toBe(Arrow(Ref("A"), Ref("A")));
   });
 });

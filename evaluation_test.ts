@@ -4,14 +4,21 @@ import { Abs, App, Def, isValue, reduceOnce, Ref, Var } from "./evaluation";
 import { pretty } from "./pretty";
 
 function reduce(defs: DefT[], t: Term): Term {
+  let prevTerm = "";
   while (true) {
-    console.log(pretty(t));
+    let printTerm = pretty(t);
+    console.log(printTerm);
+
+    if (prevTerm == printTerm) {
+      throw "term was not reduced";
+    }
 
     if (isValue(t)) {
       break;
     }
 
     t = reduceOnce(defs, t);
+    prevTerm = printTerm;
   }
 
   return t;
@@ -162,6 +169,31 @@ describe("evaluation", () => {
 
     const expected = one;
     const actual = reduce([tru, fls, testfn], ifElse);
+
+    expect(actual).toStrictEqual(expected);
+  });
+
+  test("should ensure redex uses up bound variable", () => {
+    // Γ = [z→2, y→1]
+    // (λx. y(x)(z))(λx. x)
+    // y(λx. x)(z)
+    // This corresponds to the nameless representation:
+    // (λx. 1(0)(2))(λx. 0)
+    // After one step of evaluation, then indices for y and z are reduced by 1
+    // as the x binder has now been used up.
+    // 0(λx. 0)(1)
+
+    let src = App(
+      Abs("x", App(App(Var("y", 1, 3), Var("x", 0, 3)), Var("z", 2, 3))),
+      Abs("x", Var("x", 0, 3))
+    );
+
+    let expected = App(
+      App(Var("y", 0, 2), Abs("x", Var("x", 0, 3))),
+      Var("z", 1, 2)
+    );
+
+    const actual = reduceOnce([], src);
 
     expect(actual).toStrictEqual(expected);
   });
