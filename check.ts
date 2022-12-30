@@ -49,7 +49,7 @@ export const GetType = (ctx: Context, term: Term): Type => {
   }
 };
 
-export const Check = (ctx: Context, term: Term): boolean => {
+export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
   console.log(
     `Γ = ${ctx
       .map((v) => `${v.name}:${prettyT(v.typ)}`)
@@ -65,12 +65,18 @@ export const Check = (ctx: Context, term: Term): boolean => {
       let fType = GetType(ctx, f);
       if (fType.type == "arrow") {
         if (!typeEq(fType.from, GetType(ctx, x))) {
-          throw `expected ${prettyT(fType.from)} == ${prettyT(GetType(ctx, x))}`;
+          return [
+            {
+              msg: `expected ${prettyT(fType.from)} == ${prettyT(
+                GetType(ctx, x)
+              )}`,
+            },
+          ];
         } else {
-          return true;
+          return []; // ok
         }
       } else {
-        throw "expected arrow type";
+        return [{ msg: `expected arrow type` }];
       }
     case "lam":
       // FIXME: Add return type annotations, or just general annotations.
@@ -78,7 +84,11 @@ export const Check = (ctx: Context, term: Term): boolean => {
       return Check(newCtx, term.body);
     case "var":
       // A variable can be of any type, but it must exist in the context.
-      return term.index < ctx.length;
+      if (term.index < ctx.length) {
+        return [];
+      } else {
+        return [{ msg: `undefined variable ${term.name}` }];
+      }
     default:
       throw "cannot get type for " + term.type;
   }

@@ -58,19 +58,6 @@ import { Abs, App, Arrow, Ref, Var } from "./evaluation";
 // Γ ⊢ t:[t/x]T
 
 describe("typechecker", () => {
-  test("should accept well-typed application", () => {
-    const ctx: Context = [];
-
-    // λa:A. λf:A->B. f(a)
-    const program = Abs(
-      "a",
-      Abs("f", App(Var("f", 0), Var("a", 1)), Arrow(Ref("A"), Ref("B"))),
-      Ref("A")
-    );
-
-    expect(Check(ctx, program)).toBe(true);
-  });
-
   test("should calculate type of lambda body (id)", () => {
     // The type of λa:A. a is A->A.
     const program = Abs("a", Var("a", 0), Ref("A"));
@@ -84,9 +71,31 @@ describe("typechecker", () => {
     expect(GetType(ctx, program)).toStrictEqual(Arrow(Ref("A"), Ref("B")));
   });
 
+  test("should accept well-typed application", () => {
+    // λa:A. λf:A->B. f(a)
+    const program = Abs(
+      "a",
+      Abs("f", App(Var("f", 0), Var("a", 1)), Arrow(Ref("A"), Ref("B"))),
+      Ref("A")
+    );
+
+    expect(Check([], program)).toStrictEqual([]);
+  });
+
   test("bound variable must exist", () => {
     const ctx: Context = [];
     const program = Abs("a", Var("b", 1), Ref("A"));
-    expect(Check(ctx, program)).toBe(false);
+    expect(Check(ctx, program)).toStrictEqual([
+      { msg: "undefined variable b" },
+    ]);
+  });
+
+  test("app requires lhs to be an arrow", () => {
+    const ctx: Context = [
+      { name: "b", typ: Ref("B") },
+      { name: "a", typ: Ref("A") },
+    ];
+    const program = App(Var("a", 0), Var("b", 1));
+    expect(Check(ctx, program)).toStrictEqual([{ msg: "expected arrow type" }]);
   });
 });
