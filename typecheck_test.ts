@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context } from "./ast";
 import { Check, GetType } from "./check";
-import { Abs, App, Arrow, Ref, Var } from "./evaluation";
+import { Abs, Ann, App, Arrow, Ref, Var } from "./evaluation";
 
 // TODO: Add Kinds
 // TODO: Add polymorphism (T-TAbs)
@@ -78,5 +78,20 @@ describe("typechecker", () => {
     ];
     const program = App(Var("a", 0), Var("b", 1));
     expect(Check(ctx, program)).toStrictEqual([{ msg: "expected arrow type" }]);
+  });
+
+  test("should ensure annotated type matches calculated type", () => {
+    // (λa:A. a):A->A
+    const program = Ann(
+      Abs("a", Var("a", 0), Ref("A")),
+      Arrow(Ref("A"), Ref("A"))
+    );
+    expect(Check([], program)).toStrictEqual([]);
+  });
+
+  test("should fail if annotated type doesn't match", () => {
+    // (λa:A. a):X
+    const program = Ann(Abs("a", Var("a", 0), Ref("A")), Ref("X"));
+    expect(Check([], program)).toStrictEqual([{ msg: "expected X; got A→A" }]);
   });
 });

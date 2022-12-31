@@ -6,6 +6,7 @@ import {
   Var as VarT,
   Ref as RefT,
   Def as DefT,
+  Ann as AnnT,
   Arrow as ArrowT,
 } from "./ast";
 
@@ -19,6 +20,12 @@ export const App = (left: Term, right: Term): AppT => ({
   type: "app",
   left: left,
   right: right,
+});
+
+export const Ann = (term: Term, type: Type): AnnT => ({
+  type: "ann",
+  term: term,
+  typ: type,
 });
 
 export const Abs = (
@@ -142,6 +149,9 @@ export function reduceOnce(defs: DefT[], term: Term): Term {
     }
   } else if (term.type == "lam") {
     throw "cannot reduce Abs";
+  } else if (term.type == "ann") {
+    // ignored at runtime
+    return reduceOnce(defs, term.term);
   } else {
     const match = defs.filter((d) => d.name == term.name);
     if (match.length == 0) {

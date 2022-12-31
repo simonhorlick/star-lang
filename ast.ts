@@ -1,4 +1,4 @@
-import { Abs } from "./evaluation";
+import { Abs, Ann, App, Var } from "./evaluation";
 import {
   Parser,
   bind,
@@ -32,6 +32,7 @@ export type Context = Array<{ name: string; typ: Type }>;
 
 export type Type = Arrow | Ref | Erased;
 
+// A type that has been erased.
 export type Erased = {
   type: "ers";
 };
@@ -50,12 +51,14 @@ export type Abs = {
   body: Term; // the body of the abstraction
 };
 
+// App is a function application.
 export type App = {
   type: "app";
   left: Term;
   right: Term;
 };
 
+// A bound variable.
 export type Var = {
   type: "var";
 
@@ -70,6 +73,7 @@ export type Var = {
   contextLength: number;
 };
 
+// A reference.
 export type Ref = {
   type: "ref";
 
@@ -77,8 +81,20 @@ export type Ref = {
   name: string;
 };
 
-export type Term = Abs | App | Var | Ref;
+// A type annotation.
+export type Ann = {
+  type: "ann";
 
+  // The term this annotation applies to.
+  term: Term;
+
+  // The annotated type.
+  typ: Type;
+};
+
+export type Term = Abs | App | Var | Ref | Ann;
+
+// A top-level definition.
 export type Def = {
   type: "def";
   name: string;
@@ -352,31 +368,26 @@ function getDeBruijinIndex(ctx: Context, name: string): number {
 export function transformDebruijin(term: Term, ctx: Context = []): Term {
   switch (term.type) {
     case "app":
-      return {
-        type: "app",
-        left: transformDebruijin(term.left, ctx),
-        right: transformDebruijin(term.right, ctx),
-      } as App;
+      return App(
+        transformDebruijin(term.left, ctx),
+        transformDebruijin(term.right, ctx)
+      );
     case "lam":
       const newCtx = [...ctx, { name: term.name, typ: term.bindType }];
-      return {
-        type: "lam",
-        name: term.name,
-        body: transformDebruijin(term.body, newCtx),
-        bindType: term.bindType,
-      } as Abs;
+      return Abs(
+        term.name,
+        transformDebruijin(term.body, newCtx),
+        term.bindType
+      );
     case "var":
       return term;
+    case "ann":
+      return Ann(transformDebruijin(term.term, ctx), term.typ);
     case "ref":
       // If this name exists in the context then compute its index. If it
       // doesn't exist, leave it as a ref.
       if (ctx.some((x) => x.name == term.name)) {
-        return {
-          type: "var",
-          name: term.name,
-          index: getDeBruijinIndex(ctx, term.name),
-          contextLength: ctx.length,
-        };
+        return Var(term.name, getDeBruijinIndex(ctx, term.name), ctx.length);
       } else {
         return term;
       }

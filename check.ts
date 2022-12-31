@@ -67,7 +67,7 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
         if (!typeEq(fType.from, xType)) {
           return [
             {
-              msg: `expected ${prettyT(fType.from)} == ${prettyT(xType)}`,
+              msg: `expected ${prettyT(fType.from)}; ${prettyT(xType)}`,
             },
           ];
         } else {
@@ -86,8 +86,19 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
       } else {
         return [{ msg: `undefined variable ${term.name}` }];
       }
-    // TODO: Add return type annotations, or just general annotations.
-    default:
-      throw "cannot get type for " + term.type;
+    case "ann":
+      // Check the annotated type matches the computed type.
+      const type = GetType(ctx, term.term);
+      if (!typeEq(term.typ, type)) {
+        return [
+          {
+            msg: `expected ${prettyT(term.typ)}; got ${prettyT(type)}`,
+          },
+        ];
+      } else {
+        return []; // ok
+      }
+    case "ref":
+      throw "unexpected ref";
   }
 };
