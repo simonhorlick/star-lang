@@ -61,15 +61,13 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
       // In the term f(x), when applying x:X to f:A->B, ensure X == A.
       let x = term.right;
       let f = term.left;
-      // FIXME: Remove the used variable from the context.
       let fType = GetType(ctx, f);
       if (fType.type == "arrow") {
-        if (!typeEq(fType.from, GetType(ctx, x))) {
+        const xType = GetType(ctx, x);
+        if (!typeEq(fType.from, xType)) {
           return [
             {
-              msg: `expected ${prettyT(fType.from)} == ${prettyT(
-                GetType(ctx, x)
-              )}`,
+              msg: `expected ${prettyT(fType.from)} == ${prettyT(xType)}`,
             },
           ];
         } else {
@@ -79,7 +77,6 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
         return [{ msg: `expected arrow type` }];
       }
     case "lam":
-      // FIXME: Add return type annotations, or just general annotations.
       let newCtx: Context = [...ctx, { name: term.name, typ: term.bindType }];
       return Check(newCtx, term.body);
     case "var":
@@ -89,6 +86,7 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
       } else {
         return [{ msg: `undefined variable ${term.name}` }];
       }
+    // TODO: Add return type annotations, or just general annotations.
     default:
       throw "cannot get type for " + term.type;
   }

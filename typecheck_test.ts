@@ -3,25 +3,6 @@ import { Context } from "./ast";
 import { Check, GetType } from "./check";
 import { Abs, App, Arrow, Ref, Var } from "./evaluation";
 
-// What are we testing here?
-// - given a term:
-// - we want to reject programs that would otherwise fail to evaluate (no matching rules)
-//   - λa:A. λab:A->B. ab(a) ✅
-//   - λb:A. λab:A->B. ab(b) ❌ T-App: ab has type A->B, but applied to argument of type B.
-// - does the function body evaluate to the annotated return type?
-//      func id:X = λx:X. x ✅
-//      func id:Y = λx:X. x ❌ (λx:X.x does not evaluate to type Y)
-// - do all applications apply to arguments of the same type?
-//      λn:Int. succ(n) ✅
-//      λn:Int→Int. succ(n) ❌ (succ expects Int, got Int→Int)
-// note that Int→Int is shorthand for Πx:Int. Int.
-// - λf:B→C. λg:A→B. λx:A. f(g(x))
-// - are there any undefined references in a top level definition?
-//      func id:X = λx:X. doesntexist(x) ❌ (reference doesntexist not found)
-// does a lambda abstraction have the correct type?
-// i.e. given t2:T2; then λx:T1. t2 has type  T1→T2 (or Πx:T1.T2)
-
-// TODO: For each of these come up with some example test cases.
 // TODO: Add Kinds
 // TODO: Add polymorphism (T-TAbs)
 

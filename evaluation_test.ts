@@ -67,10 +67,6 @@ const id = Def("id", transformDebruijin(Abs("x", Ref("x"))));
 
 // (λx:T11.t12)(v2) → [x/v2]t12     E-AppAbs
 
-// (λx:X.x)(y)
-// --------- using E-AppAbs
-// y
-
 //     t1 → t1'
 // ---------------- E-TApp
 // t1(T2) → t1'(T2)
