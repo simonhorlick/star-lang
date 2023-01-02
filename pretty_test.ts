@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
 
-import { Abs, App, Def, Ref, Var } from "./evaluation";
-import { pretty } from "./pretty";
+import { Abs, All, App, Def, Ref, Var } from "./evaluation";
+import { pretty, prettyT } from "./pretty";
 
 describe("pretty", () => {
   // tru = λt. λf. t

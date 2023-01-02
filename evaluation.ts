@@ -8,6 +8,8 @@ import {
   Def as DefT,
   Ann as AnnT,
   Arrow as ArrowT,
+  All as AllT,
+  Star as StarT,
 } from "./ast";
 
 export function isValue(term: Term): boolean {
@@ -39,6 +41,12 @@ export const Abs = (
   bindType: typ,
 });
 
+export const All = (name: string, body: Term): AllT => ({
+  type: "all",
+  name: name,
+  body: body,
+});
+
 export const Var = (
   name: string,
   index: number,
@@ -53,6 +61,10 @@ export const Var = (
 export const Ref = (name: string): RefT => ({
   type: "ref",
   name: name,
+});
+
+export const Star = (): StarT => ({
+  type: "star",
 });
 
 export const Def = (
@@ -134,29 +146,36 @@ function termSubstTop(s: Term, t: Term): Term {
 // Evaluate this term by a single step. When applied to a term that is not yet a value, it yields
 // the next step of evaluation for that term. When applied to a value an exception is thrown.
 export function reduceOnce(defs: DefT[], term: Term): Term {
-  if (term.type == "app") {
-    if (term.left.type == "lam" && isValue(term.right)) {
-      // E-AppAbs
-      let t12 = term.left.body;
-      let v2 = term.right;
-      return termSubstTop(v2, t12);
-    } else if (isValue(term.left)) {
-      // E-App2
-      return App(term.left, reduceOnce(defs, term.right));
-    } else {
-      // E-App1
-      return App(reduceOnce(defs, term.left), term.right);
-    }
-  } else if (term.type == "lam") {
-    throw "cannot reduce Abs";
-  } else if (term.type == "ann") {
-    // ignored at runtime
-    return reduceOnce(defs, term.term);
-  } else {
-    const match = defs.filter((d) => d.name == term.name);
-    if (match.length == 0) {
-      return term;
-    }
-    return match[0].term;
+  switch (term.type) {
+    case "app":
+      if (term.left.type == "lam" && isValue(term.right)) {
+        // E-AppAbs
+        let t12 = term.left.body;
+        let v2 = term.right;
+        return termSubstTop(v2, t12);
+      } else if (term.left.type == "all" && isValue(term.right)) {
+        // TODO: E-TAppTAbs
+        throw "not implemented";
+      } else if (isValue(term.left)) {
+        // E-App2
+        return App(term.left, reduceOnce(defs, term.right));
+      } else {
+        // E-App1
+        return App(reduceOnce(defs, term.left), term.right);
+      }
+    case "all":
+      throw "cannot reduce All";
+    case "lam":
+      throw "cannot reduce Abs";
+    case "var":
+      throw "cannot reduce Var";
+    case "ann": // ignored at runtime
+      return reduceOnce(defs, term.term);
+    case "ref":
+      const match = defs.filter((d) => d.name == term.name);
+      if (match.length == 0) {
+        return term;
+      }
+      return match[0].term;
   }
 }

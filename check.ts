@@ -1,19 +1,21 @@
 // check implements a typechecker for this language
 import { Context, Term, Type } from "./ast";
-import { Arrow } from "./evaluation";
+import { Arrow, Star } from "./evaluation";
 import { pretty, prettyT } from "./pretty";
 
 var _ = require("lodash");
 
 export const typeEq = (A: Type, B: Type) => _.isEqual(A, B);
 
-export const lookupType = (ctx: Context, index: number) =>
-  ctx[ctx.length - index - 1].typ;
+export const lookupType = (ctx: Context, index: number) => {
+  let x = ctx[ctx.length - index - 1];
+  return x.type == "bind" ? x.typ : Star();
+};
 
 export const GetType = (ctx: Context, term: Term): Type => {
   console.log(
     `Γ = ${ctx
-      .map((v) => `${v.name}:${prettyT(v.typ)}`)
+      .map((v) => `${v.name}:${v.type == "bind" ? prettyT(v.typ) : "★"}`)
       .join(",")}; term = ${pretty(term)}`
   );
 
@@ -24,7 +26,10 @@ export const GetType = (ctx: Context, term: Term): Type => {
       // ------------------- T-Abs
       // Γ ⊢ λx:T1. t2:T1→T2
       // Append the bound variable to the context.
-      let newCtx: Context = [...ctx, { name: term.name, typ: term.bindType }];
+      let newCtx: Context = [
+        ...ctx,
+        { type: "bind", name: term.name, typ: term.bindType },
+      ];
       const T1 = term.bindType;
       const T2 = GetType(newCtx, term.body);
       return Arrow(T1, T2);
@@ -52,7 +57,7 @@ export const GetType = (ctx: Context, term: Term): Type => {
 export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
   console.log(
     `Γ = ${ctx
-      .map((v) => `${v.name}:${prettyT(v.typ)}`)
+      .map((v) => `${v.name}:${v.type == "bind" ? prettyT(v.typ) : "★"}`)
       .join(",")}; term = ${pretty(term)}`
   );
 
@@ -76,9 +81,17 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
       } else {
         return [{ msg: `expected arrow type` }];
       }
-    case "lam":
-      let newCtx: Context = [...ctx, { name: term.name, typ: term.bindType }];
+    case "lam": {
+      let newCtx: Context = [
+        ...ctx,
+        { type: "bind", name: term.name, typ: term.bindType },
+      ];
       return Check(newCtx, term.body);
+    }
+    case "all": {
+      let newCtx: Context = [...ctx, { type: "tbind", name: term.name }];
+      return Check(newCtx, term.body);
+    }
     case "var":
       // A variable can be of any type, but it must exist in the context.
       if (term.index < ctx.length) {
@@ -86,7 +99,7 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
       } else {
         return [{ msg: `undefined variable ${term.name}` }];
       }
-    case "ann":
+    case "ann": {
       // Check the annotated type matches the computed type.
       const type = GetType(ctx, term.term);
       if (!typeEq(term.typ, type)) {
@@ -98,6 +111,7 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
       } else {
         return []; // ok
       }
+    }
     case "ref":
       throw "unexpected ref";
   }

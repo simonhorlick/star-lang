@@ -1,4 +1,4 @@
-import { Abs, Ann, App, Var } from "./evaluation";
+import { Abs, Ann, App, Arrow, Ref, Star, All, Var } from "./evaluation";
 import {
   Parser,
   bind,
@@ -28,9 +28,14 @@ import {
   whitespace,
 } from "./parser";
 
-export type Context = Array<{ name: string; typ: Type }>;
+export type VariableBinding = { type: "bind"; name: string; typ: Type };
+export type TypeVariableBinding = { type: "tbind"; name: string };
 
-export type Type = Arrow | Ref | Erased;
+export type Binding = VariableBinding | TypeVariableBinding;
+
+export type Context = Binding[];
+
+export type Type = Arrow | Ref | Erased | Var | Star;
 
 // A type that has been erased.
 export type Erased = {
@@ -48,6 +53,14 @@ export type Abs = {
   type: "lam";
   name: string; // name of the binder
   bindType: Type; // type of the bound variable
+  body: Term; // the body of the abstraction
+};
+
+// All is a type abstraction. Types that occur within the body of this
+// abstraction are substituted when a type application occurs.
+export type All = {
+  type: "all";
+  name: string; // name of the binder
   body: Term; // the body of the abstraction
 };
 
@@ -81,6 +94,11 @@ export type Ref = {
   name: string;
 };
 
+// The type of types.
+export type Star = {
+  type: "star";
+};
+
 // A type annotation.
 export type Ann = {
   type: "ann";
@@ -92,7 +110,7 @@ export type Ann = {
   typ: Type;
 };
 
-export type Term = Abs | App | Var | Ref | Ann;
+export type Term = Abs | App | Var | Ref | Ann | All;
 
 // A top-level definition.
 export type Def = {
@@ -172,10 +190,9 @@ export const parseLineComment: Parser<Com> = bind(str("//"), (_) =>
 );
 
 // reference parses a "variable" in the programming language.
-export const reference: Parser<Ref> = map(identifier, (result: string) => ({
-  type: "ref",
-  name: result,
-}));
+export const reference: Parser<Ref> = map(identifier, (result: string) =>
+  Ref(result)
+);
 
 // parenthesis is a parser that requires an opening and closing parenthesis to
 // surround the given parser.
@@ -209,11 +226,7 @@ export const arrow: (
             type: "arrow",
             from: lhs,
             to: front(r).reduceRight(
-              (prev, curr) => ({
-                type: "arrow",
-                from: curr,
-                to: prev,
-              }),
+              (prev, curr) => Arrow(curr, prev),
               last(r)
             ),
           })
@@ -372,13 +385,21 @@ export function transformDebruijin(term: Term, ctx: Context = []): Term {
         transformDebruijin(term.left, ctx),
         transformDebruijin(term.right, ctx)
       );
-    case "lam":
-      const newCtx = [...ctx, { name: term.name, typ: term.bindType }];
+    case "lam": {
+      const newCtx: Context = [
+        ...ctx,
+        { type: "bind", name: term.name, typ: term.bindType },
+      ];
       return Abs(
         term.name,
         transformDebruijin(term.body, newCtx),
         term.bindType
       );
+    }
+    case "all": {
+      const newCtx: Context = [...ctx, { type: "tbind", name: term.name }];
+      return All(term.name, transformDebruijin(term.body, newCtx));
+    }
     case "var":
       return term;
     case "ann":

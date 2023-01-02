@@ -1,6 +1,15 @@
 import { describe, expect, test } from "@jest/globals";
 import { Def as DefT, Term, transformDebruijin } from "./ast";
-import { Abs, App, Def, isValue, reduceOnce, Ref, Var } from "./evaluation";
+import {
+  Abs,
+  App,
+  Def,
+  isValue,
+  reduceOnce,
+  Ref,
+  All,
+  Var,
+} from "./evaluation";
 import { pretty } from "./pretty";
 
 function reduce(defs: DefT[], t: Term): Term {
@@ -80,7 +89,7 @@ describe("debruijin", () => {
     const expected: Term = Abs("x", Var("t", 1, 2));
 
     const actual = transformDebruijin(Abs("x", Ref("t")), [
-      { name: "t", typ: { type: "ers" } },
+      { type: "bind", name: "t", typ: { type: "ers" } },
     ]);
 
     expect(actual).toStrictEqual(expected);
@@ -190,6 +199,17 @@ describe("evaluation", () => {
     );
 
     const actual = reduceOnce([], src);
+
+    expect(actual).toStrictEqual(expected);
+  });
+
+  test("should evaluate polymorphic identity function app", () => {
+    // (λX. λx:X. x)(Y)
+    // λx:Y. x
+    const program = App(All("X", Abs("x", Var("x", 0), Var("X", 1))), Ref("Y"));
+
+    const actual = reduceOnce([], program);
+    const expected = Abs("x", Var("x", 0), Ref("Y"));
 
     expect(actual).toStrictEqual(expected);
   });

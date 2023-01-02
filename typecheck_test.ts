@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context } from "./ast";
 import { Check, GetType } from "./check";
-import { Abs, Ann, App, Arrow, Ref, Var } from "./evaluation";
+import { Abs, Ann, App, Arrow, Ref, Star, All, Var } from "./evaluation";
 
 // TODO: Add Kinds
 // TODO: Add polymorphism (T-TAbs)
@@ -47,7 +47,7 @@ describe("typechecker", () => {
 
   test("should calculate type of lambda body using variable from context", () => {
     // The type of λa:A. b is A->B.
-    const ctx: Context = [{ name: "b", typ: Ref("B") }];
+    const ctx: Context = [{ type: "bind", name: "b", typ: Ref("B") }];
     const program = Abs("a", Var("b", 1), Ref("A"));
     expect(GetType(ctx, program)).toStrictEqual(Arrow(Ref("A"), Ref("B")));
   });
@@ -73,8 +73,8 @@ describe("typechecker", () => {
 
   test("app requires lhs to be an arrow", () => {
     const ctx: Context = [
-      { name: "b", typ: Ref("B") },
-      { name: "a", typ: Ref("A") },
+      { type: "bind", name: "b", typ: Ref("B") },
+      { type: "bind", name: "a", typ: Ref("A") },
     ];
     const program = App(Var("a", 0), Var("b", 1));
     expect(Check(ctx, program)).toStrictEqual([{ msg: "expected arrow type" }]);
@@ -93,5 +93,11 @@ describe("typechecker", () => {
     // (λa:A. a):X
     const program = Ann(Abs("a", Var("a", 0), Ref("A")), Ref("X"));
     expect(Check([], program)).toStrictEqual([{ msg: "expected X; got A→A" }]);
+  });
+
+  test("should pass polymorphic identity function abs", () => {
+    // id = λX. λx:X. x
+    const program = All("X", Abs("x", Var("x", 0), Var("X", 1)));
+    expect(Check([], program)).toStrictEqual([]);
   });
 });
