@@ -2,7 +2,7 @@ import { Term, Type } from "./ast";
 
 // pretty print a type
 export function prettyT(type: Type): string {
-  switch (type.type) {
+  switch (type._) {
     case "arrow":
       return prettyT(type.from) + "→" + prettyT(type.to);
     case "ers":
@@ -16,16 +16,15 @@ export function prettyT(type: Type): string {
 
 // pretty print a term
 export function pretty(term: Term): string {
-  switch (term.type) {
+  switch (term._) {
     case "lam":
-      const type =
-        term.bindType.type == "ers" ? "" : ":" + prettyT(term.bindType);
+      const type = term.bindType._ == "ers" ? "" : ":" + prettyT(term.bindType);
       return "λ" + term.name + type + ". " + pretty(term.body) + "";
     case "app":
       let l = pretty(term.left);
       let r = "(" + pretty(term.right) + ")";
 
-      if (term.left.type == "lam") {
+      if (term.left._ == "lam") {
         l = "(" + l + ")";
       }
 

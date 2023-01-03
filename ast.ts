@@ -1,4 +1,4 @@
-import { Abs, Ann, App, Arrow, Ref, Star, All, Var } from "./evaluation";
+import { Abs, Ann, App, Arrow, Ref, Star, All, Var, Def } from "./evaluation";
 import {
   Parser,
   bind,
@@ -39,18 +39,18 @@ export type Type = Arrow | Ref | Erased | Var | Star;
 
 // A type that has been erased.
 export type Erased = {
-  type: "ers";
+  _: "ers";
 };
 
 export type Arrow = {
-  type: "arrow";
+  _: "arrow";
   from: Type;
   to: Type;
 };
 
 // Abs is a lambda abstraction.
 export type Abs = {
-  type: "lam";
+  _: "lam";
   name: string; // name of the binder
   bindType: Type; // type of the bound variable
   body: Term; // the body of the abstraction
@@ -59,21 +59,21 @@ export type Abs = {
 // All is a type abstraction. Types that occur within the body of this
 // abstraction are substituted when a type application occurs.
 export type All = {
-  type: "all";
+  _: "all";
   name: string; // name of the binder
   body: Term; // the body of the abstraction
 };
 
 // App is a function application.
 export type App = {
-  type: "app";
+  _: "app";
   left: Term;
   right: Term;
 };
 
 // A bound variable.
 export type Var = {
-  type: "var";
+  _: "var";
 
   // The variable name for pretty printing.
   name: string;
@@ -88,7 +88,7 @@ export type Var = {
 
 // A reference.
 export type Ref = {
-  type: "ref";
+  _: "ref";
 
   // The name of the definition being referenced.
   name: string;
@@ -96,12 +96,12 @@ export type Ref = {
 
 // The type of types.
 export type Star = {
-  type: "star";
+  _: "star";
 };
 
 // A type annotation.
 export type Ann = {
-  type: "ann";
+  _: "ann";
 
   // The term this annotation applies to.
   term: Term;
@@ -114,21 +114,21 @@ export type Term = Abs | App | Var | Ref | Ann | All;
 
 // A top-level definition.
 export type Def = {
-  type: "def";
+  _: "def";
   name: string;
   term: Term;
   typ: Type;
 };
 
-export type Pkg = { type: "pkg"; name: string };
+export type Pkg = { _: "pkg"; name: string };
 
-export type Com = { type: "com"; text: string };
+export type Com = { _: "com"; text: string };
 
-export type Space = { type: "sp" };
-export type Newline = { type: "nl" };
+export type Space = { _: "sp" };
+export type Newline = { _: "nl" };
 
 export type File = {
-  type: "file";
+  _: "file";
   content: (Pkg | Com | Def | Space | Newline)[];
 };
 
@@ -144,7 +144,7 @@ export const identifier: Parser<string> = orFail(
 );
 
 type Origin<T> = {
-  type: "ori";
+  _: "ori";
   start: number;
   end: number;
   child: T;
@@ -163,7 +163,7 @@ export const block =
     }
 
     const origin: Origin<T> = {
-      type: "ori",
+      _: "ori",
       start: start,
       end: result.stream.idx,
       child: result.value,
@@ -173,9 +173,7 @@ export const block =
 
 // parsePackage parses a package declaration such as `package abc`.
 export const parsePackage: Parser<Pkg> = bind(str("package"), (_) =>
-  bind(whitespace, (_) =>
-    bind(identifier, (a) => pure({ type: "pkg", name: a }))
-  )
+  bind(whitespace, (_) => bind(identifier, (a) => pure({ _: "pkg", name: a })))
 );
 
 // parseLineComment parses an end-of-line comment and stops either at the end of
@@ -183,7 +181,7 @@ export const parsePackage: Parser<Pkg> = bind(str("package"), (_) =>
 export const parseLineComment: Parser<Com> = bind(str("//"), (_) =>
   bind(line, (l) =>
     pure({
-      type: "com",
+      _: "com",
       text: l,
     })
   )
@@ -223,7 +221,7 @@ export const arrow: (
         //      B    C
         (r) =>
           pure({
-            type: "arrow",
+            _: "arrow",
             from: lhs,
             to: front(r).reduceRight(
               (prev, curr) => Arrow(curr, prev),
@@ -286,12 +284,12 @@ export const application = (term: () => Parser<Term>): Parser<App> =>
         //     {{{f x} y} z}
         const expr = terms.slice(2).reduce<App>(
           (acc, t) => ({
-            type: "app",
+            _: "app",
             left: acc,
             right: t,
           }),
           {
-            type: "app",
+            _: "app",
             left: terms[0],
             right: terms[1],
           }
@@ -325,14 +323,7 @@ export const definition: Parser<Def> = bind(str("func"), (_) =>
               bind(optional(whitespace), (_) =>
                 bind(char("="), (_) =>
                   bind(whitespace, (_) =>
-                    bind(term, (tm) =>
-                      pure({
-                        type: "def",
-                        name: name,
-                        term: tm,
-                        typ: typ,
-                      })
-                    )
+                    bind(term, (tm) => pure(Def(name, tm, typ)))
                   )
                 )
               )
@@ -344,8 +335,8 @@ export const definition: Parser<Def> = bind(str("func"), (_) =>
   )
 );
 
-const parseWhitespace: Parser<Space> = map(whitespace, () => ({ type: "sp" }));
-const parseNewline: Parser<Newline> = map(newline, () => ({ type: "nl" }));
+const parseWhitespace: Parser<Space> = map(whitespace, () => ({ _: "sp" }));
+const parseNewline: Parser<Newline> = map(newline, () => ({ _: "nl" }));
 
 // parseFile is a parser for a source file.
 export const parseFile: Parser<File> = map(
@@ -360,7 +351,7 @@ export const parseFile: Parser<File> = map(
       )
     )
   ),
-  (r) => ({ type: "file", content: r })
+  (r) => ({ _: "file", content: r })
 );
 
 function getDeBruijinIndex(ctx: Context, name: string): number {
@@ -379,7 +370,7 @@ function getDeBruijinIndex(ctx: Context, name: string): number {
 }
 
 export function transformDebruijin(term: Term, ctx: Context = []): Term {
-  switch (term.type) {
+  switch (term._) {
     case "app":
       return App(
         transformDebruijin(term.left, ctx),

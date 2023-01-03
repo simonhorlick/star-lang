@@ -89,7 +89,7 @@ describe("debruijin", () => {
     const expected: Term = Abs("x", Var("t", 1, 2));
 
     const actual = transformDebruijin(Abs("x", Ref("t")), [
-      { type: "bind", name: "t", typ: { type: "ers" } },
+      { type: "bind", name: "t", typ: { _: "ers" } },
     ]);
 
     expect(actual).toStrictEqual(expected);

@@ -19,7 +19,7 @@ export const GetType = (ctx: Context, term: Term): Type => {
       .join(",")}; term = ${pretty(term)}`
   );
 
-  switch (term.type) {
+  switch (term._) {
     case "lam":
       // This is the definition of T-Abs:
       //    Γ,x:T1 ⊢ t2:T2
@@ -44,13 +44,13 @@ export const GetType = (ctx: Context, term: Term): Type => {
       //        Γ ⊢ t1(t2):T12
       const t1 = term.left;
       let t1Type = GetType(ctx, t1);
-      if (t1Type.type == "arrow") {
+      if (t1Type._ == "arrow") {
         return t1Type.to;
       } else {
-        throw "cannot get type for " + t1Type.type;
+        throw "cannot get type for " + t1Type._;
       }
     default:
-      throw "cannot get type for " + term.type;
+      throw "cannot get type for " + term._;
   }
 };
 
@@ -61,13 +61,13 @@ export const Check = (ctx: Context, term: Term): Array<{ msg: string }> => {
       .join(",")}; term = ${pretty(term)}`
   );
 
-  switch (term.type) {
+  switch (term._) {
     case "app":
       // In the term f(x), when applying x:X to f:A->B, ensure X == A.
       let x = term.right;
       let f = term.left;
       let fType = GetType(ctx, f);
-      if (fType.type == "arrow") {
+      if (fType._ == "arrow") {
         const xType = GetType(ctx, x);
         if (!typeEq(fType.from, xType)) {
           return [

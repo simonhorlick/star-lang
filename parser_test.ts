@@ -96,7 +96,7 @@ describe("parser", () => {
       actual: result(line(ts("one two three\nfour five six"))),
     },
     {
-      expected: { type: "pkg", name: "abc" },
+      expected: { _: "pkg", name: "abc" },
       actual: result(parsePackage(ts(`package abc`))),
     },
     {
@@ -129,14 +129,14 @@ describe("parser", () => {
     },
     {
       expected: [
-        { type: "com", text: " comment" },
-        { type: "com", text: " comment 2" },
+        { _: "com", text: " comment" },
+        { _: "com", text: " comment 2" },
       ],
       actual: result(many(parseLineComment)(ts("// comment\n// comment 2"))),
     },
     // comment at EOF
     {
-      expected: { type: "com", text: " comment" },
+      expected: { _: "com", text: " comment" },
       actual: result(parseLineComment(ts("// comment"))),
     },
     {
