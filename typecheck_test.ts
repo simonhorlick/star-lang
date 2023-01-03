@@ -1,7 +1,8 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context } from "./ast";
-import { Check, GetType } from "./check";
-import { Abs, Ann, App, Arrow, Ref, Star, All, Var } from "./evaluation";
+import { GetType } from "./check";
+import { Abs, Ann, App, Arrow, Ref, Star, TAbs, TApp, Var } from "./evaluation";
+import { prettyT } from "./pretty";
 
 // TODO: Add Kinds
 // TODO: Add polymorphism (T-TAbs)
@@ -60,15 +61,33 @@ describe("typechecker", () => {
       Ref("A")
     );
 
-    expect(Check([], program)).toStrictEqual([]);
+    const result = GetType([], program);
+    if (result._ == "typecheckerror") {
+      throw new Error();
+    }
+    expect(prettyT(result)).toBe("A→A→B→B");
   });
 
   test("bound variable must exist", () => {
     const ctx: Context = [];
     const program = Abs("a", Var("b", 1), Ref("A"));
-    expect(Check(ctx, program)).toStrictEqual([
-      { msg: "undefined variable b" },
-    ]);
+    expect(GetType(ctx, program)).toStrictEqual({
+      _: "typecheckerror",
+      msg: "undefined variable b",
+    });
+  });
+
+  test("doubleNat is well-typed", () => {
+    // λf:Nat→Nat. λx:Nat. f(f(x))
+    const program = Abs(
+      "f",
+      Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0))), Ref("Nat")),
+      Arrow(Ref("Nat"), Ref("Nat"))
+    );
+    const result = GetType([], program);
+    if (result._ == "typecheckerror") {
+      throw new Error();
+    }
   });
 
   test("app requires lhs to be an arrow", () => {
@@ -77,7 +96,10 @@ describe("typechecker", () => {
       { type: "bind", name: "a", typ: Ref("A") },
     ];
     const program = App(Var("a", 0), Var("b", 1));
-    expect(Check(ctx, program)).toStrictEqual([{ msg: "expected arrow type" }]);
+    expect(GetType(ctx, program)).toStrictEqual({
+      _: "typecheckerror",
+      msg: "expected arrow type",
+    });
   });
 
   test("should ensure annotated type matches calculated type", () => {
@@ -86,18 +108,40 @@ describe("typechecker", () => {
       Abs("a", Var("a", 0), Ref("A")),
       Arrow(Ref("A"), Ref("A"))
     );
-    expect(Check([], program)).toStrictEqual([]);
+    const result = GetType([], program);
+    if (result._ == "typecheckerror") {
+      throw new Error();
+    }
   });
 
   test("should fail if annotated type doesn't match", () => {
     // (λa:A. a):X
     const program = Ann(Abs("a", Var("a", 0), Ref("A")), Ref("X"));
-    expect(Check([], program)).toStrictEqual([{ msg: "expected X; got A→A" }]);
+    expect(GetType([], program)).toStrictEqual({
+      _: "typecheckerror",
+      msg: "expected X; got A→A",
+    });
   });
 
   test("should pass polymorphic identity function abs", () => {
     // id = λX. λx:X. x
-    const program = All("X", Abs("x", Var("x", 0), Var("X", 1)));
-    expect(Check([], program)).toStrictEqual([]);
+    const program = TAbs("X", Abs("x", Var("x", 0), Var("X", 1)));
+    const result = GetType([], program);
+    if (result._ == "typecheckerror") {
+      throw new Error();
+    }
+  });
+
+  test("should pass polymorphic identity function applied to a type", () => {
+    // (λX. λx:X. x)(Int)
+    // λx:Int. x
+    const program = TApp(
+      TAbs("X", Abs("x", Var("x", 0), Var("X", 1))),
+      Var("Int", 0)
+    );
+    const result = GetType([{ type: "tbind", name: "Int" }], program);
+    if (result._ == "typecheckerror") {
+      throw new Error();
+    }
   });
 });

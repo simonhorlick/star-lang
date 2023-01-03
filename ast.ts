@@ -1,4 +1,4 @@
-import { Abs, Ann, App, Arrow, Ref, Star, All, Var, Def } from "./evaluation";
+import { Abs, Ann, App, Arrow, Def, Ref, Star, TAbs, Var } from "./evaluation";
 import {
   Parser,
   bind,
@@ -35,11 +35,17 @@ export type Binding = VariableBinding | TypeVariableBinding;
 
 export type Context = Binding[];
 
-export type Type = Arrow | Ref | Erased | Var | Star;
+export type Type = Arrow | Ref | Erased | Var | Star | All;
 
 // A type that has been erased.
 export type Erased = {
   _: "ers";
+};
+
+export type All = {
+  _: "all";
+  name: string;
+  to: Type;
 };
 
 export type Arrow = {
@@ -56,10 +62,10 @@ export type Abs = {
   body: Term; // the body of the abstraction
 };
 
-// All is a type abstraction. Types that occur within the body of this
-// abstraction are substituted when a type application occurs.
-export type All = {
-  _: "all";
+// TAbs is a type abstraction. Types that occur within the body of
+// this abstraction are substituted when an application occurs.
+export type TAbs = {
+  _: "tabs";
   name: string; // name of the binder
   body: Term; // the body of the abstraction
 };
@@ -69,6 +75,13 @@ export type App = {
   _: "app";
   left: Term;
   right: Term;
+};
+
+// TApp is a type application.
+export type TApp = {
+  _: "tapp";
+  left: Term;
+  right: Type;
 };
 
 // A bound variable.
@@ -110,7 +123,7 @@ export type Ann = {
   typ: Type;
 };
 
-export type Term = Abs | App | Var | Ref | Ann | All;
+export type Term = Abs | App | TAbs | TApp | Var | Ref | Ann;
 
 // A top-level definition.
 export type Def = {
@@ -387,9 +400,9 @@ export function transformDebruijin(term: Term, ctx: Context = []): Term {
         term.bindType
       );
     }
-    case "all": {
+    case "tabs": {
       const newCtx: Context = [...ctx, { type: "tbind", name: term.name }];
-      return All(term.name, transformDebruijin(term.body, newCtx));
+      return TAbs(term.name, transformDebruijin(term.body, newCtx));
     }
     case "var":
       return term;

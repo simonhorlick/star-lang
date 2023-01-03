@@ -7,7 +7,8 @@ import {
   isValue,
   reduceOnce,
   Ref,
-  All,
+  TAbs,
+  TApp,
   Var,
 } from "./evaluation";
 import { pretty } from "./pretty";
@@ -203,13 +204,29 @@ describe("evaluation", () => {
     expect(actual).toStrictEqual(expected);
   });
 
+  // TODO: Add unit tests for all of the shifting methods. Individually!!
+  test("should shift up when entering a binder", () => {
+    throw "not implemented";
+  });
+
   test("should evaluate polymorphic identity function app", () => {
-    // (λX. λx:X. x)(Y)
+    // In system F the polymorphic id function is
+    // Λα:★. λx:α. x
+    // with type
+    // ∀α:★. α→α
+
+    // (ΛX. λx:X. x)(Y)
     // λx:Y. x
-    const program = App(All("X", Abs("x", Var("x", 0), Var("X", 1))), Ref("Y"));
+    const program = TApp(
+      TAbs("X", Abs("x", Var("x", 0), Var("X", 1))),
+      Ref("Y")
+    );
 
     const actual = reduceOnce([], program);
     const expected = Abs("x", Var("x", 0), Ref("Y"));
+
+    console.log(pretty(expected));
+    console.log(pretty(actual));
 
     expect(actual).toStrictEqual(expected);
   });
