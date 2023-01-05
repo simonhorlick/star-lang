@@ -1,4 +1,16 @@
-import { Abs, Ann, App, Arrow, Def, Ref, Star, TAbs, Var } from "./evaluation";
+import {
+  Abs,
+  All,
+  Ann,
+  App,
+  Arrow,
+  Def,
+  Ref,
+  Star,
+  TAbs,
+  TApp,
+  Var,
+} from "./evaluation";
 import {
   Parser,
   bind,
@@ -94,9 +106,6 @@ export type Var = {
   // The de Bruijn index of this node. The number index stands for “the variable
   // bound by the index’th enclosing λ.”
   index: number;
-
-  // The length of the current context, as a consistency check.
-  contextLength: number;
 };
 
 // A reference.
@@ -412,7 +421,38 @@ export function transformDebruijin(term: Term, ctx: Context = []): Term {
       // If this name exists in the context then compute its index. If it
       // doesn't exist, leave it as a ref.
       if (ctx.some((x) => x.name == term.name)) {
-        return Var(term.name, getDeBruijinIndex(ctx, term.name), ctx.length);
+        return Var(term.name, getDeBruijinIndex(ctx, term.name));
+      } else {
+        return term;
+      }
+    case "tapp":
+      return TApp(
+        transformDebruijin(term.left, ctx),
+        transformDebruijinT(term.right, ctx)
+      );
+  }
+}
+
+export function transformDebruijinT(term: Type, ctx: Context = []): Type {
+  switch (term._) {
+    case "all":
+      return All(term.name, transformDebruijinT(term.to));
+    case "arrow":
+      return Arrow(
+        transformDebruijinT(term.from),
+        transformDebruijinT(term.to)
+      );
+    case "ers":
+      return term;
+    case "star":
+      return term;
+    case "var":
+      return term;
+    case "ref":
+      // If this name exists in the context then compute its index. If it
+      // doesn't exist, leave it as a ref.
+      if (ctx.some((x) => x.name == term.name)) {
+        return Var(term.name, getDeBruijinIndex(ctx, term.name));
       } else {
         return term;
       }

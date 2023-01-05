@@ -53,15 +53,10 @@ export const TApp = (left: Term, right: Type): TAppT => ({
   right: right,
 });
 
-export const Var = (
-  name: string,
-  index: number,
-  contextLength: number = -1
-): VarT => ({
+export const Var = (name: string, index: number): VarT => ({
   _: "var",
   name: name,
   index: index,
-  contextLength: contextLength,
 });
 
 export const Ref = (name: string): RefT => ({
@@ -96,17 +91,17 @@ export const All = (name: string, to: Type): AllT => ({
   name: name,
 });
 
-function termShift(d: number, t: Term): Term {
+// Shifting renumbers the indices of the free variables in a term.
+export function termShift(d: number, t: Term): Term {
   // The shifting function below takes a “cutoff” parameter c that controls which variables should
   // be shifted.
   const walk = (d: number, c: number, t: Term): Term => {
     if (t._ == "var") {
-      let n = t.contextLength;
       let x = t.index;
       if (x >= c) {
-        return Var(t.name, x + d, n + d);
+        return Var(t.name, x + d);
       } else {
-        return Var(t.name, x, n + d);
+        return Var(t.name, x);
       }
     } else if (t._ == "lam") {
       let t1 = t.body;
@@ -124,12 +119,11 @@ function termShift(d: number, t: Term): Term {
 function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
   switch (t._) {
     case "var": {
-      let n = t.contextLength;
       let x = t.index;
       if (x == j + c) {
         return termShift(c, s);
       } else {
-        return Var(t.name, x, n);
+        return Var(t.name, x);
       }
     }
     case "lam": {
@@ -157,14 +151,14 @@ function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
 }
 
 // The substitution [j -> s]t of term s for the variable numbered j in term t.
-function termSubst(j: number, s: Term, t: Term): Term {
+export function termSubst(j: number, s: Term, t: Term): Term {
   return termSubstWalk(j, s, 0, t);
 }
 
 // The term being substituted for the bound variable is first shifted up by one, then the
 // substitution is made, and then the whole result is shifted down by one to account for the
 // fact that the bound variable has been used up.
-function termSubstTop(s: Term, t: Term): Term {
+export function termSubstTop(s: Term, t: Term): Term {
   return termShift(-1, termSubst(0, termShift(1, s), t));
 }
 
@@ -180,11 +174,10 @@ function typeShiftAbove(d: number, c: number, tyT: Type): Type {
     switch (ty._) {
       case "var": {
         let x = ty.index;
-        let n = ty.contextLength;
         if (x >= c) {
-          return Var(ty.name, x + d, n + d);
+          return Var(ty.name, x + d);
         } else {
-          return Var(ty.name, x, n + d);
+          return Var(ty.name, x);
         }
       }
       case "arrow": {
@@ -209,7 +202,7 @@ function typeShiftAbove(d: number, c: number, tyT: Type): Type {
 }
 
 function tmmap(
-  onvar: (name: string, index: number, contextLength: number) => Term,
+  onvar: (name: string, index: number) => Term,
   ontype: (c: number, bindType: Type) => Type,
   c: number,
   t: Term
@@ -230,10 +223,10 @@ in walk c t
   const walk = (c: number, t: Term): Term => {
     switch (t._) {
       case "var":
-        return onvar(t.name, t.index, t.contextLength);
-      //  return Var(t.name, t.index, t.contextLength);
+        return onvar(t.name, t.index);
       case "lam":
-        return Abs(t.name, walk(c + 1, t.body), ontype(c, t.bindType));
+        // Here we use ontype(c + 1) so the type may reference this abstraction.
+        return Abs(t.name, walk(c + 1, t.body), ontype(c + 1, t.bindType));
       case "app":
         return App(walk(c, t.left), walk(c, t.right));
       case "tabs":
@@ -251,12 +244,7 @@ in walk c t
 }
 
 function tymap(
-  onvar: (
-    name: string,
-    j: number,
-    index: number,
-    contextLength: number
-  ) => Type,
+  onvar: (name: string, j: number, index: number) => Type,
   c: number,
   tyT: Type
 ): Type {
@@ -272,7 +260,7 @@ TyArr(tyT1,tyT2) → TyArr(walk c tyT1,walk c tyT2)
       case "arrow":
         return Arrow(walk(c, tyT.from), walk(c, tyT.to));
       case "var":
-        return onvar(tyT.name, c, tyT.index, tyT.contextLength);
+        return onvar(tyT.name, c, tyT.index);
       case "all": {
         let tyX = tyT.name;
         let tyT2 = tyT.to;
@@ -289,18 +277,18 @@ TyArr(tyT1,tyT2) → TyArr(walk c tyT1,walk c tyT2)
   return walk(c, tyT);
 }
 
-function typeSubst(tyS: Type, j: number, tyT: Type): Type {
+export function typeSubst(tyS: Type, j: number, tyT: Type): Type {
   return tymap(
-    (name: string, j: number, x: number, n: number) =>
-      x == j ? typeShift(j, tyS) : Var(name, x, n),
+    (name: string, j: number, x: number) =>
+      x == j ? typeShift(j, tyS) : Var(name, x),
     j,
     tyT
   );
 }
 
-function tytermSubst(tyS: Type, j: number, t: Term): Term {
+export function tytermSubst(tyS: Type, j: number, t: Term): Term {
   return tmmap(
-    (c, x, n) => Var(c, x, n),
+    (name, index) => Var(name, index),
     (j, tyT) => typeSubst(tyS, j, tyT),
     j,
     t

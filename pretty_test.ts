@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 
-import { Abs, TAbs, App, Def, Ref, Var } from "./evaluation";
+import { Abs, TAbs, App, Def, Ref, Var, TApp } from "./evaluation";
 import { pretty, prettyT } from "./pretty";
 
 describe("pretty", () => {
@@ -31,20 +31,17 @@ describe("pretty", () => {
       "(λx. 0)(λz. 0)"
     ));
   test("", () =>
-    expect(
-      pretty(Abs("s", Abs("z", App(Var("s", 1, 2), Var("z", 0, 2)))))
-    ).toBe("λs. λz. 1(0)"));
+    expect(pretty(Abs("s", Abs("z", App(Var("s", 1), Var("z", 0)))))).toBe(
+      "λs. λz. 1(0)"
+    ));
   test("", () =>
     expect(
       pretty(
-        Abs(
-          "s",
-          Abs("z", App(Var("s", 1, 2), App(Var("s", 1, 2), Var("z", 0, 2))))
-        )
+        Abs("s", Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0)))))
       )
     ).toBe("λs. λz. 1(1(0))"));
   test("type abstraction", () =>
     expect(
-      pretty(App(TAbs("X", Abs("x", Var("x", 0), Var("X", 1))), Ref("Y")))
+      pretty(TApp(TAbs("X", Abs("x", Var("x", 0), Var("X", 1))), Ref("Y")))
     ).toBe("(ΛX. λx:1. 0)(Y)"));
 });
