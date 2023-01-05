@@ -32,7 +32,17 @@ export function pretty(term: Term): string {
       let l = pretty(term.left);
       let r = "(" + pretty(term.right) + ")";
 
-      if (term.left._ == "lam" || term.left._ == "tabs") {
+      if (term.left._ == "lam") {
+        l = "(" + l + ")";
+      }
+
+      return l + r;
+    }
+    case "tapp": {
+      let l = pretty(term.left);
+      let r = "(" + prettyT(term.right) + ")";
+
+      if (term.left._ == "tabs") {
         l = "(" + l + ")";
       }
 
