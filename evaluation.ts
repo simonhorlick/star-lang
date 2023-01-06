@@ -121,6 +121,8 @@ function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
     case "var": {
       let x = t.index;
       if (x == j + c) {
+        // Substitute in the term s, renumbering any free variables so the
+        // expression is consistent.
         return termShift(c, s);
       } else {
         return Var(t.name, x);
@@ -150,7 +152,7 @@ function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
   }
 }
 
-// The substitution [j -> s]t of term s for the variable numbered j in term t.
+// Given a term t, find all Vars with index j and replace them with the term s.
 export function termSubst(j: number, s: Term, t: Term): Term {
   return termSubstWalk(j, s, 0, t);
 }
