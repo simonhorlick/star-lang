@@ -41,13 +41,11 @@ import {
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
-export type TypeVariableBinding = { type: "tbind"; name: string };
+export type TypeVariableBinding = { type: "tbind"; name: string; kind: Kind };
 
 export type Binding = VariableBinding | TypeVariableBinding;
 
 export type Context = Binding[];
-
-export type Type = Arrow | Ref | Erased | Var | Star | All;
 
 // A type that has been erased.
 export type Erased = {
@@ -58,8 +56,17 @@ export type All = {
   _: "all";
   name: string;
   to: Type;
+  kind: Kind; // The kind of the argument.
 };
 
+// KArrow (=>) is the kind of operators.
+export type KArrow = {
+  _: "karrow";
+  from: Kind;
+  to: Kind;
+};
+
+// Arrow is the type of functions.
 export type Arrow = {
   _: "arrow";
   from: Type;
@@ -80,6 +87,7 @@ export type TAbs = {
   _: "tabs";
   name: string; // name of the binder
   body: Term; // the body of the abstraction
+  kind: Kind; // the kind of the type abstraction
 };
 
 // App is a function application.
@@ -89,7 +97,12 @@ export type App = {
   right: Term;
 };
 
-// TApp is a type application.
+// TApp is a type application. We use Abs to abstract terms out of terms and
+// App to supply values for the variables we've abstracted out. TAbs is a way
+// of abstracting types out of terms so that we can use TApp to substitute
+// them back in later. When doing evaluation we can reduce a type abstraction
+// and a type application using the E-TappTabs rule, this will give us back a
+// term.
 export type TApp = {
   _: "tapp";
   left: Term;
@@ -116,7 +129,7 @@ export type Ref = {
   name: string;
 };
 
-// The type of types.
+// ★ is the kind of proper types.
 export type Star = {
   _: "star";
 };
@@ -131,6 +144,10 @@ export type Ann = {
   // The annotated type.
   typ: Type;
 };
+
+export type Kind = KArrow | Star;
+
+export type Type = Arrow | Ref | Erased | Var | All;
 
 export type Term = Abs | App | TAbs | TApp | Var | Ref | Ann;
 
@@ -376,7 +393,7 @@ export const parseFile: Parser<File> = map(
   (r) => ({ _: "file", content: r })
 );
 
-function getDeBruijinIndex(ctx: Context, name: string): number {
+export function getDeBruijinIndex(ctx: Context, name: string): number {
   let idx = -1;
   for (let i = 0; i < ctx.length; i++) {
     if (ctx[i].name == name) {
@@ -389,72 +406,4 @@ function getDeBruijinIndex(ctx: Context, name: string): number {
     console.error("failed to find binder for " + name);
   }
   return ctx.length - 1 - idx;
-}
-
-export function transformDebruijin(term: Term, ctx: Context = []): Term {
-  switch (term._) {
-    case "app":
-      return App(
-        transformDebruijin(term.left, ctx),
-        transformDebruijin(term.right, ctx)
-      );
-    case "lam": {
-      const newCtx: Context = [
-        ...ctx,
-        { type: "bind", name: term.name, typ: term.bindType },
-      ];
-      return Abs(
-        term.name,
-        transformDebruijin(term.body, newCtx),
-        term.bindType
-      );
-    }
-    case "tabs": {
-      const newCtx: Context = [...ctx, { type: "tbind", name: term.name }];
-      return TAbs(term.name, transformDebruijin(term.body, newCtx));
-    }
-    case "var":
-      return term;
-    case "ann":
-      return Ann(transformDebruijin(term.term, ctx), term.typ);
-    case "ref":
-      // If this name exists in the context then compute its index. If it
-      // doesn't exist, leave it as a ref.
-      if (ctx.some((x) => x.name == term.name)) {
-        return Var(term.name, getDeBruijinIndex(ctx, term.name));
-      } else {
-        return term;
-      }
-    case "tapp":
-      return TApp(
-        transformDebruijin(term.left, ctx),
-        transformDebruijinT(term.right, ctx)
-      );
-  }
-}
-
-export function transformDebruijinT(term: Type, ctx: Context = []): Type {
-  switch (term._) {
-    case "all":
-      return All(term.name, transformDebruijinT(term.to));
-    case "arrow":
-      return Arrow(
-        transformDebruijinT(term.from),
-        transformDebruijinT(term.to)
-      );
-    case "ers":
-      return term;
-    case "star":
-      return term;
-    case "var":
-      return term;
-    case "ref":
-      // If this name exists in the context then compute its index. If it
-      // doesn't exist, leave it as a ref.
-      if (ctx.some((x) => x.name == term.name)) {
-        return Var(term.name, getDeBruijinIndex(ctx, term.name));
-      } else {
-        return term;
-      }
-  }
 }

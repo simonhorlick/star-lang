@@ -12,10 +12,12 @@ import {
   All as AllT,
   Star as StarT,
   TApp as TAppT,
+  KArrow as KArrowT,
+  Kind,
 } from "./ast";
 
 export function isValue(term: Term): boolean {
-  return term._ == "lam";
+  return term._ == "lam" || term._ == "tabs";
 }
 
 export const App = (left: Term, right: Term): AppT => ({
@@ -41,10 +43,11 @@ export const Abs = (
   bindType: typ,
 });
 
-export const TAbs = (name: string, body: Term): TAbsT => ({
+export const TAbs = (name: string, body: Term, kind: Kind): TAbsT => ({
   _: "tabs",
   name: name,
   body: body,
+  kind: kind,
 });
 
 export const TApp = (left: Term, right: Type): TAppT => ({
@@ -68,6 +71,12 @@ export const Star = (): StarT => ({
   _: "star",
 });
 
+export const KArrow = (from: Kind, to: Kind): KArrowT => ({
+  _: "karrow",
+  from: from,
+  to: to,
+});
+
 export const Def = (
   name: string,
   term: Term,
@@ -85,10 +94,11 @@ export const Arrow = (from: Type, to: Type): ArrowT => ({
   to: to,
 });
 
-export const All = (name: string, to: Type): AllT => ({
+export const All = (name: string, to: Type, kind: Kind): AllT => ({
   _: "all",
   to: to,
   name: name,
+  kind: kind,
 });
 
 // Shifting renumbers the indices of the free variables in a term.
@@ -141,7 +151,7 @@ function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
     }
     case "tabs": {
       let t1 = t.body;
-      return TAbs(t.name, termSubstWalk(j, s, c + 1, t1));
+      return TAbs(t.name, termSubstWalk(j, s, c + 1, t1), t.kind);
     }
     case "tapp":
       return TApp(termSubstWalk(j, s, c, t.left), t.right);
@@ -190,13 +200,11 @@ function typeShiftAbove(d: number, c: number, tyT: Type): Type {
       case "all": {
         let tyX = ty.name;
         let tyT2 = ty.to;
-        return All(tyX, walk(c + 1, tyT2));
+        return All(tyX, walk(c + 1, tyT2), ty.kind);
       }
       case "ers":
         return ty;
       case "ref":
-        return ty;
-      case "star":
         return ty;
     }
   };
@@ -232,7 +240,7 @@ in walk c t
       case "app":
         return App(walk(c, t.left), walk(c, t.right));
       case "tabs":
-        return TAbs(t.name, walk(c + 1, t.body));
+        return TAbs(t.name, walk(c + 1, t.body), t.kind);
       case "tapp":
         return TApp(walk(c, t.left), ontype(c, t.right));
       case "ann":
@@ -266,13 +274,11 @@ TyArr(tyT1,tyT2) → TyArr(walk c tyT1,walk c tyT2)
       case "all": {
         let tyX = tyT.name;
         let tyT2 = tyT.to;
-        return All(tyX, walk(c + 1, tyT2));
+        return All(tyX, walk(c + 1, tyT2), tyT.kind);
       }
       case "ref":
         return tyT;
       case "ers":
-        return tyT;
-      case "star":
         return tyT;
     }
   };
@@ -297,6 +303,7 @@ export function tytermSubst(tyS: Type, j: number, t: Term): Term {
   );
 }
 
+// Increment any Var nodes that refer to free variables in the given type.
 export function typeShift(d: number, tyT: Type): Type {
   return typeShiftAbove(d, 0, tyT);
 }
