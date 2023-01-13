@@ -351,12 +351,6 @@ export function reduceOnce(defs: DefT[], term: Term): Term {
         let t1p = reduceOnce(defs, t1);
         return TApp(t1p, tyT2);
       }
-
-    /*
-        | TmTApp(fi,TmTAbs(_,x,t11),tyT2) → tytermSubstTop tyT2 t11
-        | TmTApp(fi,t1,tyT2) →
-            let t1’ = eval1 ctx t1 in TmTApp(fi, t1’, tyT2)
-      */
     case "tabs":
       throw "cannot reduce TAbs";
     case "lam":
