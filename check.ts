@@ -226,9 +226,9 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
       if (T2._ == "typecheckerror") {
         return T2;
       }
-      // Why is this shifted in the book?
+      // We just added x:T1 to the context while calculating the type of T2, so
+      // shift everything back down again here.
       return Arrow(T1, typeShift(-1, T2));
-      // return Arrow(T1, T2);
     }
     case "app": {
       // Γ ⊢ t1:T11→T12    Γ ⊢ t2:T11
