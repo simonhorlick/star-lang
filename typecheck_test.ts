@@ -1,6 +1,14 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context, Type } from "./ast";
-import { GetKind, GetType, simplifyty, typeEq } from "./check";
+import {
+  GetKind,
+  GetType,
+  reduceOnce,
+  simplifyty,
+  typeEq,
+  typeShift,
+  tytermSubst,
+} from "./check";
 import {
   Abs,
   All,
@@ -16,7 +24,6 @@ import {
   Var,
 } from "./ast";
 import { prettyT } from "./pretty";
-import { reduceOnce, typeShift } from "./evaluation";
 
 //
 // Typing Rules
@@ -267,6 +274,15 @@ describe("typechecker", () => {
 
   // pair = ΛA::★. ΛB::★. λa:A. λb:B.
   // fst = λp:Pair(A,B).
+
+  test("[X/Nat](λx:X.x)", () => {
+    // [X/Nat](λx:X.x)
+    // λx:Nat.x
+    let term = Abs("x", Var("x", 0), Var("X", 1));
+    let actual = tytermSubst(Var("Nat", 5), 0, term);
+    let expected = Abs("x", Var("x", 0), Var("Nat", 6));
+    expect(actual).toStrictEqual(expected);
+  });
 });
 
 describe("type operators", () => {

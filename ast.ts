@@ -1,3 +1,4 @@
+import { addTermToCtx, addTypeToCtx } from "./check";
 import {
   Parser,
   bind,
@@ -491,4 +492,77 @@ export function getDeBruijinIndex(ctx: Context, name: string): number {
     console.error("failed to find binder for " + name);
   }
   return ctx.length - 1 - idx;
+}
+
+export function transformDebruijin(term: Term, ctx: Context = []): Term {
+  switch (term._) {
+    case "app":
+      return App(
+        transformDebruijin(term.left, ctx),
+        transformDebruijin(term.right, ctx)
+      );
+    case "lam": {
+      const newCtx = addTermToCtx(ctx, term.name, term.bindType);
+      return Abs(
+        term.name,
+        transformDebruijin(term.body, newCtx),
+        term.bindType
+      );
+    }
+    case "tabs": {
+      const newCtx = addTypeToCtx(ctx, term.name, term.kind);
+      return TAbs(term.name, transformDebruijin(term.body, newCtx), term.kind);
+    }
+    case "var":
+      return term;
+    case "ann":
+      return Ann(transformDebruijin(term.term, ctx), term.typ);
+    case "ref":
+      // If this name exists in the context then compute its index. If it
+      // doesn't exist, leave it as a ref.
+      if (ctx.some((x) => x.name == term.name)) {
+        return Var(term.name, getDeBruijinIndex(ctx, term.name));
+      } else {
+        return term;
+      }
+    case "tapp":
+      return TApp(
+        transformDebruijin(term.left, ctx),
+        transformDebruijinT(term.right, ctx)
+      );
+  }
+}
+
+export function transformDebruijinT(term: Type, ctx: Context = []): Type {
+  switch (term._) {
+    case "all":
+      return All(term.name, transformDebruijinT(term.to), term.kind);
+    case "arrow":
+      return Arrow(
+        transformDebruijinT(term.from),
+        transformDebruijinT(term.to)
+      );
+    case "var":
+      return term;
+    case "ref":
+      // If this name exists in the context then compute its index. If it
+      // doesn't exist, leave it as a ref.
+      if (ctx.some((x) => x.name == term.name)) {
+        return Var(term.name, getDeBruijinIndex(ctx, term.name));
+      } else {
+        return term;
+      }
+    case "ttabs":
+      const newCtx = addTypeToCtx(ctx, term.name, term.kind);
+      return TTAbs(
+        term.name,
+        transformDebruijinT(term.body, newCtx),
+        term.kind
+      );
+    case "ttapp":
+      return TTApp(
+        transformDebruijinT(term.left, ctx),
+        transformDebruijinT(term.right, ctx)
+      );
+  }
 }

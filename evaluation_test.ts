@@ -1,105 +1,13 @@
 import { describe, expect, test } from "@jest/globals";
-import { addTermToCtx, addTypeToCtx } from "./check";
-import {
-  Context,
-  getDeBruijinIndex,
-  Term,
-  Type,
-  Abs,
-  All,
-  Ann,
-  App,
-  Arrow,
-  Ref,
-  Star,
-  TAbs,
-  TApp,
-  TTAbs,
-  TTApp,
-  Var,
-} from "./ast";
+import { Abs, Ref, Star, TAbs, TApp, Var } from "./ast";
 import * as Erased from "./erased";
 import {
   erase,
   reduce,
   reduceOnce2,
-  termShift,
-  termSubst,
-  tytermSubst,
+  termShift2,
+  termSubst2,
 } from "./evaluation";
-
-export function transformDebruijin(term: Term, ctx: Context = []): Term {
-  switch (term._) {
-    case "app":
-      return App(
-        transformDebruijin(term.left, ctx),
-        transformDebruijin(term.right, ctx)
-      );
-    case "lam": {
-      const newCtx = addTermToCtx(ctx, term.name, term.bindType);
-      return Abs(
-        term.name,
-        transformDebruijin(term.body, newCtx),
-        term.bindType
-      );
-    }
-    case "tabs": {
-      const newCtx = addTypeToCtx(ctx, term.name, term.kind);
-      return TAbs(term.name, transformDebruijin(term.body, newCtx), term.kind);
-    }
-    case "var":
-      return term;
-    case "ann":
-      return Ann(transformDebruijin(term.term, ctx), term.typ);
-    case "ref":
-      // If this name exists in the context then compute its index. If it
-      // doesn't exist, leave it as a ref.
-      if (ctx.some((x) => x.name == term.name)) {
-        return Var(term.name, getDeBruijinIndex(ctx, term.name));
-      } else {
-        return term;
-      }
-    case "tapp":
-      return TApp(
-        transformDebruijin(term.left, ctx),
-        transformDebruijinT(term.right, ctx)
-      );
-  }
-}
-
-export function transformDebruijinT(term: Type, ctx: Context = []): Type {
-  switch (term._) {
-    case "all":
-      return All(term.name, transformDebruijinT(term.to), term.kind);
-    case "arrow":
-      return Arrow(
-        transformDebruijinT(term.from),
-        transformDebruijinT(term.to)
-      );
-    case "var":
-      return term;
-    case "ref":
-      // If this name exists in the context then compute its index. If it
-      // doesn't exist, leave it as a ref.
-      if (ctx.some((x) => x.name == term.name)) {
-        return Var(term.name, getDeBruijinIndex(ctx, term.name));
-      } else {
-        return term;
-      }
-    case "ttabs":
-      const newCtx = addTypeToCtx(ctx, term.name, term.kind);
-      return TTAbs(
-        term.name,
-        transformDebruijinT(term.body, newCtx),
-        term.kind
-      );
-    case "ttapp":
-      return TTApp(
-        transformDebruijinT(term.left, ctx),
-        transformDebruijinT(term.right, ctx)
-      );
-  }
-}
 
 // tru = λt. λf. t
 const tru = Erased.Def(
@@ -189,52 +97,6 @@ describe("erasure", () => {
   });
 });
 
-describe("debruijin", () => {
-  test("TestComputeDebruijinIndicesSingleBinder", () => {
-    // Γ = [t]; λx.t
-    // λ.1
-    const expected: Term = Abs("x", Var("t", 1), Ref("T"));
-
-    const actual = transformDebruijin(Abs("x", Ref("t"), Ref("T")), [
-      { type: "bind", name: "t", typ: Ref("T") },
-    ]);
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  test("TestComputeDebruijinIndicesIdApp", () => {
-    // (λx. x)(λz. z)
-    // (λ. 0)(λ. 0)
-    const expected: Term = App(
-      Abs("x", Var("x", 0), Ref("X")),
-      Abs("z", Var("z", 0), Ref("Z"))
-    );
-    const actual = transformDebruijin(
-      App(Abs("x", Ref("x"), Ref("X")), Abs("z", Ref("z"), Ref("Z")))
-    );
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  test("TestComputeDebruijinIndicesChurchNat", () => {
-    // λs. λz. s (s z)
-    // λ. λ. 1 (1 0)
-    const expected = two;
-
-    const actual = erase(
-      transformDebruijin(
-        Abs(
-          "s",
-          Abs("z", App(Ref("s"), App(Ref("s"), Ref("z"))), Ref("Z")),
-          Ref("S")
-        )
-      )
-    );
-
-    expect(actual).toStrictEqual(expected);
-  });
-});
-
 describe("shifting", () => {
   test("ensure we only shift free variables", () => {
     // we need to shift the 2, but not the 0 or the 1, as 2 is free in this
@@ -242,16 +104,26 @@ describe("shifting", () => {
 
     // λ.λ.1(0(2)) shifted up by 2 is:
     // λ.λ.1(0(4))
-    let term = Abs(
+    let term = Erased.Abs(
       "x",
-      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 2))), Ref("Y")),
-      Ref("X")
+      Erased.Abs(
+        "y",
+        Erased.App(
+          Erased.Var("x", 1),
+          Erased.App(Erased.Var("y", 0), Erased.Var("z", 2))
+        )
+      )
     );
-    let actual = termShift(2, term);
-    let expected = Abs(
+    let actual = termShift2(2, term);
+    let expected = Erased.Abs(
       "x",
-      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 4))), Ref("Y")),
-      Ref("X")
+      Erased.Abs(
+        "y",
+        Erased.App(
+          Erased.Var("x", 1),
+          Erased.App(Erased.Var("y", 0), Erased.Var("z", 4))
+        )
+      )
     );
     expect(actual).toStrictEqual(expected);
   });
@@ -260,22 +132,32 @@ describe("shifting", () => {
     // note left association of app in the following syntax:
     // λ.01(λ.012) shifted up by 2 is:
     // λ.03(λ.014)
-    let term = Abs(
+    let term = Erased.Abs(
       "",
-      App(
-        App(Var("", 0), Var("", 1)),
-        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 2)), Ref(""))
-      ),
-      Ref("")
+      Erased.App(
+        Erased.App(Erased.Var("", 0), Erased.Var("", 1)),
+        Erased.Abs(
+          "",
+          Erased.App(
+            Erased.App(Erased.Var("", 0), Erased.Var("", 1)),
+            Erased.Var("", 2)
+          )
+        )
+      )
     );
-    let actual = termShift(2, term);
-    let expected = Abs(
+    let actual = termShift2(2, term);
+    let expected = Erased.Abs(
       "",
-      App(
-        App(Var("", 0), Var("", 3)),
-        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 4)), Ref(""))
-      ),
-      Ref("")
+      Erased.App(
+        Erased.App(Erased.Var("", 0), Erased.Var("", 3)),
+        Erased.Abs(
+          "",
+          Erased.App(
+            Erased.App(Erased.Var("", 0), Erased.Var("", 1)),
+            Erased.Var("", 4)
+          )
+        )
+      )
     );
     expect(actual).toStrictEqual(expected);
   });
@@ -289,16 +171,16 @@ describe("substitution", () => {
   // [x/s](t1 t2) = [x/s]t1 [x/s]t2
 
   test("[x/s]x = s", () => {
-    let term = Var("x", 1);
-    let actual = termSubst(1, Var("s", 2), term);
-    let expected = Var("s", 2);
+    let term = Erased.Var("x", 1);
+    let actual = termSubst2(1, Erased.Var("s", 2), term);
+    let expected = Erased.Var("s", 2);
     expect(actual).toStrictEqual(expected);
   });
 
   test("[x/s]y = y", () => {
-    let term = Var("y", 0);
-    let actual = termSubst(1, Var("s", 2), term);
-    let expected = Var("y", 0);
+    let term = Erased.Var("y", 0);
+    let actual = termSubst2(1, Erased.Var("s", 2), term);
+    let expected = Erased.Var("y", 0);
     expect(actual).toStrictEqual(expected);
   });
 
@@ -306,9 +188,15 @@ describe("substitution", () => {
     // [b/a](λb. b a)
     // [0/1](λ. 0 2)
     // λ. 0 2 i.e. λb. b a, this is the same, nothing has been substituted.
-    let term = Abs("b", App(Var("b", 0), Var("a", 2)), Ref("B"));
-    let actual = termSubst(0, Var("", 1), term);
-    let expected = Abs("b", App(Var("b", 0), Var("a", 2)), Ref("B"));
+    let term = Erased.Abs(
+      "b",
+      Erased.App(Erased.Var("b", 0), Erased.Var("a", 2))
+    );
+    let actual = termSubst2(0, Var("", 1), term);
+    let expected = Erased.Abs(
+      "b",
+      Erased.App(Erased.Var("b", 0), Erased.Var("a", 2))
+    );
     expect(actual).toStrictEqual(expected);
   });
 
@@ -319,21 +207,15 @@ describe("substitution", () => {
     // in debruijin form b=0,a=1:
     // [0/1](0 (λ.λ.2))
     // 1 (λ.λ.3)
-    let term = App(Var("", 0), Abs("", Abs("", Var("", 2), Ref("")), Ref("")));
-    let actual = termSubst(0, Var("", 1), term);
-    let expected = App(
-      Var("", 1),
-      Abs("", Abs("", Var("", 3), Ref("")), Ref(""))
+    let term = Erased.App(
+      Erased.Var("", 0),
+      Erased.Abs("", Erased.Abs("", Erased.Var("", 2)))
     );
-    expect(actual).toStrictEqual(expected);
-  });
-
-  test("[X/Nat](λx:X.x)", () => {
-    // [X/Nat](λx:X.x)
-    // λx:Nat.x
-    let term = Abs("x", Var("x", 0), Var("X", 1));
-    let actual = tytermSubst(Var("Nat", 5), 0, term);
-    let expected = Abs("x", Var("x", 0), Var("Nat", 6));
+    let actual = termSubst2(0, Erased.Var("", 1), term);
+    let expected = Erased.App(
+      Erased.Var("", 1),
+      Erased.Abs("", Erased.Abs("", Erased.Var("", 3)))
+    );
     expect(actual).toStrictEqual(expected);
   });
 });
