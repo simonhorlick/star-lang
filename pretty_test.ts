@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 
-import { Abs, TAbs, App, Def, Ref, Var, TApp, Star, Arrow } from "./ast";
+import { Abs, TAbs, App, Def, Ref, Var, TApp, Star, Pi } from "./ast";
 import { pretty, prettyC, prettyT } from "./pretty";
 import * as Erased from "./erased";
 
@@ -102,7 +102,7 @@ describe("pretty", () => {
               App(Var("f", 1), App(Var("f", 1), Var("x", 0))),
               Var("T", 1)
             ),
-            Arrow(Var("T", 0), Var("T", 0))
+            Pi(Var("T", 0), Var("T", 0))
           ),
           Star()
         ),

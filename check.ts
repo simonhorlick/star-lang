@@ -11,7 +11,7 @@ import {
   Var,
   Ref,
   Ann,
-  Arrow,
+  Pi,
   TAbs,
   All,
   TApp,
@@ -102,7 +102,7 @@ const TypecheckError = (msg: string): TypecheckError => ({
 
 export const GetKind = (ctx: Context, type: Type): Kind | TypecheckError => {
   switch (type._) {
-    case "arrow": {
+    case "pi": {
       let kfrom = GetKind(ctx, type.from);
       if (kfrom._ == "typecheckerror") {
         return kfrom;
@@ -228,7 +228,7 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
       }
       // We just added x:T1 to the context while calculating the type of T2, so
       // shift everything back down again here.
-      return Arrow(T1, typeShift(-1, T2));
+      return Pi(T1, typeShift(-1, T2));
     }
     case "app": {
       // Γ ⊢ t1:T11→T12    Γ ⊢ t2:T11
@@ -245,8 +245,8 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
         return tyT2;
       }
       let simplifyT1 = simplifyty(ctx, tyT1);
-      if (simplifyT1._ != "arrow") {
-        return TypecheckError("expected arrow type");
+      if (simplifyT1._ != "pi") {
+        return TypecheckError("expected pi type");
       }
 
       // Ensure the type of the term we're applying to the arrow matches the
@@ -323,8 +323,8 @@ export function simplifyty(ctx: Context, t: Type): Type {
   switch (t._) {
     case "all":
       return All(t.name, simplifyty(ctx, t.to), t.kind);
-    case "arrow":
-      return Arrow(simplifyty(ctx, t.from), simplifyty(ctx, t.to));
+    case "pi":
+      return Pi(simplifyty(ctx, t.from), simplifyty(ctx, t.to));
     case "ref":
       return t;
     case "var":
@@ -416,8 +416,8 @@ function typeShiftAbove(d: number, c: number, tyT: Type): Type {
         } else {
           return Var(ty.name, ty.index);
         }
-      case "arrow":
-        return Arrow(walk(c, ty.from), walk(c, ty.to));
+      case "pi":
+        return Pi(walk(c, ty.from), walk(c, ty.to));
       case "all":
         return All(ty.name, walk(c + 1, ty.to), ty.kind);
       case "ttabs":
@@ -434,8 +434,8 @@ function typeShiftAbove(d: number, c: number, tyT: Type): Type {
 export function typeSubst(tyS: Type, j: number, tyT: Type): Type {
   const walk = (c: number, t: Type): Type => {
     switch (t._) {
-      case "arrow":
-        return Arrow(walk(c, t.from), walk(c, t.to));
+      case "pi":
+        return Pi(walk(c, t.from), walk(c, t.to));
       case "var":
         return t.index == c ? typeShift(c, tyS) : Var(t.name, t.index);
       case "all":

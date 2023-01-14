@@ -14,7 +14,7 @@ import {
   All,
   Ann,
   App,
-  Arrow,
+  Pi,
   Ref,
   Star,
   TAbs,
@@ -63,7 +63,7 @@ describe("typechecker", () => {
     const program = Abs("a", Var("a", 0), Var("A", 0));
     expect(
       GetType([{ type: "tbind", name: "A", kind: Star() }], program)
-    ).toStrictEqual(Arrow(Var("A", 0), Var("A", 0)));
+    ).toStrictEqual(Pi(Var("A", 0), Var("A", 0)));
   });
 
   test("should calculate type of lambda body using variable from context", () => {
@@ -73,14 +73,14 @@ describe("typechecker", () => {
       { type: "bind", name: "b", typ: Ref("B") },
     ];
     const program = Abs("a", Var("b", 1), Var("A", 1));
-    expect(GetType(ctx, program)).toStrictEqual(Arrow(Var("A", 1), Ref("B")));
+    expect(GetType(ctx, program)).toStrictEqual(Pi(Var("A", 1), Ref("B")));
   });
 
   test("should accept well-typed application", () => {
     // Γ=[B::★,A::★]  λa:A. λf:A->B. f(a)
     const program = Abs(
       "a",
-      Abs("f", App(Var("f", 0), Var("a", 1)), Arrow(Var("A", 1), Var("B", 2))),
+      Abs("f", App(Var("f", 0), Var("a", 1)), Pi(Var("A", 1), Var("B", 2))),
       Var("A", 0)
     );
 
@@ -108,8 +108,8 @@ describe("typechecker", () => {
 
   test("type shift increments free variables", () => {
     // Both X and Y are free type variables.
-    const type = Arrow(Var("X", 0), Var("Y", 1));
-    expect(typeShift(1, type)).toStrictEqual(Arrow(Var("X", 1), Var("Y", 2)));
+    const type = Pi(Var("X", 0), Var("Y", 1));
+    expect(typeShift(1, type)).toStrictEqual(Pi(Var("X", 1), Var("Y", 2)));
   });
 
   test("type shift doesn't change bound variables", () => {
@@ -123,7 +123,7 @@ describe("typechecker", () => {
     Abs(
       "f",
       Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0))), Var("T", 1)),
-      Arrow(Var("T", 0), Var("T", 0))
+      Pi(Var("T", 0), Var("T", 0))
     ),
     Star()
   );
@@ -137,7 +137,7 @@ describe("typechecker", () => {
     expect(result).toStrictEqual(
       All(
         "T",
-        Arrow(Arrow(Var("T", 0), Var("T", 0)), Arrow(Var("T", 0), Var("T", 0))),
+        Pi(Pi(Var("T", 0), Var("T", 0)), Pi(Var("T", 0), Var("T", 0))),
         Star()
       )
     );
@@ -153,7 +153,7 @@ describe("typechecker", () => {
       throw new Error(result.msg);
     }
     expect(result).toStrictEqual(
-      Arrow(Arrow(Ref("Nat"), Ref("Nat")), Arrow(Ref("Nat"), Ref("Nat")))
+      Pi(Pi(Ref("Nat"), Ref("Nat")), Pi(Ref("Nat"), Ref("Nat")))
     );
   });
 
@@ -162,7 +162,7 @@ describe("typechecker", () => {
     const program = Abs(
       "f",
       Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0))), Var("Nat", 1)),
-      Arrow(Var("Nat", 0), Var("Nat", 0))
+      Pi(Var("Nat", 0), Var("Nat", 0))
     );
     const result = GetType(
       [{ type: "tbind", name: "Nat", kind: Star() }],
@@ -181,7 +181,7 @@ describe("typechecker", () => {
     const program = App(Var("a", 0), Var("b", 1));
     expect(GetType(ctx, program)).toStrictEqual({
       _: "typecheckerror",
-      msg: "expected arrow type",
+      msg: "expected pi type",
     });
   });
 
@@ -189,7 +189,7 @@ describe("typechecker", () => {
     // Γ=[A::★]  (λa:A. a):A->A
     const program = Ann(
       Abs("a", Var("a", 0), Var("A", 0)),
-      Arrow(Var("A", 0), Var("A", 0))
+      Pi(Var("A", 0), Var("A", 0))
     );
     const result = GetType(
       [{ type: "tbind", name: "A", kind: Star() }],
@@ -217,7 +217,7 @@ describe("typechecker", () => {
     expect(
       GetKind(
         [{ type: "tbind", name: "Nat", kind: Star() }],
-        Arrow(Var("Nat", 0), Var("Nat", 0))
+        Pi(Var("Nat", 0), Var("Nat", 0))
       )
     ).toStrictEqual(Star());
   });
@@ -294,7 +294,7 @@ describe("type operators", () => {
   const Bool: Type = Ref("Bool");
 
   // The type Nat→Bool.
-  const NatToBool: Type = Arrow(Nat, Bool);
+  const NatToBool: Type = Pi(Nat, Bool);
 
   const ctx: Context = [];
   const n2b = simplifyty(ctx, NatToBool);
@@ -304,27 +304,23 @@ describe("type operators", () => {
     expect(typeEq(n2b, simplifyty(ctx, NatToBool))).toBe(true));
 
   test("Nat→Bool === Nat→Id(Bool)", () => {
-    let s = simplifyty(ctx, Arrow(Nat, TTApp(Id, Bool)));
+    let s = simplifyty(ctx, Pi(Nat, TTApp(Id, Bool)));
     expect(typeEq(n2b, s)).toBe(true);
   });
 
   test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
     expect(
-      typeEq(n2b, simplifyty(ctx, Arrow(TTApp(Id, Nat), TTApp(Id, Bool))))
+      typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), TTApp(Id, Bool))))
     ).toBe(true));
 
   test("Nat→Bool === Id(Nat)→Bool", () =>
-    expect(typeEq(n2b, simplifyty(ctx, Arrow(TTApp(Id, Nat), Bool)))).toBe(
-      true
-    ));
+    expect(typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), Bool)))).toBe(true));
 
   test("Nat→Bool === Id(Nat→Bool)", () =>
-    expect(typeEq(n2b, simplifyty(ctx, TTApp(Id, Arrow(Nat, Bool))))).toBe(
-      true
-    ));
+    expect(typeEq(n2b, simplifyty(ctx, TTApp(Id, Pi(Nat, Bool))))).toBe(true));
 
   test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
-    const t = TTApp(Id, TTApp(Id, Arrow(TTApp(Id, Nat), Bool)));
+    const t = TTApp(Id, TTApp(Id, Pi(TTApp(Id, Nat), Bool)));
     console.log(prettyT(t));
     const s = simplifyty(ctx, t);
     console.log(prettyT(s));

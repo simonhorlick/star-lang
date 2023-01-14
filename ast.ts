@@ -50,15 +50,15 @@ export const All = (name: string, to: Type, kind: Kind): All => ({
   kind: kind,
 });
 
-// Arrow is the type of functions.
-export type Arrow = {
-  _: "arrow";
+// Π is the type of functions.
+export type Pi = {
+  _: "pi";
   from: Type;
   to: Type;
 };
 
-export const Arrow = (from: Type, to: Type): Arrow => ({
-  _: "arrow",
+export const Pi = (from: Type, to: Type): Pi => ({
+  _: "pi",
   from: from,
   to: to,
 });
@@ -226,7 +226,7 @@ export const Ann = (term: Term, type: Type): Ann => ({
 
 export type Kind = KArrow | Star;
 
-export type Type = Arrow | Ref | Var | All | TTAbs | TTApp;
+export type Type = Pi | Ref | Var | All | TTAbs | TTApp;
 
 export type Term = Abs | App | TAbs | TApp | Var | Ref | Ann;
 
@@ -322,9 +322,9 @@ export const reference: Parser<Ref> = map(identifier, (result: string) =>
 export const parenthesis = <T>(between: Parser<T>): Parser<T> =>
   bind(char("("), (_) => bind(between, (x) => bind(char(")"), (_) => pure(x))));
 
-export const arrow: (
-  type: () => Parser<Type>
-) => (s: Stream) => Result<Arrow> = (type) =>
+export const arrow: (type: () => Parser<Type>) => (s: Stream) => Result<Pi> = (
+  type
+) =>
   bind(
     // (A->B)->C
     either(reference, parenthesis(lazy(type))),
@@ -345,14 +345,12 @@ export const arrow: (
         //       /  \
         //      B    C
         (r) =>
-          pure({
-            _: "arrow",
-            from: lhs,
-            to: front(r).reduceRight(
-              (prev, curr) => Arrow(curr, prev),
-              last(r)
-            ),
-          })
+          pure(
+            Pi(
+              lhs,
+              front(r).reduceRight((prev, curr) => Pi(curr, prev), last(r))
+            )
+          )
       )
   );
 
@@ -537,11 +535,8 @@ export function transformDebruijinT(term: Type, ctx: Context = []): Type {
   switch (term._) {
     case "all":
       return All(term.name, transformDebruijinT(term.to), term.kind);
-    case "arrow":
-      return Arrow(
-        transformDebruijinT(term.from),
-        transformDebruijinT(term.to)
-      );
+    case "pi":
+      return Pi(transformDebruijinT(term.from), transformDebruijinT(term.to));
     case "var":
       return term;
     case "ref":

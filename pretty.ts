@@ -14,7 +14,7 @@ export function prettyK(kind: Kind): string {
 // pretty print a type
 export function prettyT(type: Type, indices: boolean = true): string {
   switch (type._) {
-    case "arrow":
+    case "pi":
       return prettyT(type.from, indices) + "→" + prettyT(type.to, indices);
     case "all":
       return (
