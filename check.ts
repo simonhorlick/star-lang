@@ -121,8 +121,6 @@ export const GetKind = (ctx: Context, type: Type): Kind | TypecheckError => {
         return TypecheckError("star kind expected");
       }
       return Star();
-    case "ers":
-      return Star();
     case "ref":
       throw "not implemented";
     case "var":
@@ -270,16 +268,17 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
       if (tyT1._ == "typecheckerror") {
         return tyT1;
       }
-      if (tyT1._ != "all") {
+      let styT1 = simplifyty(ctx, tyT1);
+      if (styT1._ != "all") {
         return TypecheckError("expected All");
       }
       let kindT2 = GetKind(ctx, tyT2);
       if (kindT2._ == "typecheckerror") {
         return kindT2;
       }
-      if (!kindEq(tyT1.kind, kindT2)) {
+      if (!kindEq(styT1.kind, kindT2)) {
       }
-      let tyT12 = tyT1.to;
+      let tyT12 = styT1.to;
       return typeSubstTop(tyT2, tyT12);
     }
     case "ann": {
@@ -300,27 +299,6 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
   }
 };
 
-export function computeType(ctx: Context, t: Type): Type {
-  switch (t._) {
-    case "all":
-    case "arrow":
-    case "ers":
-    case "ref":
-    case "var":
-    case "ttabs":
-      return t;
-    case "ttapp":
-      // Q-AppAbs
-      // (λX:K11.T12)T2 ≡ [X/T2]T12
-      if (t.left._ == "ttabs") {
-        let tyT12 = t.left.body;
-        let tyT2 = t.right;
-        return typeSubstTop(tyT2, tyT12);
-      }
-      return t;
-  }
-}
-
 // reduces the type
 export function simplifyty(ctx: Context, t: Type): Type {
   let simplified: Type;
@@ -329,18 +307,22 @@ export function simplifyty(ctx: Context, t: Type): Type {
       return All(t.name, simplifyty(ctx, t.to), t.kind);
     case "arrow":
       return Arrow(simplifyty(ctx, t.from), simplifyty(ctx, t.to));
-    case "ers":
-      return t;
     case "ref":
       return t;
     case "var":
       return t;
     case "ttabs":
-      simplified = t;
-      break;
+      return t;
     case "ttapp":
       simplified = TTApp(simplifyty(ctx, t.left), t.right);
-      break;
+
+      // Q-AppAbs
+      // (λX:K11.T12)T2 ≡ [X/T2]T12
+      if (simplified.left._ == "ttabs") {
+        let tyT12 = simplified.left.body;
+        let tyT2 = simplified.right;
+        return typeSubstTop(tyT2, tyT12);
+      }
+      return simplified;
   }
-  return computeType(ctx, simplified);
 }

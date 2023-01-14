@@ -47,11 +47,6 @@ export type Binding = VariableBinding | TypeVariableBinding;
 
 export type Context = Binding[];
 
-// A type that has been erased.
-export type Erased = {
-  _: "ers";
-};
-
 export type All = {
   _: "all";
   name: string;
@@ -163,7 +158,7 @@ export type Ann = {
 
 export type Kind = KArrow | Star;
 
-export type Type = Arrow | Ref | Erased | Var | All | TTAbs | TTApp;
+export type Type = Arrow | Ref | Var | All | TTAbs | TTApp;
 
 export type Term = Abs | App | TAbs | TApp | Var | Ref | Ann;
 

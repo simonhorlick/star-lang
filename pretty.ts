@@ -1,4 +1,5 @@
 import { Context, Kind, Term, Type } from "./ast";
+import * as Erased from "./erased";
 
 // pretty print a kind
 export function prettyK(kind: Kind): string {
@@ -17,8 +18,6 @@ export function prettyT(type: Type, indices: boolean = true): string {
       return prettyT(type.from, indices) + "→" + prettyT(type.to, indices);
     case "all":
       return "∀" + type.name + "::" + prettyK(type.kind) + ". " + type.to;
-    case "ers":
-      return "";
     case "ref":
       return type.name;
     case "var":
@@ -37,7 +36,6 @@ export function prettyT(type: Type, indices: boolean = true): string {
         prettyT(type.body, indices) +
         ""
       );
-
     case "ttapp":
       let l = prettyT(type.left, indices);
       let r = "(" + prettyT(type.right, indices) + ")";
@@ -61,14 +59,20 @@ export function printCtx(ctx: Context): string {
 // pretty print a term
 export function pretty(term: Term, indices: boolean = true): string {
   switch (term._) {
-    case "lam": {
-      const type =
-        term.bindType._ == "ers" ? "" : ":" + prettyT(term.bindType, indices);
-      return "λ" + term.name + type + ". " + pretty(term.body, indices) + "";
-    }
-    case "tabs": {
+    case "lam":
+      return (
+        "λ" +
+        term.name +
+        ":" +
+        prettyT(term.bindType, indices) +
+        ". " +
+        pretty(term.body, indices) +
+        ""
+      );
+
+    case "tabs":
       return "Λ" + term.name + ". " + pretty(term.body, indices) + "";
-    }
+
     case "app": {
       let l = pretty(term.left, indices);
       let r = "(" + pretty(term.right, indices) + ")";
@@ -101,5 +105,31 @@ export function pretty(term: Term, indices: boolean = true): string {
       return (
         "(" + pretty(term.term, indices) + "):" + prettyT(term.typ, indices)
       );
+  }
+}
+
+// pretty print an erased term
+export function prettyC(term: Erased.Term, indices: boolean = true): string {
+  switch (term._) {
+    case "lam":
+      return "λ" + term.name + ". " + prettyC(term.body, indices) + "";
+    case "app": {
+      let l = prettyC(term.left, indices);
+      let r = "(" + prettyC(term.right, indices) + ")";
+
+      if (term.left._ == "lam") {
+        l = "(" + l + ")";
+      }
+
+      return l + r;
+    }
+    case "ref":
+      return term.name;
+    case "var":
+      if (indices) {
+        return `${term.index}`;
+      } else {
+        return `${term.name}@${term.index}`;
+      }
   }
 }

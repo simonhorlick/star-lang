@@ -7,6 +7,7 @@ import {
   Ann,
   App,
   Arrow,
+  reduceOnce,
   Ref,
   Star,
   TAbs,
@@ -182,6 +183,24 @@ describe("typechecker", () => {
     if (result._ == "typecheckerror") {
       throw new Error();
     }
+  });
+
+  test("should evaluate polymorphic identity function app", () => {
+    // In system F the polymorphic id function is
+    // Λα:★. λx:α. x
+    // with type
+    // ∀α:★. α→α
+
+    // (ΛX::★. λx:X. x)(Y)
+    // λx:Y. x
+    const program = TApp(
+      TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
+      Ref("Y")
+    );
+
+    const actual = reduceOnce([], program);
+    const expected = Abs("x", Var("x", 0), Ref("Y"));
+    expect(actual).toStrictEqual(expected);
   });
 
   test("should pass polymorphic identity function applied to a type", () => {

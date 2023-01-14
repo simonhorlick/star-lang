@@ -8,8 +8,11 @@ import {
   App,
   Arrow,
   Def,
+  erase,
   isValue,
+  reduce,
   reduceOnce,
+  reduceOnce2,
   Ref,
   Star,
   TAbs,
@@ -24,27 +27,7 @@ import {
   Var,
 } from "./evaluation";
 import { pretty } from "./pretty";
-
-function reduce(defs: DefT[], t: Term): Term {
-  let prevTerm = "";
-  while (true) {
-    let printTerm = pretty(t);
-    console.log(printTerm);
-
-    if (prevTerm == printTerm) {
-      throw "term was not reduced";
-    }
-
-    if (isValue(t)) {
-      break;
-    }
-
-    t = reduceOnce(defs, t);
-    prevTerm = printTerm;
-  }
-
-  return t;
-}
+import * as Erased from "./erased";
 
 export function transformDebruijin(term: Term, ctx: Context = []): Term {
   switch (term._) {
@@ -94,8 +77,6 @@ export function transformDebruijinT(term: Type, ctx: Context = []): Type {
         transformDebruijinT(term.from),
         transformDebruijinT(term.to)
       );
-    case "ers":
-      return term;
     case "var":
       return term;
     case "ref":
@@ -122,30 +103,59 @@ export function transformDebruijinT(term: Type, ctx: Context = []): Type {
 }
 
 // tru = λt. λf. t
-const tru: DefT = Def("tru", transformDebruijin(Abs("t", Abs("f", Ref("t")))));
+const tru = Erased.Def(
+  "tru",
+  Erased.Abs("t", Erased.Abs("f", Erased.Var("t", 1)))
+);
 
 // fls = λt. λf. f
-const fls: DefT = Def("fls", transformDebruijin(Abs("t", Abs("f", Ref("f")))));
+const fls = Erased.Def(
+  "fls",
+  Erased.Abs("t", Erased.Abs("f", Erased.Var("f", 0)))
+);
 
 // test = λl. λm. λn. (l(m))(n)
-const testfn = Def(
+// test = λ2. λ1. λ0. (2(1))(0)
+const testfn = Erased.Def(
   "test",
-  transformDebruijin(
-    Abs("l", Abs("m", Abs("n", App(App(Ref("l"), Ref("m")), Ref("n")))))
+  Erased.Abs(
+    "l",
+    Erased.Abs(
+      "m",
+      Erased.Abs(
+        "n",
+        Erased.App(
+          Erased.App(Erased.Var("l", 2), Erased.Var("m", 1)),
+          Erased.Var("n", 0)
+        )
+      )
+    )
   )
 );
 
 // λs. λz. z
-const zero = Abs("s", Abs("z", Var("z", 0)));
+// const zero = Abs("s", Abs("z", Var("z", 0)));
 
 // λs. λz. s z
-const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
+const one = Erased.Abs(
+  "s",
+  Erased.Abs("z", Erased.App(Erased.Var("s", 1), Erased.Var("z", 0)))
+);
 
 // λs. λz. s (s z)
-const two = Abs("s", Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0)))));
+const two = Erased.Abs(
+  "s",
+  Erased.Abs(
+    "z",
+    Erased.App(
+      Erased.Var("s", 1),
+      Erased.App(Erased.Var("s", 1), Erased.Var("z", 0))
+    )
+  )
+);
 
 // λx. x
-const id = Def("id", transformDebruijin(Abs("x", Ref("x"))));
+const id = Erased.Def("id", Erased.Abs("x", Erased.Var("x", 0)));
 
 //
 // Evaluation Rules
@@ -167,14 +177,27 @@ const id = Def("id", transformDebruijin(Abs("x", Ref("x"))));
 
 // (ΛX.t12)(T2) → [X/T2]t12    E-TappTabs
 
+describe("erasure", () => {
+  test("polymorphic identity function erases to untyped identity", () => {
+    const program = TApp(
+      TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
+      Ref("Y")
+    );
+
+    const actual = erase(program);
+    const expected = Erased.Abs("x", Erased.Var("x", 0));
+    expect(actual).toStrictEqual(expected);
+  });
+});
+
 describe("debruijin", () => {
   test("TestComputeDebruijinIndicesSingleBinder", () => {
     // Γ = [t]; λx.t
     // λ.1
-    const expected: Term = Abs("x", Var("t", 1));
+    const expected: Term = Abs("x", Var("t", 1), Ref("T"));
 
-    const actual = transformDebruijin(Abs("x", Ref("t")), [
-      { type: "bind", name: "t", typ: { _: "ers" } },
+    const actual = transformDebruijin(Abs("x", Ref("t"), Ref("T")), [
+      { type: "bind", name: "t", typ: Ref("T") },
     ]);
 
     expect(actual).toStrictEqual(expected);
@@ -183,9 +206,12 @@ describe("debruijin", () => {
   test("TestComputeDebruijinIndicesIdApp", () => {
     // (λx. x)(λz. z)
     // (λ. 0)(λ. 0)
-    const expected: Term = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
+    const expected: Term = App(
+      Abs("x", Var("x", 0), Ref("X")),
+      Abs("z", Var("z", 0), Ref("Z"))
+    );
     const actual = transformDebruijin(
-      App(Abs("x", Ref("x")), Abs("z", Ref("z")))
+      App(Abs("x", Ref("x"), Ref("X")), Abs("z", Ref("z"), Ref("Z")))
     );
 
     expect(actual).toStrictEqual(expected);
@@ -196,8 +222,14 @@ describe("debruijin", () => {
     // λ. λ. 1 (1 0)
     const expected = two;
 
-    const actual = transformDebruijin(
-      Abs("s", Abs("z", App(Ref("s"), App(Ref("s"), Ref("z")))))
+    const actual = erase(
+      transformDebruijin(
+        Abs(
+          "s",
+          Abs("z", App(Ref("s"), App(Ref("s"), Ref("z"))), Ref("Z")),
+          Ref("S")
+        )
+      )
     );
 
     expect(actual).toStrictEqual(expected);
@@ -213,12 +245,14 @@ describe("shifting", () => {
     // λ.λ.1(0(4))
     let term = Abs(
       "x",
-      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 2))))
+      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 2))), Ref("Y")),
+      Ref("X")
     );
     let actual = termShift(2, term);
     let expected = Abs(
       "x",
-      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 4))))
+      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 4))), Ref("Y")),
+      Ref("X")
     );
     expect(actual).toStrictEqual(expected);
   });
@@ -231,16 +265,18 @@ describe("shifting", () => {
       "",
       App(
         App(Var("", 0), Var("", 1)),
-        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 2)))
-      )
+        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 2)), Ref(""))
+      ),
+      Ref("")
     );
     let actual = termShift(2, term);
     let expected = Abs(
       "",
       App(
         App(Var("", 0), Var("", 3)),
-        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 4)))
-      )
+        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 4)), Ref(""))
+      ),
+      Ref("")
     );
     expect(actual).toStrictEqual(expected);
   });
@@ -271,9 +307,9 @@ describe("substitution", () => {
     // [b/a](λb. b a)
     // [0/1](λ. 0 2)
     // λ. 0 2 i.e. λb. b a, this is the same, nothing has been substituted.
-    let term = Abs("b", App(Var("b", 0), Var("a", 2)));
+    let term = Abs("b", App(Var("b", 0), Var("a", 2)), Ref("B"));
     let actual = termSubst(0, Var("", 1), term);
-    let expected = Abs("b", App(Var("b", 0), Var("a", 2)));
+    let expected = Abs("b", App(Var("b", 0), Var("a", 2)), Ref("B"));
     expect(actual).toStrictEqual(expected);
   });
 
@@ -284,9 +320,12 @@ describe("substitution", () => {
     // in debruijin form b=0,a=1:
     // [0/1](0 (λ.λ.2))
     // 1 (λ.λ.3)
-    let term = App(Var("", 0), Abs("", Abs("", Var("", 2))));
+    let term = App(Var("", 0), Abs("", Abs("", Var("", 2), Ref("")), Ref("")));
     let actual = termSubst(0, Var("", 1), term);
-    let expected = App(Var("", 1), Abs("", Abs("", Var("", 3))));
+    let expected = App(
+      Var("", 1),
+      Abs("", Abs("", Var("", 3), Ref("")), Ref(""))
+    );
     expect(actual).toStrictEqual(expected);
   });
 
@@ -303,11 +342,11 @@ describe("substitution", () => {
 describe("evaluation", () => {
   // (λx. x)(λz. z) -> (λz. z)
   test("TestReduceIdentity", () => {
-    const identity = transformDebruijin(
-      App(Abs("x", Ref("x")), Abs("z", Ref("z")))
+    const identity = Erased.App(
+      Erased.Abs("x", Erased.Var("x", 0)),
+      Erased.Abs("z", Erased.Var("z", 0))
     );
-
-    const expected: Term = transformDebruijin(Abs("z", Ref("z")));
+    const expected: Erased.Term = Erased.Abs("z", Erased.Var("z", 0));
 
     const actual = reduce([], identity);
 
@@ -316,8 +355,11 @@ describe("evaluation", () => {
 
   // Test that substituting top level functions works properly.
   test("TestSubstituteDef", () => {
-    const expected = Abs("z", Var("z", 0));
-    const actual = reduce([id], App(Ref("id"), Abs("z", Var("z", 0))));
+    const expected = Erased.Abs("z", Erased.Var("z", 0));
+    const actual = reduce(
+      [id],
+      Erased.App(Ref("id"), Erased.Abs("z", Erased.Var("z", 0)))
+    );
     expect(actual).toStrictEqual(expected);
   });
 
@@ -346,10 +388,10 @@ describe("evaluation", () => {
   // v
   test("TestReduceIfElse", () => {
     // ((test(tru))(1))(2)
-    const ifElse: Term = transformDebruijin(
-      App(App(App(Ref("test"), Ref("tru")), one), two)
+    const ifElse: Erased.Term = Erased.App(
+      Erased.App(Erased.App(Erased.Ref("test"), Erased.Ref("tru")), one),
+      two
     );
-
     const expected = one;
     const actual = reduce([tru, fls, testfn], ifElse);
 
@@ -366,33 +408,24 @@ describe("evaluation", () => {
     // as the x binder has now been used up.
     // 0(λx. 0)(1)
 
-    let src = App(
-      Abs("x", App(App(Var("y", 1), Var("x", 0)), Var("z", 2))),
-      Abs("x", Var("x", 0))
+    let src = Erased.App(
+      Erased.Abs(
+        "x",
+        Erased.App(
+          Erased.App(Erased.Var("y", 1), Erased.Var("x", 0)),
+          Erased.Var("z", 2)
+        )
+      ),
+      Erased.Abs("x", Erased.Var("x", 0))
     );
 
-    let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
-
-    const actual = reduceOnce([], src);
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  test("should evaluate polymorphic identity function app", () => {
-    // In system F the polymorphic id function is
-    // Λα:★. λx:α. x
-    // with type
-    // ∀α:★. α→α
-
-    // (ΛX::★. λx:X. x)(Y)
-    // λx:Y. x
-    const program = TApp(
-      TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
-      Ref("Y")
+    let expected = Erased.App(
+      Erased.App(Erased.Var("y", 0), Erased.Abs("x", Erased.Var("x", 0))),
+      Erased.Var("z", 1)
     );
 
-    const actual = reduceOnce([], program);
-    const expected = Abs("x", Var("x", 0), Ref("Y"));
+    const actual = reduceOnce2([], src);
+
     expect(actual).toStrictEqual(expected);
   });
 });
