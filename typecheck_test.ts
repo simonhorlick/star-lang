@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
-import { Context } from "./ast";
-import { GetKind, GetType } from "./check";
+import { Context, Type } from "./ast";
+import { GetKind, GetType, simplifyty, typeEq } from "./check";
 import {
   Abs,
   All,
@@ -11,6 +11,8 @@ import {
   Star,
   TAbs,
   TApp,
+  TTAbs,
+  TTApp,
   typeShift,
   Var,
 } from "./evaluation";
@@ -199,9 +201,63 @@ describe("typechecker", () => {
   });
 
   test("should disallow type operators with the wrong kind", () => {
-    // ΛX::★. X→X has kind ★=>★
+    // λX::★. X→X has kind ★=>★
     // MakePair = ΛA::★. ΛB::★. A→B→Pair(A,B) has kind ★=>★=>★
     // Pair(Nat) has kind ★=>★ (it's partially applied)
     // Pair(Pair) does not belong to any kind
+  });
+
+  // pair = ΛA::★. ΛB::★. λa:A. λb:B.
+  // fst = λp:Pair(A,B).
+});
+
+describe("type operators", () => {
+  // The identity type operator λX.X: when applied to any type it gives back
+  // the argument.
+  const Id: Type = TTAbs("A", Var("A", 0), Star());
+
+  const Nat: Type = Ref("Nat");
+  const Bool: Type = Ref("Bool");
+
+  // The type Nat→Bool.
+  const NatToBool: Type = Arrow(Nat, Bool);
+
+  const ctx: Context = [];
+  const n2b = simplifyty(ctx, NatToBool);
+
+  // In λω, we recapitulated the mechanisms of the simply typed lambda-calculus “one level up,” taking a type and abstracting out a subexpression to obtain a type operator that can later be instantiated by applying it to different types.
+  test("Nat→Bool === Nat→Bool", () =>
+    expect(typeEq(n2b, simplifyty(ctx, NatToBool))).toBe(true));
+
+  test("Nat→Bool === Nat→Id(Bool)", () => {
+    let s = simplifyty(ctx, Arrow(Nat, TTApp(Id, Bool)));
+    expect(typeEq(n2b, s)).toBe(true);
+  });
+
+  test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
+    expect(
+      typeEq(n2b, simplifyty(ctx, Arrow(TTApp(Id, Nat), TTApp(Id, Bool))))
+    ).toBe(true));
+
+  test("Nat→Bool === Id(Nat)→Bool", () =>
+    expect(typeEq(n2b, simplifyty(ctx, Arrow(TTApp(Id, Nat), Bool)))).toBe(
+      true
+    ));
+
+  test("Nat→Bool === Id(Nat→Bool)", () =>
+    expect(typeEq(n2b, simplifyty(ctx, TTApp(Id, Arrow(Nat, Bool))))).toBe(
+      true
+    ));
+
+  test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
+    const t = TTApp(Id, TTApp(Id, Arrow(TTApp(Id, Nat), Bool)));
+    console.log(prettyT(t));
+    const s = simplifyty(ctx, t);
+    console.log(prettyT(s));
+    const s2 = simplifyty(ctx, s);
+    console.log(prettyT(s2));
+    const s3 = simplifyty(ctx, s2);
+    console.log(prettyT(s3));
+    expect(typeEq(n2b, s3)).toBe(true);
   });
 });

@@ -90,6 +90,15 @@ export type TAbs = {
   kind: Kind; // the kind of the type abstraction
 };
 
+// TTAbs is a type abstraction. Types that occur within the body of
+// this abstraction are substituted when an application occurs.
+export type TTAbs = {
+  _: "ttabs";
+  name: string; // name of the binder
+  body: Type; // the body of the abstraction
+  kind: Kind; // the kind of the type abstraction
+};
+
 // App is a function application.
 export type App = {
   _: "app";
@@ -106,6 +115,13 @@ export type App = {
 export type TApp = {
   _: "tapp";
   left: Term;
+  right: Type;
+};
+
+// TTApp is a type application, but on the type level.
+export type TTApp = {
+  _: "ttapp";
+  left: Type;
   right: Type;
 };
 
@@ -147,7 +163,7 @@ export type Ann = {
 
 export type Kind = KArrow | Star;
 
-export type Type = Arrow | Ref | Erased | Var | All;
+export type Type = Arrow | Ref | Erased | Var | All | TTAbs | TTApp;
 
 export type Term = Abs | App | TAbs | TApp | Var | Ref | Ann;
 

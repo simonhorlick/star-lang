@@ -27,6 +27,26 @@ export function prettyT(type: Type, indices: boolean = true): string {
       } else {
         return `${type.name}@${type.index}`;
       }
+    case "ttabs":
+      return (
+        "λ" +
+        type.name +
+        "::" +
+        prettyK(type.kind) +
+        ". " +
+        prettyT(type.body, indices) +
+        ""
+      );
+
+    case "ttapp":
+      let l = prettyT(type.left, indices);
+      let r = "(" + prettyT(type.right, indices) + ")";
+
+      if (type.left._ == "ttabs") {
+        l = "(" + l + ")";
+      }
+
+      return l + r;
   }
 }
 

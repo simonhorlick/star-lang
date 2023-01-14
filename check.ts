@@ -7,6 +7,7 @@ import {
   typeShift,
   typeSubstTop,
   KArrow,
+  TTApp,
 } from "./evaluation";
 import { pretty, prettyK, prettyT, printCtx } from "./pretty";
 
@@ -126,6 +127,52 @@ export const GetKind = (ctx: Context, type: Type): Kind | TypecheckError => {
       throw "not implemented";
     case "var":
       return lookupKind(ctx, type.index);
+    case "ttabs": {
+      let tyT2 = type.body;
+      let knK1 = type.kind;
+      let newCtx = addTypeToCtx(ctx, type.name, knK1);
+
+      let knK2 = GetKind(newCtx, tyT2);
+      if (knK2._ == "typecheckerror") {
+        return knK2;
+      }
+
+      return KArrow(knK1, knK2);
+    }
+    case "ttapp": {
+      // Note that the implementation here is identical to that of tapp in
+      // GetType, but with kinds instead of types.
+
+      // Γ ⊢ T1::K11⇒K12   Γ ⊢ T2::K11
+      // ---------------------------- K-App
+      //        Γ ⊢ T1(T2)::K12
+      const T1 = type.left;
+      const T2 = type.right;
+      let kindT1 = GetKind(ctx, T1);
+      let kindT2 = GetKind(ctx, T2);
+      if (kindT1._ == "typecheckerror") {
+        return kindT1;
+      }
+      if (kindT2._ == "typecheckerror") {
+        return kindT2;
+      }
+      if (kindT1._ != "karrow") {
+        return TypecheckError("expected arrow kind");
+      }
+
+      // Ensure the kind of the type we're applying to the arrow matches the
+      // from kind.
+      let kindT11 = kindT1.from;
+      let kindT12 = kindT1.to;
+      if (!kindEq(kindT2, kindT11)) {
+        return TypecheckError(
+          `parameter kind mismatch: while trying to apply parameter of kind ${prettyK(
+            kindT2
+          )} to a function of kind ${prettyK(kindT1)}`
+        );
+      }
+      return kindT12;
+    }
   }
 };
 
@@ -253,15 +300,47 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
   }
 };
 
-// reduces the type
-function simplifyty(ctx: Context, t: Type): Type {
+export function computeType(ctx: Context, t: Type): Type {
   switch (t._) {
     case "all":
     case "arrow":
     case "ers":
     case "ref":
     case "var":
+    case "ttabs":
       return t;
-    // TODO: Add TyApp(TyAbs) = typeSubstTop
+    case "ttapp":
+      // Q-AppAbs
+      // (λX:K11.T12)T2 ≡ [X/T2]T12
+      if (t.left._ == "ttabs") {
+        let tyT12 = t.left.body;
+        let tyT2 = t.right;
+        return typeSubstTop(tyT2, tyT12);
+      }
+      return t;
   }
+}
+
+// reduces the type
+export function simplifyty(ctx: Context, t: Type): Type {
+  let simplified: Type;
+  switch (t._) {
+    case "all":
+      return All(t.name, simplifyty(ctx, t.to), t.kind);
+    case "arrow":
+      return Arrow(simplifyty(ctx, t.from), simplifyty(ctx, t.to));
+    case "ers":
+      return t;
+    case "ref":
+      return t;
+    case "var":
+      return t;
+    case "ttabs":
+      simplified = t;
+      break;
+    case "ttapp":
+      simplified = TTApp(simplifyty(ctx, t.left), t.right);
+      break;
+  }
+  return computeType(ctx, simplified);
 }

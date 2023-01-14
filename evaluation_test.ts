@@ -17,6 +17,8 @@ import {
   termShift,
   termSubst,
   termSubstTop,
+  TTAbs,
+  TTApp,
   typeSubst,
   tytermSubst,
   Var,
@@ -104,6 +106,18 @@ export function transformDebruijinT(term: Type, ctx: Context = []): Type {
       } else {
         return term;
       }
+    case "ttabs":
+      const newCtx = addTypeToCtx(ctx, term.name, term.kind);
+      return TTAbs(
+        term.name,
+        transformDebruijinT(term.body, newCtx),
+        term.kind
+      );
+    case "ttapp":
+      return TTApp(
+        transformDebruijinT(term.left, ctx),
+        transformDebruijinT(term.right, ctx)
+      );
   }
 }
 

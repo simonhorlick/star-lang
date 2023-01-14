@@ -13,6 +13,8 @@ import {
   Star as StarT,
   TApp as TAppT,
   KArrow as KArrowT,
+  TTApp as TTAppT,
+  TTAbs as TTAbsT,
   Kind,
 } from "./ast";
 
@@ -52,6 +54,19 @@ export const TAbs = (name: string, body: Term, kind: Kind): TAbsT => ({
 
 export const TApp = (left: Term, right: Type): TAppT => ({
   _: "tapp",
+  left: left,
+  right: right,
+});
+
+export const TTAbs = (name: string, body: Type, kind: Kind): TTAbsT => ({
+  _: "ttabs",
+  name: name,
+  body: body,
+  kind: kind,
+});
+
+export const TTApp = (left: Type, right: Type): TTAppT => ({
+  _: "ttapp",
   left: left,
   right: right,
 });
@@ -175,13 +190,6 @@ export function termSubstTop(s: Term, t: Term): Term {
 }
 
 function typeShiftAbove(d: number, c: number, tyT: Type): Type {
-  // let typeShiftAbove d c tyT =
-  //   let rec walk c tyT = match tyT with
-  //       TyVar(x,n) → if x>=c then TyVar(x+d,n+d) else TyVar(x,n+d)
-  //     | TyArr(tyT1,tyT2) → TyArr(walk c tyT1,walk c tyT2)
-  //     | TyAll(tyX,tyT2) → TyAll(tyX,walk (c+1) tyT2)
-  //     | TySome(tyX,tyT2) → TySome(tyX,walk (c+1) tyT2)
-  //     in walk c tyT
   const walk = (c: number, ty: Type): Type => {
     switch (ty._) {
       case "var": {
@@ -206,6 +214,13 @@ function typeShiftAbove(d: number, c: number, tyT: Type): Type {
         return ty;
       case "ref":
         return ty;
+      case "ttabs": {
+        let tyX = ty.name;
+        let tyT2 = ty.body;
+        return TTAbs(tyX, walk(c + 1, tyT2), ty.kind);
+      }
+      case "ttapp":
+        return TTApp(walk(c, ty.left), walk(c, ty.right));
     }
   };
   return walk(c, tyT);
@@ -217,19 +232,6 @@ function tmmap(
   c: number,
   t: Term
 ): Term {
-  /*
-  let rec walk c t = match t with
-  TmVar(fi,x,n) → onvar fi c x n
-| TmAbs(fi,x,tyT1,t2) → TmAbs(fi,x,ontype c tyT1,walk (c+1) t2)
-| TmApp(fi,t1,t2) → TmApp(fi,walk c t1,walk c t2)
-| TmTAbs(fi,tyX,t2) → TmTAbs(fi,tyX,walk (c+1) t2)
-| TmTApp(fi,t1,tyT2) → TmTApp(fi,walk c t1,ontype c tyT2)
-| TmPack(fi,tyT1,t2,tyT3) →
-TmPack(fi,ontype c tyT1,walk c t2,ontype c tyT3)
-| TmUnpack(fi,tyX,x,t1,t2) →
-    TmUnpack(fi,tyX,x,walk c t1,walk (c+2) t2)
-in walk c t
-*/
   const walk = (c: number, t: Term): Term => {
     switch (t._) {
       case "var":
@@ -258,13 +260,6 @@ function tymap(
   c: number,
   tyT: Type
 ): Type {
-  /*
-  let rec walk c tyT = match tyT with
-TyArr(tyT1,tyT2) → TyArr(walk c tyT1,walk c tyT2)
-| TyVar(x,n) → onvar c x n
-| TyAll(tyX,tyT2) → TyAll(tyX,walk (c+1) tyT2)
-| TySome(tyX,tyT2) → TySome(tyX,walk (c+1) tyT2) in walk c tyT
-*/
   const walk = (c: number, tyT: Type): Type => {
     switch (tyT._) {
       case "arrow":
@@ -280,6 +275,13 @@ TyArr(tyT1,tyT2) → TyArr(walk c tyT1,walk c tyT2)
         return tyT;
       case "ers":
         return tyT;
+      case "ttabs": {
+        let tyX = tyT.name;
+        let tyT2 = tyT.body;
+        return TTAbs(tyX, walk(c + 1, tyT2), tyT.kind);
+      }
+      case "ttapp":
+        return TTApp(walk(c, tyT.left), walk(c, tyT.right));
     }
   };
   return walk(c, tyT);
