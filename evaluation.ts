@@ -134,45 +134,33 @@ export function termShift(d: number, t: Term): Term {
   return walk(d, 0, t);
 }
 
-function termSubstWalk(j: number, s: Term, c: number, t: Term): Term {
-  switch (t._) {
-    case "var": {
-      let x = t.index;
-      if (x == j + c) {
-        // Substitute in the term s, renumbering any free variables so the
-        // expression is consistent.
-        return termShift(c, s);
-      } else {
-        return Var(t.name, x);
-      }
-    }
-    case "lam": {
-      let t1 = t.body;
-      let ty = t.bindType;
-      return Abs(t.name, termSubstWalk(j, s, c + 1, t1), ty);
-    }
-    case "app": {
-      return App(
-        termSubstWalk(j, s, c, t.left),
-        termSubstWalk(j, s, c, t.right)
-      );
-    }
-    case "tabs": {
-      let t1 = t.body;
-      return TAbs(t.name, termSubstWalk(j, s, c + 1, t1), t.kind);
-    }
-    case "tapp":
-      return TApp(termSubstWalk(j, s, c, t.left), t.right);
-    case "ann":
-      return Ann(termSubstWalk(j, s, c, t.term), t.typ);
-    case "ref":
-      return t;
-  }
-}
-
 // Given a term t, find all Vars with index j and replace them with the term s.
 export function termSubst(j: number, s: Term, t: Term): Term {
-  return termSubstWalk(j, s, 0, t);
+  const walk = (j: number, s: Term, c: number, t: Term): Term => {
+    switch (t._) {
+      case "var":
+        if (t.index == j + c) {
+          // Substitute in the term s, renumbering any free variables so the
+          // expression is consistent.
+          return termShift(c, s);
+        } else {
+          return Var(t.name, t.index);
+        }
+      case "lam":
+        return Abs(t.name, walk(j, s, c + 1, t.body), t.bindType);
+      case "app":
+        return App(walk(j, s, c, t.left), walk(j, s, c, t.right));
+      case "tabs":
+        return TAbs(t.name, walk(j, s, c + 1, t.body), t.kind);
+      case "tapp":
+        return TApp(walk(j, s, c, t.left), t.right);
+      case "ann":
+        return Ann(walk(j, s, c, t.term), t.typ);
+      case "ref":
+        return t;
+    }
+  };
+  return walk(j, s, 0, t);
 }
 
 // The term being substituted for the bound variable is first shifted up by one, then the
@@ -207,20 +195,20 @@ function typeShiftAbove(d: number, c: number, tyT: Type): Type {
 }
 
 export function typeSubst(tyS: Type, j: number, tyT: Type): Type {
-  const walk = (c: number, tyT: Type): Type => {
-    switch (tyT._) {
+  const walk = (c: number, t: Type): Type => {
+    switch (t._) {
       case "arrow":
-        return Arrow(walk(c, tyT.from), walk(c, tyT.to));
+        return Arrow(walk(c, t.from), walk(c, t.to));
       case "var":
-        return tyT.index == c ? typeShift(c, tyS) : Var(tyT.name, tyT.index);
+        return t.index == c ? typeShift(c, tyS) : Var(t.name, t.index);
       case "all":
-        return All(tyT.name, walk(c + 1, tyT.to), tyT.kind);
+        return All(t.name, walk(c + 1, t.to), t.kind);
       case "ttabs":
-        return TTAbs(tyT.name, walk(c + 1, tyT.body), tyT.kind);
+        return TTAbs(t.name, walk(c + 1, t.body), t.kind);
       case "ttapp":
-        return TTApp(walk(c, tyT.left), walk(c, tyT.right));
+        return TTApp(walk(c, t.left), walk(c, t.right));
       case "ref":
-        return tyT;
+        return t;
     }
   };
   return walk(j, tyT);
@@ -233,7 +221,7 @@ export function tytermSubst(tyS: Type, j: number, t: Term): Term {
       case "var":
         return Var(t.name, t.index);
       case "lam":
-        // Here we use ontype(c + 1) so the type may reference this abstraction.
+        // We use c+1 in typeSubst so the type may reference this abstraction.
         return Abs(
           t.name,
           walk(c + 1, t.body),
