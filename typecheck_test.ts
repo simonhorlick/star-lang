@@ -7,17 +7,16 @@ import {
   Ann,
   App,
   Arrow,
-  reduceOnce,
   Ref,
   Star,
   TAbs,
   TApp,
   TTAbs,
   TTApp,
-  typeShift,
   Var,
-} from "./evaluation";
+} from "./ast";
 import { prettyT } from "./pretty";
+import { reduceOnce, typeShift } from "./evaluation";
 
 //
 // Typing Rules
@@ -109,6 +108,46 @@ describe("typechecker", () => {
   test("type shift doesn't change bound variables", () => {
     const type = All("X", Var("X", 0), Star());
     expect(typeShift(1, type)).toStrictEqual(type);
+  });
+
+  // ΛT::★. λf:T→T. λx:T. f(f(x))
+  const double = TAbs(
+    "T",
+    Abs(
+      "f",
+      Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0))), Var("T", 1)),
+      Arrow(Var("T", 0), Var("T", 0))
+    ),
+    Star()
+  );
+
+  test("polymorphic double function is well-typed", () => {
+    const result = GetType([], double);
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+    console.log(prettyT(result, false));
+    expect(result).toStrictEqual(
+      All(
+        "T",
+        Arrow(Arrow(Var("T", 0), Var("T", 0)), Arrow(Var("T", 0), Var("T", 0))),
+        Star()
+      )
+    );
+  });
+
+  test("instantiating double with Nat gives doubleNat", () => {
+    const doubleNat = TApp(double, Ref("Nat"));
+    const result = GetType(
+      [{ type: "tbind", name: "Nat", kind: Star() }],
+      doubleNat
+    );
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+    expect(result).toStrictEqual(
+      Arrow(Arrow(Ref("Nat"), Ref("Nat")), Arrow(Ref("Nat"), Ref("Nat")))
+    );
   });
 
   test("doubleNat is well-typed", () => {

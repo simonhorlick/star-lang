@@ -1,14 +1,15 @@
 // check implements a typechecker for this language
-import { Binding, Context, Kind, Term, Type, VariableBinding } from "./ast";
 import {
-  All,
-  Arrow,
-  Star,
-  typeShift,
-  typeSubstTop,
-  KArrow,
-  TTApp,
-} from "./evaluation";
+  Context,
+  Kind,
+  Term,
+  Type,
+  TypeVariableBinding,
+  VariableBinding,
+} from "./ast";
+import { typeShift, typeSubstTop } from "./evaluation";
+import { All, Arrow, Star, KArrow, TTApp } from "./ast";
+
 import { pretty, prettyK, prettyT, printCtx } from "./pretty";
 
 var _ = require("lodash");
@@ -121,8 +122,13 @@ export const GetKind = (ctx: Context, type: Type): Kind | TypecheckError => {
         return TypecheckError("star kind expected");
       }
       return Star();
-    case "ref":
-      throw "not implemented";
+    case "ref": {
+      const match = ctx.filter((d) => d.type == "tbind" && d.name == type.name);
+      if (match.length == 0) {
+        return TypecheckError("type not found: " + type.name);
+      }
+      return (match[0] as TypeVariableBinding).kind;
+    }
     case "var":
       return lookupKind(ctx, type.index);
     case "ttabs": {

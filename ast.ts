@@ -1,17 +1,4 @@
 import {
-  Abs,
-  All,
-  Ann,
-  App,
-  Arrow,
-  Def,
-  Ref,
-  Star,
-  TAbs,
-  TApp,
-  Var,
-} from "./evaluation";
-import {
   Parser,
   bind,
   alpha,
@@ -47,19 +34,20 @@ export type Binding = VariableBinding | TypeVariableBinding;
 
 export type Context = Binding[];
 
+// All is the type of TAbs terms that abstract out a type.
 export type All = {
   _: "all";
   name: string;
   to: Type;
-  kind: Kind; // The kind of the argument.
+  kind: Kind; // The kind of the type argument.
 };
 
-// KArrow (=>) is the kind of operators.
-export type KArrow = {
-  _: "karrow";
-  from: Kind;
-  to: Kind;
-};
+export const All = (name: string, to: Type, kind: Kind): All => ({
+  _: "all",
+  to: to,
+  name: name,
+  kind: kind,
+});
 
 // Arrow is the type of functions.
 export type Arrow = {
@@ -68,6 +56,12 @@ export type Arrow = {
   to: Type;
 };
 
+export const Arrow = (from: Type, to: Type): Arrow => ({
+  _: "arrow",
+  from: from,
+  to: to,
+});
+
 // Abs is a lambda abstraction.
 export type Abs = {
   _: "lam";
@@ -75,6 +69,13 @@ export type Abs = {
   bindType: Type; // type of the bound variable
   body: Term; // the body of the abstraction
 };
+
+export const Abs = (name: string, body: Term, typ: Type): Abs => ({
+  _: "lam",
+  name: name,
+  body: body,
+  bindType: typ,
+});
 
 // TAbs is a type abstraction. Types that occur within the body of
 // this abstraction are substituted when an application occurs.
@@ -85,6 +86,13 @@ export type TAbs = {
   kind: Kind; // the kind of the type abstraction
 };
 
+export const TAbs = (name: string, body: Term, kind: Kind): TAbs => ({
+  _: "tabs",
+  name: name,
+  body: body,
+  kind: kind,
+});
+
 // TTAbs is a type abstraction. Types that occur within the body of
 // this abstraction are substituted when an application occurs.
 export type TTAbs = {
@@ -94,12 +102,25 @@ export type TTAbs = {
   kind: Kind; // the kind of the type abstraction
 };
 
+export const TTAbs = (name: string, body: Type, kind: Kind): TTAbs => ({
+  _: "ttabs",
+  name: name,
+  body: body,
+  kind: kind,
+});
+
 // App is a function application.
 export type App = {
   _: "app";
   left: Term;
   right: Term;
 };
+
+export const App = (left: Term, right: Term): App => ({
+  _: "app",
+  left: left,
+  right: right,
+});
 
 // TApp is a type application. We use Abs to abstract terms out of terms and
 // App to supply values for the variables we've abstracted out. TAbs is a way
@@ -113,12 +134,24 @@ export type TApp = {
   right: Type;
 };
 
+export const TApp = (left: Term, right: Type): TApp => ({
+  _: "tapp",
+  left: left,
+  right: right,
+});
+
 // TTApp is a type application, but on the type level.
 export type TTApp = {
   _: "ttapp";
   left: Type;
   right: Type;
 };
+
+export const TTApp = (left: Type, right: Type): TTApp => ({
+  _: "ttapp",
+  left: left,
+  right: right,
+});
 
 // A bound variable.
 export type Var = {
@@ -132,6 +165,12 @@ export type Var = {
   index: number;
 };
 
+export const Var = (name: string, index: number): Var => ({
+  _: "var",
+  name: name,
+  index: index,
+});
+
 // A reference.
 export type Ref = {
   _: "ref";
@@ -140,10 +179,32 @@ export type Ref = {
   name: string;
 };
 
+export const Ref = (name: string): Ref => ({
+  _: "ref",
+  name: name,
+});
+
 // ★ is the kind of proper types.
 export type Star = {
   _: "star";
 };
+
+export const Star = (): Star => ({
+  _: "star",
+});
+
+// KArrow (=>) is the kind of operators.
+export type KArrow = {
+  _: "karrow";
+  from: Kind;
+  to: Kind;
+};
+
+export const KArrow = (from: Kind, to: Kind): KArrow => ({
+  _: "karrow",
+  from: from,
+  to: to,
+});
 
 // A type annotation.
 export type Ann = {
@@ -155,6 +216,12 @@ export type Ann = {
   // The annotated type.
   typ: Type;
 };
+
+export const Ann = (term: Term, type: Type): Ann => ({
+  _: "ann",
+  term: term,
+  typ: type,
+});
 
 export type Kind = KArrow | Star;
 
@@ -169,6 +236,13 @@ export type Def = {
   term: Term;
   typ: Type;
 };
+
+export const Def = (name: string, term: Term, type: Type): Def => ({
+  _: "def",
+  name: name,
+  typ: type,
+  term: term,
+});
 
 export type Pkg = { _: "pkg"; name: string };
 

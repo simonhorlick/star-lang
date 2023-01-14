@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 
-import { Abs, TAbs, App, Def, Ref, Var, TApp, Star } from "./evaluation";
+import { Abs, TAbs, App, Def, Ref, Var, TApp, Star, Arrow } from "./ast";
 import { pretty, prettyC, prettyT } from "./pretty";
 import * as Erased from "./erased";
 
@@ -90,4 +90,23 @@ describe("pretty", () => {
         TApp(TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()), Ref("Y"))
       )
     ).toBe("(ΛX. λx:1. 0)(Y)"));
+  test("polymorphic double function", () =>
+    expect(
+      pretty(
+        TAbs(
+          "T",
+          Abs(
+            "f",
+            Abs(
+              "x",
+              App(Var("f", 1), App(Var("f", 1), Var("x", 0))),
+              Var("T", 1)
+            ),
+            Arrow(Var("T", 0), Var("T", 0))
+          ),
+          Star()
+        ),
+        false
+      )
+    ).toBe("ΛT::★. λf:T→T. λx:T. f(f(x))"));
 });

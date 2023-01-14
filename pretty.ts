@@ -17,14 +17,21 @@ export function prettyT(type: Type, indices: boolean = true): string {
     case "arrow":
       return prettyT(type.from, indices) + "→" + prettyT(type.to, indices);
     case "all":
-      return "∀" + type.name + "::" + prettyK(type.kind) + ". " + type.to;
+      return (
+        "∀" +
+        type.name +
+        "::" +
+        prettyK(type.kind) +
+        ". " +
+        prettyT(type.to, indices)
+      );
     case "ref":
       return type.name;
     case "var":
       if (indices) {
         return `${type.index}`;
       } else {
-        return `${type.name}@${type.index}`;
+        return `${type.name}`;
       }
     case "ttabs":
       return (
@@ -71,7 +78,15 @@ export function pretty(term: Term, indices: boolean = true): string {
       );
 
     case "tabs":
-      return "Λ" + term.name + ". " + pretty(term.body, indices) + "";
+      return (
+        "Λ" +
+        term.name +
+        "::" +
+        prettyK(term.kind) +
+        ". " +
+        pretty(term.body, indices) +
+        ""
+      );
 
     case "app": {
       let l = pretty(term.left, indices);
@@ -99,7 +114,7 @@ export function pretty(term: Term, indices: boolean = true): string {
       if (indices) {
         return `${term.index}`;
       } else {
-        return `${term.name}@${term.index}`;
+        return `${term.name}`;
       }
     case "ann":
       return (

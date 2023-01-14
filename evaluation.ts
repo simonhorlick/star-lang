@@ -1,113 +1,24 @@
 import {
   Term,
   Type,
-  App as AppT,
-  Abs as AbsT,
-  Var as VarT,
-  Ref as RefT,
-  Def as DefT,
-  Ann as AnnT,
-  Arrow as ArrowT,
-  TAbs as TAbsT,
-  All as AllT,
-  Star as StarT,
-  TApp as TAppT,
-  KArrow as KArrowT,
-  TTApp as TTAppT,
-  TTAbs as TTAbsT,
-  Kind,
+  App,
+  Abs,
+  Var,
+  Ref,
+  Ann,
+  Arrow,
+  TAbs,
+  All,
+  TApp,
+  Def,
+  TTApp,
+  TTAbs,
 } from "./ast";
 import * as Erased from "./erased";
 
 export function isValue(term: Term): boolean {
   return term._ == "lam" || term._ == "tabs";
 }
-
-export const App = (left: Term, right: Term): AppT => ({
-  _: "app",
-  left: left,
-  right: right,
-});
-
-export const Ann = (term: Term, type: Type): AnnT => ({
-  _: "ann",
-  term: term,
-  typ: type,
-});
-
-export const Abs = (name: string, body: Term, typ: Type): AbsT => ({
-  _: "lam",
-  name: name,
-  body: body,
-  bindType: typ,
-});
-
-export const TAbs = (name: string, body: Term, kind: Kind): TAbsT => ({
-  _: "tabs",
-  name: name,
-  body: body,
-  kind: kind,
-});
-
-export const TApp = (left: Term, right: Type): TAppT => ({
-  _: "tapp",
-  left: left,
-  right: right,
-});
-
-export const TTAbs = (name: string, body: Type, kind: Kind): TTAbsT => ({
-  _: "ttabs",
-  name: name,
-  body: body,
-  kind: kind,
-});
-
-export const TTApp = (left: Type, right: Type): TTAppT => ({
-  _: "ttapp",
-  left: left,
-  right: right,
-});
-
-export const Var = (name: string, index: number): VarT => ({
-  _: "var",
-  name: name,
-  index: index,
-});
-
-export const Ref = (name: string): RefT => ({
-  _: "ref",
-  name: name,
-});
-
-export const Star = (): StarT => ({
-  _: "star",
-});
-
-export const KArrow = (from: Kind, to: Kind): KArrowT => ({
-  _: "karrow",
-  from: from,
-  to: to,
-});
-
-export const Def = (name: string, term: Term, type: Type): DefT => ({
-  _: "def",
-  name: name,
-  typ: type,
-  term: term,
-});
-
-export const Arrow = (from: Type, to: Type): ArrowT => ({
-  _: "arrow",
-  from: from,
-  to: to,
-});
-
-export const All = (name: string, to: Type, kind: Kind): AllT => ({
-  _: "all",
-  to: to,
-  name: name,
-  kind: kind,
-});
 
 // Shifting renumbers the indices of the free variables in a term.
 export function termShift(d: number, t: Term): Term {
@@ -257,7 +168,7 @@ export function typeSubstTop(tyS: Type, tyT: Type): Type {
 
 // Evaluate this term by a single step. When applied to a term that is not yet a value, it yields
 // the next step of evaluation for that term. When applied to a value an exception is thrown.
-export function reduceOnce(defs: DefT[], term: Term): Term {
+export function reduceOnce(defs: Def[], term: Term): Term {
   switch (term._) {
     case "app":
       if (term.left._ == "lam" && isValue(term.right)) {
