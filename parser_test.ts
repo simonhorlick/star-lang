@@ -28,7 +28,7 @@ import {
   type,
   arrow,
 } from "./ast";
-import { Abs, App, Arrow, Def, Ref } from "./evaluation";
+import { Abs, App, Arrow, Def, Ref } from "./ast";
 
 const success = <T>(x: Result<T>) => x.type == "outputvalue";
 

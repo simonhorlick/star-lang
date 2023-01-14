@@ -89,7 +89,7 @@ describe("pretty", () => {
       pretty(
         TApp(TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()), Ref("Y"))
       )
-    ).toBe("(ΛX. λx:1. 0)(Y)"));
+    ).toBe("(ΛX::★. λx:1. 0)(Y)"));
   test("polymorphic double function", () =>
     expect(
       pretty(

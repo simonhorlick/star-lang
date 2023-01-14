@@ -1,33 +1,32 @@
 import { describe, expect, test } from "@jest/globals";
-import { Context, Def as DefT, getDeBruijinIndex, Term, Type } from "./ast";
 import { addTermToCtx, addTypeToCtx } from "./check";
 import {
+  Context,
+  getDeBruijinIndex,
+  Term,
+  Type,
   Abs,
   All,
   Ann,
   App,
   Arrow,
-  Def,
-  erase,
-  isValue,
-  reduce,
-  reduceOnce,
-  reduceOnce2,
   Ref,
   Star,
   TAbs,
   TApp,
-  termShift,
-  termSubst,
-  termSubstTop,
   TTAbs,
   TTApp,
-  typeSubst,
-  tytermSubst,
   Var,
-} from "./evaluation";
-import { pretty } from "./pretty";
+} from "./ast";
 import * as Erased from "./erased";
+import {
+  erase,
+  reduce,
+  reduceOnce2,
+  termShift,
+  termSubst,
+  tytermSubst,
+} from "./evaluation";
 
 export function transformDebruijin(term: Term, ctx: Context = []): Term {
   switch (term._) {
