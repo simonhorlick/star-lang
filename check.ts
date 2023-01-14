@@ -193,7 +193,7 @@ export const GetKind = (ctx: Context, type: Type): Kind | TypecheckError => {
 };
 
 export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
-  console.log(`Γ = [${printCtx(ctx)}]; term = ${pretty(term, false)}`);
+  console.log(`Γ = [${printCtx(ctx)}]; term = ${pretty(term, true)}`);
 
   // FIXME: This needs to follow the inversion lemmas rather than the
   // definitions.

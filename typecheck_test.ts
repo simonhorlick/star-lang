@@ -265,15 +265,52 @@ describe("typechecker", () => {
     }
   });
 
-  test("should disallow type operators with the wrong kind", () => {
-    // λX::★. X→X has kind ★=>★
-    // MakePair = ΛA::★. ΛB::★. A→B→Pair(A,B) has kind ★=>★=>★
-    // Pair(Nat) has kind ★=>★ (it's partially applied)
-    // Pair(Pair) does not belong to any kind
+  test("can represent bool by its eliminators", () => {
+    // typeof Bool = ∀X. X→X→X
+    //
+    // untyped:
+    // tru = λt. λf. t
+    // fls = λt. λf. f
+    // if = λl. λm. λn. (l(m))(n)
+    //
+    // typed:
+    // tru: Bool = λX. λt:X. λf:X. t
+    // fls: Bool = λX. λt:X. λf:X. f
+    // if = λX. λb:Bool. λt:X. λf:X. (b(t))(f)
+
+    const Bool = All(
+      "X",
+      Pi(Var("X", 0), Pi(Var("X", 0), Var("X", 0))),
+      Star()
+    );
+
+    const tru = TAbs(
+      "X",
+      Abs("t", Abs("f", Var("t", 1), Var("X", 1)), Var("X", 0)),
+      Star()
+    );
+    const fls = TAbs(
+      "X",
+      Abs("t", Abs("f", Var("f", 0), Var("X", 1)), Var("X", 0)),
+      Star()
+    );
+
+    expect(GetType([], tru)).toStrictEqual(Bool);
+    expect(GetType([], fls)).toStrictEqual(Bool);
   });
 
-  // pair = ΛA::★. ΛB::★. λa:A. λb:B.
-  // fst = λp:Pair(A,B).
+  test("should disallow type operators with the wrong kind", () => {
+    // pair = ΛA::★. ΛB::★. λa:A. λb:B. ???
+    // typeof Pair = ∀X. X→X→X
+    // untyped:
+    // fst = λa. λb. a
+    // snd = λa. λb. b
+    // λX::★. X→X has kind ★=>★
+    // pair = ΛA::★. ΛB::★. A→B→Pair(A,B) has kind ★=>★=>★
+    // Pair(Nat) has kind ★=>★ (it's partially applied)
+    // Pair(Pair) does not belong to any kind
+    // const pair = ;
+  });
 
   test("[X/Nat](λx:X.x)", () => {
     // [X/Nat](λx:X.x)
