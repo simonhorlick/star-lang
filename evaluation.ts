@@ -9,10 +9,6 @@ export function erase(term: Term): Erased.Term {
       return Erased.Abs(term.name, erase(term.body));
     case "app":
       return Erased.App(erase(term.left), erase(term.right));
-    case "tabs":
-      return erase(term.body);
-    case "tapp":
-      return erase(term.left);
     case "ann":
       return erase(term.term);
     case "ref":

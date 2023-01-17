@@ -16,15 +16,6 @@ export function prettyT(type: Type, indices: boolean = true): string {
   switch (type._) {
     case "pi":
       return prettyT(type.from, indices) + "→" + prettyT(type.to, indices);
-    case "all":
-      return (
-        "∀" +
-        type.name +
-        "::" +
-        prettyK(type.kind) +
-        ". " +
-        prettyT(type.to, indices)
-      );
     case "ref":
       return type.name;
     case "var":
@@ -33,25 +24,6 @@ export function prettyT(type: Type, indices: boolean = true): string {
       } else {
         return `${type.name}`;
       }
-    case "ttabs":
-      return (
-        "λ" +
-        type.name +
-        "::" +
-        prettyK(type.kind) +
-        ". " +
-        prettyT(type.body, indices) +
-        ""
-      );
-    case "ttapp":
-      let l = prettyT(type.left, indices);
-      let r = "(" + prettyT(type.right, indices) + ")";
-
-      if (type.left._ == "ttabs") {
-        l = "(" + l + ")";
-      }
-
-      return l + r;
   }
 }
 
@@ -76,33 +48,11 @@ export function pretty(term: Term, indices: boolean = true): string {
         pretty(term.body, indices) +
         ""
       );
-
-    case "tabs":
-      return (
-        "Λ" +
-        term.name +
-        "::" +
-        prettyK(term.kind) +
-        ". " +
-        pretty(term.body, indices) +
-        ""
-      );
-
     case "app": {
       let l = pretty(term.left, indices);
       let r = "(" + pretty(term.right, indices) + ")";
 
       if (term.left._ == "lam") {
-        l = "(" + l + ")";
-      }
-
-      return l + r;
-    }
-    case "tapp": {
-      let l = pretty(term.left, indices);
-      let r = "(" + prettyT(term.right, indices) + ")";
-
-      if (term.left._ == "tabs") {
         l = "(" + l + ")";
       }
 

@@ -1,4 +1,4 @@
-import { addTermToCtx, addTypeToCtx } from "./check";
+import { addTermToCtx } from "./check";
 import {
   Parser,
   bind,
@@ -35,21 +35,6 @@ export type Binding = VariableBinding | TypeVariableBinding;
 
 export type Context = Binding[];
 
-// All is the type of TAbs terms that abstract out a type.
-export type All = {
-  _: "all";
-  name: string;
-  to: Type;
-  kind: Kind; // The kind of the type argument.
-};
-
-export const All = (name: string, to: Type, kind: Kind): All => ({
-  _: "all",
-  to: to,
-  name: name,
-  kind: kind,
-});
-
 // Π is the type of functions.
 export type Pi = {
   _: "pi";
@@ -78,38 +63,6 @@ export const Abs = (name: string, body: Term, typ: Type): Abs => ({
   bindType: typ,
 });
 
-// TAbs is a type abstraction. Types that occur within the body of
-// this abstraction are substituted when an application occurs.
-export type TAbs = {
-  _: "tabs";
-  name: string; // name of the binder
-  body: Term; // the body of the abstraction
-  kind: Kind; // the kind of the type abstraction
-};
-
-export const TAbs = (name: string, body: Term, kind: Kind): TAbs => ({
-  _: "tabs",
-  name: name,
-  body: body,
-  kind: kind,
-});
-
-// TTAbs is a type abstraction. Types that occur within the body of
-// this abstraction are substituted when an application occurs.
-export type TTAbs = {
-  _: "ttabs";
-  name: string; // name of the binder
-  body: Type; // the body of the abstraction
-  kind: Kind; // the kind of the type abstraction
-};
-
-export const TTAbs = (name: string, body: Type, kind: Kind): TTAbs => ({
-  _: "ttabs",
-  name: name,
-  body: body,
-  kind: kind,
-});
-
 // App is a function application.
 export type App = {
   _: "app";
@@ -119,37 +72,6 @@ export type App = {
 
 export const App = (left: Term, right: Term): App => ({
   _: "app",
-  left: left,
-  right: right,
-});
-
-// TApp is a type application. We use Abs to abstract terms out of terms and
-// App to supply values for the variables we've abstracted out. TAbs is a way
-// of abstracting types out of terms so that we can use TApp to substitute
-// them back in later. When doing evaluation we can reduce a type abstraction
-// and a type application using the E-TappTabs rule, this will give us back a
-// term.
-export type TApp = {
-  _: "tapp";
-  left: Term;
-  right: Type;
-};
-
-export const TApp = (left: Term, right: Type): TApp => ({
-  _: "tapp",
-  left: left,
-  right: right,
-});
-
-// TTApp is a type application, but on the type level.
-export type TTApp = {
-  _: "ttapp";
-  left: Type;
-  right: Type;
-};
-
-export const TTApp = (left: Type, right: Type): TTApp => ({
-  _: "ttapp",
   left: left,
   right: right,
 });
@@ -226,9 +148,9 @@ export const Ann = (term: Term, type: Type): Ann => ({
 
 export type Kind = KArrow | Star;
 
-export type Type = Pi | Ref | Var | All | TTAbs | TTApp;
+export type Type = Pi | Ref | Var;
 
-export type Term = Abs | App | TAbs | TApp | Var | Ref | Ann;
+export type Term = Abs | App | Var | Ref | Ann;
 
 // A top-level definition.
 export type Def = {
@@ -507,10 +429,6 @@ export function transformDebruijin(term: Term, ctx: Context = []): Term {
         term.bindType
       );
     }
-    case "tabs": {
-      const newCtx = addTypeToCtx(ctx, term.name, term.kind);
-      return TAbs(term.name, transformDebruijin(term.body, newCtx), term.kind);
-    }
     case "var":
       return term;
     case "ann":
@@ -523,18 +441,11 @@ export function transformDebruijin(term: Term, ctx: Context = []): Term {
       } else {
         return term;
       }
-    case "tapp":
-      return TApp(
-        transformDebruijin(term.left, ctx),
-        transformDebruijinT(term.right, ctx)
-      );
   }
 }
 
 export function transformDebruijinT(term: Type, ctx: Context = []): Type {
   switch (term._) {
-    case "all":
-      return All(term.name, transformDebruijinT(term.to), term.kind);
     case "pi":
       return Pi(transformDebruijinT(term.from), transformDebruijinT(term.to));
     case "var":
@@ -547,17 +458,5 @@ export function transformDebruijinT(term: Type, ctx: Context = []): Type {
       } else {
         return term;
       }
-    case "ttabs":
-      const newCtx = addTypeToCtx(ctx, term.name, term.kind);
-      return TTAbs(
-        term.name,
-        transformDebruijinT(term.body, newCtx),
-        term.kind
-      );
-    case "ttapp":
-      return TTApp(
-        transformDebruijinT(term.left, ctx),
-        transformDebruijinT(term.right, ctx)
-      );
   }
 }

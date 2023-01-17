@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
 
-import { Abs, TAbs, App, Def, Ref, Var, TApp, Star, Pi } from "./ast";
-import { pretty, prettyC, prettyT } from "./pretty";
+import { Abs, App, Def, Ref, Var, Star, Pi } from "./ast";
+import { pretty, prettyC } from "./pretty";
 import * as Erased from "./erased";
 
 describe("pretty", () => {
@@ -84,29 +84,4 @@ describe("pretty", () => {
         )
       )
     ).toBe("λs. λz. 1(1(0))"));
-  test("type abstraction", () =>
-    expect(
-      pretty(
-        TApp(TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()), Ref("Y"))
-      )
-    ).toBe("(ΛX::★. λx:1. 0)(Y)"));
-  test("polymorphic double function", () =>
-    expect(
-      pretty(
-        TAbs(
-          "T",
-          Abs(
-            "f",
-            Abs(
-              "x",
-              App(Var("f", 1), App(Var("f", 1), Var("x", 0))),
-              Var("T", 1)
-            ),
-            Pi(Var("T", 0), Var("T", 0))
-          ),
-          Star()
-        ),
-        false
-      )
-    ).toBe("ΛT::★. λf:T→T. λx:T. f(f(x))"));
 });

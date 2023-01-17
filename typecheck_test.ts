@@ -1,28 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
-import { Context, Type } from "./ast";
-import {
-  GetKind,
-  GetType,
-  reduceOnce,
-  simplifyty,
-  typeEq,
-  typeShift,
-  tytermSubst,
-} from "./check";
-import {
-  Abs,
-  All,
-  Ann,
-  App,
-  Pi,
-  Ref,
-  Star,
-  TAbs,
-  TApp,
-  TTAbs,
-  TTApp,
-  Var,
-} from "./ast";
+import { Context } from "./ast";
+import { GetKind, GetType, typeShift } from "./check";
+import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { prettyT } from "./pretty";
 
 //
@@ -112,50 +91,50 @@ describe("typechecker", () => {
     expect(typeShift(1, type)).toStrictEqual(Pi(Var("X", 1), Var("Y", 2)));
   });
 
-  test("type shift doesn't change bound variables", () => {
-    const type = All("X", Var("X", 0), Star());
-    expect(typeShift(1, type)).toStrictEqual(type);
-  });
+  // test("type shift doesn't change bound variables", () => {
+  //   const type = All("X", Var("X", 0), Star());
+  //   expect(typeShift(1, type)).toStrictEqual(type);
+  // });
 
-  // ΛT::★. λf:T→T. λx:T. f(f(x))
-  const double = TAbs(
-    "T",
-    Abs(
-      "f",
-      Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0))), Var("T", 1)),
-      Pi(Var("T", 0), Var("T", 0))
-    ),
-    Star()
-  );
+  // // ΛT::★. λf:T→T. λx:T. f(f(x))
+  // const double = TAbs(
+  //   "T",
+  //   Abs(
+  //     "f",
+  //     Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0))), Var("T", 1)),
+  //     Pi(Var("T", 0), Var("T", 0))
+  //   ),
+  //   Star()
+  // );
 
-  test("polymorphic double function is well-typed", () => {
-    const result = GetType([], double);
-    if (result._ == "typecheckerror") {
-      throw new Error(result.msg);
-    }
-    console.log(prettyT(result, false));
-    expect(result).toStrictEqual(
-      All(
-        "T",
-        Pi(Pi(Var("T", 0), Var("T", 0)), Pi(Var("T", 0), Var("T", 0))),
-        Star()
-      )
-    );
-  });
+  // test("polymorphic double function is well-typed", () => {
+  //   const result = GetType([], double);
+  //   if (result._ == "typecheckerror") {
+  //     throw new Error(result.msg);
+  //   }
+  //   console.log(prettyT(result, false));
+  //   expect(result).toStrictEqual(
+  //     All(
+  //       "T",
+  //       Pi(Pi(Var("T", 0), Var("T", 0)), Pi(Var("T", 0), Var("T", 0))),
+  //       Star()
+  //     )
+  //   );
+  // });
 
-  test("instantiating double with Nat gives doubleNat", () => {
-    const doubleNat = TApp(double, Ref("Nat"));
-    const result = GetType(
-      [{ type: "tbind", name: "Nat", kind: Star() }],
-      doubleNat
-    );
-    if (result._ == "typecheckerror") {
-      throw new Error(result.msg);
-    }
-    expect(result).toStrictEqual(
-      Pi(Pi(Ref("Nat"), Ref("Nat")), Pi(Ref("Nat"), Ref("Nat")))
-    );
-  });
+  // test("instantiating double with Nat gives doubleNat", () => {
+  //   const doubleNat = TApp(double, Ref("Nat"));
+  //   const result = GetType(
+  //     [{ type: "tbind", name: "Nat", kind: Star() }],
+  //     doubleNat
+  //   );
+  //   if (result._ == "typecheckerror") {
+  //     throw new Error(result.msg);
+  //   }
+  //   expect(result).toStrictEqual(
+  //     Pi(Pi(Ref("Nat"), Ref("Nat")), Pi(Ref("Nat"), Ref("Nat")))
+  //   );
+  // });
 
   test("doubleNat is well-typed", () => {
     // Γ=[Nat::★]  λf:Nat→Nat. λx:Nat. f(f(x))
@@ -222,82 +201,82 @@ describe("typechecker", () => {
     ).toStrictEqual(Star());
   });
 
-  test("should pass polymorphic identity function abs", () => {
-    // id = ΛX::★. λx:X. x
-    const program = TAbs("X", Abs("x", Var("x", 0), Var("X", 0)), Star());
-    const result = GetType([], program);
-    if (result._ == "typecheckerror") {
-      throw new Error();
-    }
-  });
+  // test("should pass polymorphic identity function abs", () => {
+  //   // id = ΛX::★. λx:X. x
+  //   const program = TAbs("X", Abs("x", Var("x", 0), Var("X", 0)), Star());
+  //   const result = GetType([], program);
+  //   if (result._ == "typecheckerror") {
+  //     throw new Error();
+  //   }
+  // });
 
-  test("should evaluate polymorphic identity function app", () => {
-    // In system F the polymorphic id function is
-    // Λα:★. λx:α. x
-    // with type
-    // ∀α:★. α→α
+  // test("should evaluate polymorphic identity function app", () => {
+  //   // In system F the polymorphic id function is
+  //   // Λα:★. λx:α. x
+  //   // with type
+  //   // ∀α:★. α→α
 
-    // (ΛX::★. λx:X. x)(Y)
-    // λx:Y. x
-    const program = TApp(
-      TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
-      Ref("Y")
-    );
+  //   // (ΛX::★. λx:X. x)(Y)
+  //   // λx:Y. x
+  //   const program = TApp(
+  //     TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
+  //     Ref("Y")
+  //   );
 
-    const actual = reduceOnce([], program);
-    const expected = Abs("x", Var("x", 0), Ref("Y"));
-    expect(actual).toStrictEqual(expected);
-  });
+  //   const actual = reduceOnce([], program);
+  //   const expected = Abs("x", Var("x", 0), Ref("Y"));
+  //   expect(actual).toStrictEqual(expected);
+  // });
 
-  test("should pass polymorphic identity function applied to a type", () => {
-    // (ΛX::★. λx:X. x)(Int)
-    // λx:Int. x
-    const program = TApp(
-      TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
-      Var("Int", 0)
-    );
-    const result = GetType(
-      [{ type: "tbind", name: "Int", kind: Star() }],
-      program
-    );
-    if (result._ == "typecheckerror") {
-      throw new Error();
-    }
-  });
+  // test("should pass polymorphic identity function applied to a type", () => {
+  //   // (ΛX::★. λx:X. x)(Int)
+  //   // λx:Int. x
+  //   const program = TApp(
+  //     TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
+  //     Var("Int", 0)
+  //   );
+  //   const result = GetType(
+  //     [{ type: "tbind", name: "Int", kind: Star() }],
+  //     program
+  //   );
+  //   if (result._ == "typecheckerror") {
+  //     throw new Error();
+  //   }
+  // });
 
-  test("can represent bool by its eliminators", () => {
-    // typeof Bool = ∀X. X→X→X
-    //
-    // untyped:
-    // tru = λt. λf. t
-    // fls = λt. λf. f
-    // if = λl. λm. λn. (l(m))(n)
-    //
-    // typed:
-    // tru: Bool = λX. λt:X. λf:X. t
-    // fls: Bool = λX. λt:X. λf:X. f
-    // if = λX. λb:Bool. λt:X. λf:X. (b(t))(f)
+  // test("can represent bool by its eliminators", () => {
+  //   // typeof Bool = ∀X. X→X→X
+  //   //
+  //   // untyped:
+  //   // tru = λt. λf. t
+  //   // fls = λt. λf. f
+  //   // if = λl. λm. λn. (l(m))(n)
+  //   //
+  //   // typed:
+  //   // tru: Bool = λX. λt:X. λf:X. t
+  //   // fls: Bool = λX. λt:X. λf:X. f
+  //   // if = λX. λb:Bool. λt:X. λf:X. (b(t))(f)
 
-    const Bool = All(
-      "X",
-      Pi(Var("X", 0), Pi(Var("X", 0), Var("X", 0))),
-      Star()
-    );
+  //   const Bool = All(
+  //     "X",
+  //     Pi(Var("X", 0), Pi(Var("X", 0), Var("X", 0))),
+  //     Star()
+  //   );
 
-    const tru = TAbs(
-      "X",
-      Abs("t", Abs("f", Var("t", 1), Var("X", 1)), Var("X", 0)),
-      Star()
-    );
-    const fls = TAbs(
-      "X",
-      Abs("t", Abs("f", Var("f", 0), Var("X", 1)), Var("X", 0)),
-      Star()
-    );
+  //   const tru = TAbs(
+  //     "X",
+  //     Abs("t", Abs("f", Var("t", 1), Var("X", 1)), Var("X", 0)),
+  //     Star()
+  //   );
+  //   const fls = TAbs(
+  //     "X",
+  //     Abs("t", Abs("f", Var("f", 0), Var("X", 1)), Var("X", 0)),
+  //     Star()
+  //   );
 
-    expect(GetType([], tru)).toStrictEqual(Bool);
-    expect(GetType([], fls)).toStrictEqual(Bool);
-  });
+  //   expect(GetType([], tru)).toStrictEqual(Bool);
+  //   expect(GetType([], fls)).toStrictEqual(Bool);
+  // });
 
   test("should disallow type operators with the wrong kind", () => {
     // pair = ΛA::★. ΛB::★. λa:A. λb:B. ???
@@ -312,59 +291,59 @@ describe("typechecker", () => {
     // const pair = ;
   });
 
-  test("[X/Nat](λx:X.x)", () => {
-    // [X/Nat](λx:X.x)
-    // λx:Nat.x
-    let term = Abs("x", Var("x", 0), Var("X", 1));
-    let actual = tytermSubst(Var("Nat", 5), 0, term);
-    let expected = Abs("x", Var("x", 0), Var("Nat", 6));
-    expect(actual).toStrictEqual(expected);
-  });
+  // test("[X/Nat](λx:X.x)", () => {
+  //   // [X/Nat](λx:X.x)
+  //   // λx:Nat.x
+  //   let term = Abs("x", Var("x", 0), Var("X", 1));
+  //   let actual = tytermSubst(Var("Nat", 5), 0, term);
+  //   let expected = Abs("x", Var("x", 0), Var("Nat", 6));
+  //   expect(actual).toStrictEqual(expected);
+  // });
 });
 
-describe("type operators", () => {
-  // The identity type operator λX.X: when applied to any type it gives back
-  // the argument.
-  const Id: Type = TTAbs("A", Var("A", 0), Star());
+// describe("type operators", () => {
+//   // The identity type operator λX.X: when applied to any type it gives back
+//   // the argument.
+//   const Id: Type = TTAbs("A", Var("A", 0), Star());
 
-  const Nat: Type = Ref("Nat");
-  const Bool: Type = Ref("Bool");
+//   const Nat: Type = Ref("Nat");
+//   const Bool: Type = Ref("Bool");
 
-  // The type Nat→Bool.
-  const NatToBool: Type = Pi(Nat, Bool);
+//   // The type Nat→Bool.
+//   const NatToBool: Type = Pi(Nat, Bool);
 
-  const ctx: Context = [];
-  const n2b = simplifyty(ctx, NatToBool);
+//   const ctx: Context = [];
+//   const n2b = simplifyty(ctx, NatToBool);
 
-  // In λω, we recapitulated the mechanisms of the simply typed lambda-calculus “one level up,” taking a type and abstracting out a subexpression to obtain a type operator that can later be instantiated by applying it to different types.
-  test("Nat→Bool === Nat→Bool", () =>
-    expect(typeEq(n2b, simplifyty(ctx, NatToBool))).toBe(true));
+//   // In λω, we recapitulated the mechanisms of the simply typed lambda-calculus “one level up,” taking a type and abstracting out a subexpression to obtain a type operator that can later be instantiated by applying it to different types.
+//   test("Nat→Bool === Nat→Bool", () =>
+//     expect(typeEq(n2b, simplifyty(ctx, NatToBool))).toBe(true));
 
-  test("Nat→Bool === Nat→Id(Bool)", () => {
-    let s = simplifyty(ctx, Pi(Nat, TTApp(Id, Bool)));
-    expect(typeEq(n2b, s)).toBe(true);
-  });
+//   test("Nat→Bool === Nat→Id(Bool)", () => {
+//     let s = simplifyty(ctx, Pi(Nat, TTApp(Id, Bool)));
+//     expect(typeEq(n2b, s)).toBe(true);
+//   });
 
-  test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
-    expect(
-      typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), TTApp(Id, Bool))))
-    ).toBe(true));
+//   test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
+//     expect(
+//       typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), TTApp(Id, Bool))))
+//     ).toBe(true));
 
-  test("Nat→Bool === Id(Nat)→Bool", () =>
-    expect(typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), Bool)))).toBe(true));
+//   test("Nat→Bool === Id(Nat)→Bool", () =>
+//     expect(typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), Bool)))).toBe(true));
 
-  test("Nat→Bool === Id(Nat→Bool)", () =>
-    expect(typeEq(n2b, simplifyty(ctx, TTApp(Id, Pi(Nat, Bool))))).toBe(true));
+//   test("Nat→Bool === Id(Nat→Bool)", () =>
+//     expect(typeEq(n2b, simplifyty(ctx, TTApp(Id, Pi(Nat, Bool))))).toBe(true));
 
-  test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
-    const t = TTApp(Id, TTApp(Id, Pi(TTApp(Id, Nat), Bool)));
-    console.log(prettyT(t));
-    const s = simplifyty(ctx, t);
-    console.log(prettyT(s));
-    const s2 = simplifyty(ctx, s);
-    console.log(prettyT(s2));
-    const s3 = simplifyty(ctx, s2);
-    console.log(prettyT(s3));
-    expect(typeEq(n2b, s3)).toBe(true);
-  });
-});
+//   test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
+//     const t = TTApp(Id, TTApp(Id, Pi(TTApp(Id, Nat), Bool)));
+//     console.log(prettyT(t));
+//     const s = simplifyty(ctx, t);
+//     console.log(prettyT(s));
+//     const s2 = simplifyty(ctx, s);
+//     console.log(prettyT(s2));
+//     const s3 = simplifyty(ctx, s2);
+//     console.log(prettyT(s3));
+//     expect(typeEq(n2b, s3)).toBe(true);
+//   });
+// });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { Abs, Ref, Star, TAbs, TApp, Var } from "./ast";
+import { Abs, Ref, Star, Var } from "./ast";
 import * as Erased from "./erased";
 import {
   erase,
@@ -85,16 +85,15 @@ const id = Erased.Def("id", Erased.Abs("x", Erased.Var("x", 0)));
 // (ΛX.t12)(T2) → [X/T2]t12    E-TappTabs
 
 describe("erasure", () => {
-  test("polymorphic identity function erases to untyped identity", () => {
-    const program = TApp(
-      TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
-      Ref("Y")
-    );
-
-    const actual = erase(program);
-    const expected = Erased.Abs("x", Erased.Var("x", 0));
-    expect(actual).toStrictEqual(expected);
-  });
+  // test("polymorphic identity function erases to untyped identity", () => {
+  //   const program = TApp(
+  //     TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
+  //     Ref("Y")
+  //   );
+  //   const actual = erase(program);
+  //   const expected = Erased.Abs("x", Erased.Var("x", 0));
+  //   expect(actual).toStrictEqual(expected);
+  // });
 });
 
 describe("shifting", () => {
