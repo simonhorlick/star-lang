@@ -1,13 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
-import { Abs, Ref, Star, Var } from "./ast";
+import { Ref, Var } from "./ast";
 import * as Erased from "./erased";
-import {
-  erase,
-  reduce,
-  reduceOnce2,
-  termShift2,
-  termSubst2,
-} from "./evaluation";
+import { reduce, reduceOnce2, termShift2, termSubst2 } from "./evaluation";
 
 // tru = λt. λf. t
 const tru = Erased.Def(

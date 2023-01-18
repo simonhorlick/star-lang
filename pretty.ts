@@ -42,8 +42,8 @@ export function pretty(term: Term, indices: boolean = true): string {
       return (
         "λ" +
         term.name +
-        ":" +
-        prettyT(term.bindType, indices) +
+        // ":" +
+        // prettyT(term.bindType, indices) +
         ". " +
         pretty(term.body, indices) +
         ""

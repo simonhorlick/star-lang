@@ -52,15 +52,13 @@ export const Pi = (from: Type, to: Type): Pi => ({
 export type Abs = {
   _: "lam";
   name: string; // name of the binder
-  bindType: Type; // type of the bound variable
   body: Term; // the body of the abstraction
 };
 
-export const Abs = (name: string, body: Term, typ: Type): Abs => ({
+export const Abs = (name: string, body: Term): Abs => ({
   _: "lam",
   name: name,
   body: body,
-  bindType: typ,
 });
 
 // App is a function application.
@@ -294,7 +292,9 @@ export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
                 bind(optional(whitespace), () =>
                   bind(char("."), () =>
                     bind(optional(whitespace), () =>
-                      bind(lazy(term), (body) => pure(Abs(name, body, typ)))
+                      bind(lazy(term), (body) =>
+                        pure(Abs(name, body /*, typ*/))
+                      )
                     )
                   )
                 )
@@ -414,49 +414,46 @@ export function getDeBruijinIndex(ctx: Context, name: string): number {
   return ctx.length - 1 - idx;
 }
 
-export function transformDebruijin(term: Term, ctx: Context = []): Term {
-  switch (term._) {
-    case "app":
-      return App(
-        transformDebruijin(term.left, ctx),
-        transformDebruijin(term.right, ctx)
-      );
-    case "lam": {
-      const newCtx = addTermToCtx(ctx, term.name, term.bindType);
-      return Abs(
-        term.name,
-        transformDebruijin(term.body, newCtx),
-        term.bindType
-      );
-    }
-    case "var":
-      return term;
-    case "ann":
-      return Ann(transformDebruijin(term.term, ctx), term.typ);
-    case "ref":
-      // If this name exists in the context then compute its index. If it
-      // doesn't exist, leave it as a ref.
-      if (ctx.some((x) => x.name == term.name)) {
-        return Var(term.name, getDeBruijinIndex(ctx, term.name));
-      } else {
-        return term;
-      }
-  }
-}
+// export function transformDebruijin(term: Term, ctx: Context = []): Term {
+//   switch (term._) {
+//     case "app":
+//       return App(
+//         transformDebruijin(term.left, ctx),
+//         transformDebruijin(term.right, ctx)
+//       );
+//     case "lam": {
+//       // Where do we get this type from then?
+//       const newCtx = addTermToCtx(ctx, term.name, term.bindType);
+//       return Abs(term.name, transformDebruijin(term.body, newCtx));
+//     }
+//     case "var":
+//       return term;
+//     case "ann":
+//       return Ann(transformDebruijin(term.term, ctx), term.typ);
+//     case "ref":
+//       // If this name exists in the context then compute its index. If it
+//       // doesn't exist, leave it as a ref.
+//       if (ctx.some((x) => x.name == term.name)) {
+//         return Var(term.name, getDeBruijinIndex(ctx, term.name));
+//       } else {
+//         return term;
+//       }
+//   }
+// }
 
-export function transformDebruijinT(term: Type, ctx: Context = []): Type {
-  switch (term._) {
-    case "pi":
-      return Pi(transformDebruijinT(term.from), transformDebruijinT(term.to));
-    case "var":
-      return term;
-    case "ref":
-      // If this name exists in the context then compute its index. If it
-      // doesn't exist, leave it as a ref.
-      if (ctx.some((x) => x.name == term.name)) {
-        return Var(term.name, getDeBruijinIndex(ctx, term.name));
-      } else {
-        return term;
-      }
-  }
-}
+// export function transformDebruijinT(term: Type, ctx: Context = []): Type {
+//   switch (term._) {
+//     case "pi":
+//       return Pi(transformDebruijinT(term.from), transformDebruijinT(term.to));
+//     case "var":
+//       return term;
+//     case "ref":
+//       // If this name exists in the context then compute its index. If it
+//       // doesn't exist, leave it as a ref.
+//       if (ctx.some((x) => x.name == term.name)) {
+//         return Var(term.name, getDeBruijinIndex(ctx, term.name));
+//       } else {
+//         return term;
+//       }
+//   }
+// }

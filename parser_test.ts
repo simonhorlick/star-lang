@@ -164,7 +164,7 @@ describe("parser", () => {
       actual: success(parenthesis(char("a"))(ts("(a)"))),
     },
     {
-      expected: Abs("x", Ref("t"), Ref("X")),
+      expected: Abs("x", Ref("t")),
       actual: result(abstraction(() => term)(ts("λx:X.t"))),
     },
     {
@@ -188,7 +188,7 @@ describe("parser", () => {
       actual: result(application(() => term)(ts("(b(v))(w)"))),
     },
     {
-      expected: Abs("t", Abs("f", Ref("t"), Ref("Bool")), Ref("Bool")),
+      expected: Abs("t", Abs("f", Ref("t"))),
       actual: result(term(ts("λt:Bool. λf:Bool. t"))),
     },
     {
@@ -198,17 +198,12 @@ describe("parser", () => {
     {
       expected: Abs(
         "z",
-        Abs(
-          "x",
-          Abs("y", App(Ref("x"), App(Ref("y"), Ref("z"))), Ref("Y")),
-          Ref("X")
-        ),
-        Ref("Z")
+        Abs("x", Abs("y", App(Ref("x"), App(Ref("y"), Ref("z")))))
       ),
       actual: result(term(ts("λz:Z. λx:X. λy:Y. x (y (z))"))),
     },
     {
-      expected: Def("id", Abs("x", Ref("x"), Ref("X")), Ref("X")),
+      expected: Def("id", Abs("x", Ref("x")), Ref("X")),
       actual: result(definition(ts("func id:X = λx:X. x"))),
     },
     {

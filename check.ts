@@ -27,12 +27,6 @@ export const addTermToCtx = (
   type: Type
 ): Context => [...ctx, { type: "bind", name: name, typ: type }];
 
-// Shift any type variables that occur inside the types in variable
-// bindings.
-function bindingshift(d: number, bind: VariableBinding): VariableBinding {
-  return { type: "bind", name: bind.name, typ: typeShift(d, bind.typ) };
-}
-
 export const lookupType = (
   ctx: Context,
   index: number,
@@ -47,11 +41,7 @@ export const lookupType = (
     if (name && x.name != name) {
       throw "name mismatch";
     }
-
-    // We need to shift the type variables to ensure they still point
-    // at the correct type in the context.
-    let shifted = bindingshift(index + 1, x);
-    return shifted.typ;
+    return x.typ;
   } else {
     throw `could not find variable binding for ${index}`;
   }
@@ -128,29 +118,30 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
       }
       return lookupType(ctx, term.index, term.name);
     case "lam": {
-      // This is the definition of T-Abs:
-      //   Γ ⊢ T1::★   Γ,x:T1 ⊢ t2:T2
-      // ---------------------------- T-Abs
-      //     Γ ⊢ (λx:T1. t2):T1→T2
-      let T1 = term.bindType;
-      let kindT1 = GetKind(ctx, T1);
-      if (kindT1._ == "typecheckerror") {
-        return kindT1;
-      }
+      throw "can't get type of a lam";
+      //   // This is the definition of T-Abs:
+      //   //   Γ ⊢ T1::★   Γ,x:T1 ⊢ t2:T2
+      //   // ---------------------------- T-Abs
+      //   //     Γ ⊢ (λx:T1. t2):T1→T2
+      //   let T1 = term.bindType;
+      //   let kindT1 = GetKind(ctx, T1);
+      //   if (kindT1._ == "typecheckerror") {
+      //     return kindT1;
+      //   }
 
-      if (kindT1._ != "star") {
-        return TypecheckError("argument to λ must have kind ★");
-      }
+      //   if (kindT1._ != "star") {
+      //     return TypecheckError("argument to λ must have kind ★");
+      //   }
 
-      // Append the bound variable to the context.
-      let newCtx = addTermToCtx(ctx, term.name, T1);
-      const T2 = GetType(newCtx, term.body);
-      if (T2._ == "typecheckerror") {
-        return T2;
-      }
-      // We just added x:T1 to the context while calculating the type of T2, so
-      // shift everything back down again here.
-      return Pi(T1, typeShift(-1, T2));
+      //   // Append the bound variable to the context.
+      //   let newCtx = addTermToCtx(ctx, term.name, T1);
+      //   const T2 = GetType(newCtx, term.body);
+      //   if (T2._ == "typecheckerror") {
+      //     return T2;
+      //   }
+      //   // We just added x:T1 to the context while calculating the type of T2, so
+      //   // shift everything back down again here.
+      //   return Pi(T1, T2);
     }
     case "app": {
       // Γ ⊢ t1:T11→T12    Γ ⊢ t2:T11
@@ -208,7 +199,7 @@ export function termShift(d: number, c: number, t: Term): Term {
     case "var":
       return t.index >= c ? Var(t.name, t.index + d) : t;
     case "lam":
-      return Abs(t.name, termShift(d, c + 1, t.body), t.bindType);
+      return Abs(t.name, termShift(d, c + 1, t.body));
     case "app":
       return App(termShift(d, c, t.left), termShift(d, c, t.right));
     case "ann":
@@ -225,7 +216,7 @@ export function termSubst(j: number, s: Term, c: number, t: Term): Term {
       // expression is consistent.
       return t.index == j + c ? termShift(c, 0, s) : t;
     case "lam":
-      return Abs(t.name, termSubst(j, s, c + 1, t.body), t.bindType);
+      return Abs(t.name, termSubst(j, s, c + 1, t.body));
     case "app":
       return App(termSubst(j, s, c, t.left), termSubst(j, s, c, t.right));
     case "ann":
@@ -240,25 +231,6 @@ export function termSubst(j: number, s: Term, c: number, t: Term): Term {
 // fact that the bound variable has been used up.
 export function termSubstTop(s: Term, t: Term): Term {
   return termShift(-1, 0, termSubst(0, termShift(1, 0, s), 0, t));
-}
-
-function typeShiftAbove(d: number, c: number, tyT: Type): Type {
-  const walk = (c: number, ty: Type): Type => {
-    switch (ty._) {
-      case "var":
-        return ty.index >= c ? Var(ty.name, ty.index + d) : ty;
-      case "pi":
-        return Pi(walk(c, ty.from), walk(c, ty.to));
-      case "ref":
-        return ty;
-    }
-  };
-  return walk(c, tyT);
-}
-
-// Increment any Var nodes that refer to free variables in the given type.
-export function typeShift(d: number, tyT: Type): Type {
-  return typeShiftAbove(d, 0, tyT);
 }
 
 export function isValue(term: Term): boolean {
