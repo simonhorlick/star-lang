@@ -194,14 +194,14 @@ export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
 };
 
 // Shifting renumbers the indices of the free variables in a term.
-export function termShift(d: number, c: number, t: Term): Term {
+export function shift(d: number, c: number, t: Term): Term {
   switch (t._) {
     case "var":
       return t.index >= c ? Var(t.name, t.index + d) : t;
     case "lam":
-      return Abs(t.name, termShift(d, c + 1, t.body));
+      return Abs(t.name, shift(d, c + 1, t.body));
     case "app":
-      return App(termShift(d, c, t.left), termShift(d, c, t.right));
+      return App(shift(d, c, t.left), shift(d, c, t.right));
     case "ann":
     case "ref":
       return t;
@@ -209,18 +209,18 @@ export function termShift(d: number, c: number, t: Term): Term {
 }
 
 // Given a term t, find all Vars with index j and replace them with the term s.
-export function termSubst(j: number, s: Term, c: number, t: Term): Term {
+export function subst(j: number, s: Term, c: number, t: Term): Term {
   switch (t._) {
     case "var":
       // Substitute in the term s, renumbering any free variables so the
       // expression is consistent.
-      return t.index == j + c ? termShift(c, 0, s) : t;
+      return t.index == j + c ? shift(c, 0, s) : t;
     case "lam":
-      return Abs(t.name, termSubst(j, s, c + 1, t.body));
+      return Abs(t.name, subst(j, s, c + 1, t.body));
     case "app":
-      return App(termSubst(j, s, c, t.left), termSubst(j, s, c, t.right));
+      return App(subst(j, s, c, t.left), subst(j, s, c, t.right));
     case "ann":
-      return Ann(termSubst(j, s, c, t.term), t.typ);
+      return Ann(subst(j, s, c, t.term), t.typ);
     case "ref":
       return t;
   }
@@ -229,8 +229,8 @@ export function termSubst(j: number, s: Term, c: number, t: Term): Term {
 // The term being substituted for the bound variable is first shifted up by one, then the
 // substitution is made, and then the whole result is shifted down by one to account for the
 // fact that the bound variable has been used up.
-export function termSubstTop(s: Term, t: Term): Term {
-  return termShift(-1, 0, termSubst(0, termShift(1, 0, s), 0, t));
+export function substTop(s: Term, t: Term): Term {
+  return shift(-1, 0, subst(0, shift(1, 0, s), 0, t));
 }
 
 export function isValue(term: Term): boolean {
@@ -244,7 +244,7 @@ export function evaluate(defs: Def[], term: Term): Term {
       let e1 = evaluate(defs, term.left);
       let e2 = evaluate(defs, term.right);
       if (term.left._ == "lam" && isValue(term.right)) {
-        return termSubstTop(term.right, term.left.body);
+        return substTop(term.right, term.left.body);
       }
       return App(e1, e2);
     case "lam":

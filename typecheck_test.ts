@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context, Def, Term } from "./ast";
-import { evaluate, GetKind, GetType, termShift, termSubst } from "./check";
+import { evaluate, GetKind, GetType, shift, subst } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { prettyT } from "./pretty";
 
@@ -426,7 +426,7 @@ describe("shifting", () => {
       "x",
       Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 2))))
     );
-    let actual = termShift(2, 0, term);
+    let actual = shift(2, 0, term);
     let expected = Abs(
       "x",
       Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 4))))
@@ -445,7 +445,7 @@ describe("shifting", () => {
         Abs("", App(App(Var("", 0), Var("", 1)), Var("", 2)))
       )
     );
-    let actual = termShift(2, 0, term);
+    let actual = shift(2, 0, term);
     let expected = Abs(
       "",
       App(
@@ -466,14 +466,14 @@ describe("substitution", () => {
 
   test("[x/s]x = s", () => {
     let term = Var("x", 1);
-    let actual = termSubst(1, Var("s", 2), 0, term);
+    let actual = subst(1, Var("s", 2), 0, term);
     let expected = Var("s", 2);
     expect(actual).toStrictEqual(expected);
   });
 
   test("[x/s]y = y", () => {
     let term = Var("y", 0);
-    let actual = termSubst(1, Var("s", 2), 0, term);
+    let actual = subst(1, Var("s", 2), 0, term);
     let expected = Var("y", 0);
     expect(actual).toStrictEqual(expected);
   });
@@ -483,7 +483,7 @@ describe("substitution", () => {
     // [0/1](λ. 0 2)
     // λ. 0 2 i.e. λb. b a, this is the same, nothing has been substituted.
     let term = Abs("b", App(Var("b", 0), Var("a", 2)));
-    let actual = termSubst(0, Var("", 1), 0, term);
+    let actual = subst(0, Var("", 1), 0, term);
     let expected = Abs("b", App(Var("b", 0), Var("a", 2)));
     expect(actual).toStrictEqual(expected);
   });
@@ -496,7 +496,7 @@ describe("substitution", () => {
     // [0/1](0 (λ.λ.2))
     // 1 (λ.λ.3)
     let term = App(Var("", 0), Abs("", Abs("", Var("", 2))));
-    let actual = termSubst(0, Var("", 1), 0, term);
+    let actual = subst(0, Var("", 1), 0, term);
     let expected = App(Var("", 1), Abs("", Abs("", Var("", 3))));
     expect(actual).toStrictEqual(expected);
   });
