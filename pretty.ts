@@ -1,38 +1,8 @@
-import { Context, Kind, Term, Type } from "./ast";
+import { Context, Term } from "./ast";
 import * as Erased from "./erased";
 
-// pretty print a kind
-export function prettyK(kind: Kind): string {
-  switch (kind._) {
-    case "karrow":
-      return prettyK(kind.from) + "→" + prettyK(kind.to);
-    case "star":
-      return "★";
-  }
-}
-
-// pretty print a type
-export function prettyT(type: Type, indices: boolean = true): string {
-  switch (type._) {
-    case "pi":
-      return prettyT(type.from, indices) + "→" + prettyT(type.to, indices);
-    case "ref":
-      return type.name;
-    case "var":
-      if (indices) {
-        return `${type.index}`;
-      } else {
-        return `${type.name}`;
-      }
-  }
-}
-
 export function printCtx(ctx: Context): string {
-  return ctx
-    .map(
-      (v) => `${v.name}:${v.type == "bind" ? prettyT(v.typ) : prettyK(v.kind)}`
-    )
-    .join(",");
+  return ctx.map((v) => `${v.name}:${pretty(v.typ)}`).join(",");
 }
 
 // pretty print a term
@@ -66,10 +36,14 @@ export function pretty(term: Term, indices: boolean = true): string {
       } else {
         return `${term.name}`;
       }
+    case "pi":
+      return pretty(term.from, indices) + "→" + pretty(term.to, indices);
     case "ann":
       return (
-        "(" + pretty(term.term, indices) + "):" + prettyT(term.typ, indices)
+        "(" + pretty(term.term, indices) + "):" + pretty(term.typ, indices)
       );
+    case "star":
+      return "★";
   }
 }
 

@@ -13,6 +13,10 @@ export function erase(term: Term): Erased.Term {
       return erase(term.term);
     case "ref":
       return Erased.Ref(term.name);
+    case "pi":
+      throw "unexpected pi";
+    case "star":
+      throw "unexpected star";
   }
 }
 

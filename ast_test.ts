@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { Abs, App, Ref, Term, transformDebruijin, Var } from "./ast";
+import { Abs, App, Ref, Term, Var } from "./ast";
 import { erase } from "./evaluation";
 
 // describe("debruijin", () => {

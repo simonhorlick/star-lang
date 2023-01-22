@@ -29,9 +29,8 @@ import {
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
-export type TypeVariableBinding = { type: "tbind"; name: string; kind: Kind };
 
-export type Binding = VariableBinding | TypeVariableBinding;
+export type Binding = VariableBinding;
 
 export type Context = Binding[];
 
@@ -53,12 +52,14 @@ export type Abs = {
   _: "lam";
   name: string; // name of the binder
   body: Term; // the body of the abstraction
+  argtype?: Term; // the type of the argument
 };
 
-export const Abs = (name: string, body: Term): Abs => ({
+export const Abs = (name: string, body: Term, argtype?: Term): Abs => ({
   _: "lam",
   name: name,
   body: body,
+  argtype: argtype,
 });
 
 // App is a function application.
@@ -114,19 +115,6 @@ export const Star = (): Star => ({
   _: "star",
 });
 
-// KArrow (=>) is the kind of operators.
-export type KArrow = {
-  _: "karrow";
-  from: Kind;
-  to: Kind;
-};
-
-export const KArrow = (from: Kind, to: Kind): KArrow => ({
-  _: "karrow",
-  from: from,
-  to: to,
-});
-
 // A type annotation.
 export type Ann = {
   _: "ann";
@@ -144,11 +132,8 @@ export const Ann = (term: Term, type: Type): Ann => ({
   typ: type,
 });
 
-export type Kind = KArrow | Star;
-
-export type Type = Pi | Ref | Var;
-
-export type Term = Abs | App | Var | Ref | Ann;
+export type Term = Abs | App | Var | Ref | Ann | Pi | Star;
+export type Type = Term;
 
 // A top-level definition.
 export type Def = {

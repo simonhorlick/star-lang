@@ -1,21 +1,5 @@
 // check implements a typechecker for this language
-import {
-  Context,
-  Kind,
-  Term,
-  Type,
-  App,
-  Abs,
-  Var,
-  Ann,
-  Pi,
-  Def,
-  Star,
-  TypeVariableBinding,
-  VariableBinding,
-} from "./ast";
-
-import { pretty, prettyT, printCtx } from "./pretty";
+import { Context, Term, Type, App, Abs, Var, Ann, Pi, Def, Star } from "./ast";
 
 var _ = require("lodash");
 
@@ -39,31 +23,11 @@ export const lookupType = (
   if (x.type == "bind") {
     // for debugging.
     if (name && x.name != name) {
-      throw "name mismatch";
+      throw `name mismatch: got ${name}; expected ${x.name}`;
     }
     return x.typ;
   } else {
     throw `could not find variable binding for ${index}`;
-  }
-};
-
-export const lookupKind = (
-  ctx: Context,
-  index: number,
-  name: string | undefined = undefined
-) => {
-  if (index >= ctx.length) {
-    throw `type ${name} not found in context`;
-  }
-  let x = ctx[ctx.length - index - 1];
-  if (x.type == "tbind") {
-    // for debugging.
-    if (name && x.name != name) {
-      throw "name mismatch";
-    }
-    return x.kind;
-  } else {
-    throw `could not find type variable binding for ${index}`;
   }
 };
 
@@ -77,119 +41,156 @@ const TypecheckError = (msg: string): TypecheckError => ({
   msg: msg,
 });
 
-export const GetKind = (ctx: Context, type: Type): Kind | TypecheckError => {
-  switch (type._) {
-    case "pi": {
-      let kfrom = GetKind(ctx, type.from);
-      if (kfrom._ == "typecheckerror") {
-        return kfrom;
-      }
-      if (kfrom._ != "star") {
-        return TypecheckError("star kind expected");
-      }
-      let kto = GetKind(ctx, type.to);
-      if (kto._ == "typecheckerror") {
-        return kto;
-      }
-      if (kto._ != "star") {
-        return TypecheckError("star kind expected");
-      }
-      return Star();
-    }
-    case "ref": {
-      const match = ctx.filter((d) => d.type == "tbind" && d.name == type.name);
-      if (match.length == 0) {
-        return TypecheckError("type not found: " + type.name);
-      }
-      return (match[0] as TypeVariableBinding).kind;
-    }
-    case "var":
-      return lookupKind(ctx, type.index);
+interface Result {
+  _: "result";
+  term: Term;
+  type: Type;
+}
+
+const Result = (term: Term, type: Term): Result => ({
+  _: "result",
+  term: term,
+  type: type,
+});
+
+// infer the type of a term. This produces an annotated version of the term
+// whose type can always be checked.
+export const infer = (ctx: Context, term: Term): Result | TypecheckError =>
+  tc(ctx, term);
+
+// check that the given term has the expected type.
+export const check = (
+  ctx: Context,
+  tm: Term,
+  ty: Term
+): Result | TypecheckError => {
+  switch (ty._) {
+    case "ann":
+      return check(ctx, tm, ty.term);
+    default:
+      return tc(ctx, tm, ty);
   }
 };
 
-export const GetType = (ctx: Context, term: Term): Type | TypecheckError => {
-  console.log(`Γ = [${printCtx(ctx)}]; term = ${pretty(term, true)}`);
+// Make sure that the term is a "type" (i.e. that it has type 'Type')
+export const checkStar = (ctx: Context, term: Term): Result | TypecheckError =>
+  tc(ctx, term, Star());
+
+// check a term, producing an elaborated term where all of the type annotations
+// have been filled in. The second argument is undefined in inference mode and
+// an expected type (must be in whnf) in checking mode.
+export const tc = (
+  ctx: Context,
+  term: Term,
+  type?: Term // this is undefined in inference mode.
+): Result | TypecheckError => {
   switch (term._) {
+    case "pi": {
+      // Γ ⊢ A <= ★
+      // Γ,x:A ⊢ B <= ★
+      // ----------------
+      // Γ ⊢ Πx:A. B => ★
+      let elA = check(ctx, term.from, Star());
+      if (elA._ == "typecheckerror") {
+        return elA;
+      }
+      let elB = check(addTermToCtx(ctx, "x", term.from), term.to, Star());
+      if (elB._ == "typecheckerror") {
+        return elB;
+      }
+      return Result(Pi(elA.term, elB.term), Star());
+    }
+    case "star":
+      // ----------------
+      // Γ ⊢ ★ => ★
+      return Result(Star(), Star());
     case "var":
       // Look up its type in the context.
       if (term.index >= ctx.length) {
         return TypecheckError("undefined variable " + term.name);
       }
-      return lookupType(ctx, term.index, term.name);
-    case "lam": {
-      throw "can't get type of a lam";
-      //   // This is the definition of T-Abs:
-      //   //   Γ ⊢ T1::★   Γ,x:T1 ⊢ t2:T2
-      //   // ---------------------------- T-Abs
-      //   //     Γ ⊢ (λx:T1. t2):T1→T2
-      //   let T1 = term.bindType;
-      //   let kindT1 = GetKind(ctx, T1);
-      //   if (kindT1._ == "typecheckerror") {
-      //     return kindT1;
-      //   }
-
-      //   if (kindT1._ != "star") {
-      //     return TypecheckError("argument to λ must have kind ★");
-      //   }
-
-      //   // Append the bound variable to the context.
-      //   let newCtx = addTermToCtx(ctx, term.name, T1);
-      //   const T2 = GetType(newCtx, term.body);
-      //   if (T2._ == "typecheckerror") {
-      //     return T2;
-      //   }
-      //   // We just added x:T1 to the context while calculating the type of T2, so
-      //   // shift everything back down again here.
-      //   return Pi(T1, T2);
-    }
-    case "app": {
-      // Γ ⊢ t1:T11→T12    Γ ⊢ t2:T11
-      // ---------------------------- T-App
-      //        Γ ⊢ t1(t2):T12
-      const t1 = term.left;
-      const t2 = term.right;
-      let tyT1 = GetType(ctx, t1);
-      let tyT2 = GetType(ctx, t2);
-      if (tyT1._ == "typecheckerror") {
-        return tyT1;
+      return Result(term, lookupType(ctx, term.index, term.name));
+    case "lam":
+      // Γ,x:A ⊢ a <= B
+      // ----------------
+      // Γ ⊢ λx.a <= Πx:A. B
+      if (type == undefined) {
+        // infer the type of a lambda expression, when an annotation on the
+        // binder is present
+        if (term.argtype == undefined) {
+          return TypecheckError("lambda requires annotation");
+        }
+        let atyA = checkStar(ctx, term.argtype);
+        if (atyA._ == "typecheckerror") {
+          return atyA;
+        }
+        // infer the type of the body of the lambda expression
+        let inferred = infer(
+          addTermToCtx(ctx, term.name, atyA.term),
+          term.body
+        );
+        if (inferred._ == "typecheckerror") {
+          return inferred;
+        }
+        let ebody = inferred.term;
+        let atyB = inferred.type;
+        return Result(Abs(term.name, ebody, term.argtype), Pi(atyA.term, atyB));
       }
-      if (tyT2._ == "typecheckerror") {
-        return tyT2;
-      }
-      if (tyT1._ != "pi") {
+      // checking mode.
+      if (type._ != "pi") {
         return TypecheckError("expected pi type");
       }
-
-      // Ensure the type of the term we're applying to the arrow matches the
-      // from type.
-      let tyT11 = tyT1.from;
-      let tyT12 = tyT1.to;
-      if (!typeEq(tyT2, tyT11)) {
-        return TypecheckError(
-          `parameter type mismatch: while trying to apply parameter of type ${prettyT(
-            tyT2,
-            false
-          )} to a function of type ${prettyT(tyT1, false)}`
-        );
+      // we add the bound variable x:A to the context (assuming that x has type
+      // A) then using that context we check the body has type B.
+      let ebody = check(
+        addTermToCtx(ctx, term.name, type.from),
+        term.body,
+        type.to
+      );
+      if (ebody._ == "typecheckerror") {
+        return ebody;
       }
-      return tyT12;
+      return Result(
+        Abs(term.name, Ann(ebody.term, ebody.type), term.argtype),
+        type
+      );
+    case "app": {
+      let t1 = term.left;
+      let t2 = term.right;
+      let t1T = infer(ctx, t1);
+      if (t1T._ == "typecheckerror") {
+        return t1T;
+      }
+      let et1 = t1T.term;
+      let ty1 = t1T.type;
+      if (ty1._ != "pi") {
+        return TypecheckError("expected pi type");
+      }
+      let tyA = ty1.from;
+      let tyB = ty1.to;
+      let arg = check(ctx, t2, tyA);
+      if (arg._ == "typecheckerror") {
+        return arg;
+      }
+      let et2 = arg.term;
+      // Substitute the argument in the pi type with the elaborated argument to
+      // the app inside of tyB.
+      return Result(App(et1, et2), substTop(et2, tyB));
     }
     case "ann": {
-      let computed = GetType(ctx, term.term);
-      let annotated = term.typ;
-      if (computed._ == "typecheckerror") {
-        return computed;
+      let typ = checkStar(ctx, term.typ);
+      if (typ._ == "typecheckerror") {
+        return typ;
       }
-      if (!typeEq(computed, annotated)) {
-        return TypecheckError(
-          `expected ${prettyT(annotated)}; got ${prettyT(computed)}`
-        );
+      // check the annotated type matches the computed type.
+      let ty = check(ctx, term.term, term.typ);
+      if (ty._ == "typecheckerror") {
+        return ty;
       }
-      return computed;
+      return Result(ty.term, ty.type);
     }
     case "ref":
-      throw "unexpected ref";
+      throw "ref not implemented";
   }
 };
 
@@ -203,6 +204,10 @@ export function shift(d: number, c: number, t: Term): Term {
     case "app":
       return App(shift(d, c, t.left), shift(d, c, t.right));
     case "ann":
+      return Ann(shift(d, c, t.term), t.typ);
+    case "pi":
+      return Pi(shift(d, c, t.from), shift(d, c + 1, t.to));
+    case "star":
     case "ref":
       return t;
   }
@@ -221,6 +226,9 @@ export function subst(j: number, s: Term, c: number, t: Term): Term {
       return App(subst(j, s, c, t.left), subst(j, s, c, t.right));
     case "ann":
       return Ann(subst(j, s, c, t.term), t.typ);
+    case "pi":
+      return Pi(subst(j, s, c, t.from), subst(j, s, c + 1, t.to));
+    case "star":
     case "ref":
       return t;
   }
@@ -243,12 +251,13 @@ export function evaluate(defs: Def[], term: Term): Term {
     case "app":
       let e1 = evaluate(defs, term.left);
       let e2 = evaluate(defs, term.right);
-      if (term.left._ == "lam" && isValue(term.right)) {
-        return substTop(term.right, term.left.body);
+      if (e1._ == "lam" && isValue(e2)) {
+        return substTop(e2, e1.body);
       }
       return App(e1, e2);
     case "lam":
-      throw "cannot reduce Abs";
+      return term;
+    // throw "cannot reduce Abs";
     case "var":
       throw "cannot reduce Var";
     case "ann": // ignored at runtime
@@ -258,6 +267,10 @@ export function evaluate(defs: Def[], term: Term): Term {
       if (match.length == 0) {
         return term;
       }
-      return match[0].term;
+      return evaluate(defs, match[0].term);
+    case "pi":
+      throw "can't eval pi";
+    case "star":
+      throw "can't eval star";
   }
 }
