@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context, Def, Term } from "./ast";
-import { check, evaluate, infer, shift, subst } from "./check";
+import { check, infer, shift, subst, whnf } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
 
@@ -76,6 +76,7 @@ describe("typechecker", () => {
     const program = Abs("a", Var("a", 0), Ref("A"));
     expect(
       check(
+        [],
         [{ type: "bind", name: "A", typ: Star() }],
         program,
         Pi(Ref("A"), Ref("A"))
@@ -90,7 +91,7 @@ describe("typechecker", () => {
       { type: "bind", name: "b", typ: Ref("B") },
     ];
     const program = Abs("a", Var("b", 1));
-    expect(check(ctx, program, Pi(Ref("A"), Ref("B")))).toBeTruthy();
+    expect(check([], ctx, program, Pi(Ref("A"), Ref("B")))).toBeTruthy();
   });
 
   test("should accept well-typed application", () => {
@@ -103,6 +104,7 @@ describe("typechecker", () => {
     );
 
     const result = check(
+      [],
       [
         { type: "bind", name: "B", typ: Star() },
         { type: "bind", name: "A", typ: Star() },
@@ -119,7 +121,7 @@ describe("typechecker", () => {
   test("bound variable must exist", () => {
     const ctx: Context = [{ type: "bind", name: "A", typ: Star() }];
     const program = Abs("a", Var("b", 2), Ref("A"));
-    expect(check(ctx, program, Pi(Ref("?"), Ref("?")))).toStrictEqual({
+    expect(check([], ctx, program, Pi(Ref("A"), Ref("A")))).toStrictEqual({
       _: "typecheckerror",
       msg: "undefined variable b",
     });
@@ -145,9 +147,10 @@ describe("typechecker", () => {
 
   test("polymorphic double function is well-typed", () => {
     const result = check(
+      [Def("T", Abs("x", Var("x", 0)), Pi(Ref("X"), Ref("X")))],
       [],
       double,
-      Pi(Star(), Pi(Pi(Ref("T"), Ref("T")), Pi(Ref("T"), Ref("T"))))
+      Pi(Star(), Pi(Pi(Var("T", 0), Var("T", 1)), Pi(Var("T", 1), Var("T", 2))))
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
@@ -159,6 +162,7 @@ describe("typechecker", () => {
     // double = λT:★. λf:T→T. λx:T. f(f(x))
     const doubleNat = App(double, Var("Nat", 0));
     const result = check(
+      [],
       [{ type: "bind", name: "Nat", typ: Star() }],
       doubleNat,
       Pi(Pi(Var("Nat", 0), Var("Nat", 1)), Pi(Var("Nat", 1), Var("Nat", 2)))
@@ -174,7 +178,7 @@ describe("typechecker", () => {
       { type: "bind", name: "a", typ: Ref("A") },
     ];
     const program = App(Var("a", 0), Var("b", 1));
-    expect(infer(ctx, program)).toStrictEqual({
+    expect(infer([], ctx, program)).toStrictEqual({
       _: "typecheckerror",
       msg: "expected pi type",
     });
@@ -183,7 +187,11 @@ describe("typechecker", () => {
   test("should ensure annotated type matches calculated type", () => {
     // Γ=[A::★]  (λa:A. a):A->A
     const program = Ann(Abs("a", Var("a", 0)), Pi(Var("A", 0), Var("A", 1)));
-    const result = infer([{ type: "bind", name: "A", typ: Star() }], program);
+    const result = infer(
+      [],
+      [{ type: "bind", name: "A", typ: Star() }],
+      program
+    );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -213,9 +221,72 @@ describe("typechecker", () => {
     // double(x Nat) Nat = 2*x
     // double has type Nat->Nat which has kind ★
     let result = check(
+      [],
       [{ type: "bind", name: "Nat", typ: Star() }],
       Pi(Var("Nat", 0), Var("Nat", 1)),
       Star()
+    );
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+  });
+
+  test("type-level and", () => {
+    // and : Type -> Type -> Type
+    // and = \p. \q. (c: Type) -> (p -> q -> c) -> c
+
+    let and = Ann(
+      Abs(
+        "p",
+        Abs(
+          "q",
+          Pi(
+            // "c"
+            Star(),
+            Pi(Pi(Var("p", 2), Pi(Var("q", 2), Var("c", 2))), Var("c", 0))
+          )
+        )
+      ),
+      Pi(Star(), Pi(Star(), Star()))
+    );
+
+    // conj : (p:Type) -> (q:Type) -> p -> q -> and p q
+    // conj = \p.\q. \x.\y. \c. \f. f x y
+    let conj = Ann(
+      Abs(
+        "p",
+        Abs(
+          "q",
+          Abs(
+            "x",
+            Abs(
+              "y",
+              Abs(
+                "c",
+                Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
+              )
+            )
+          )
+        )
+      ),
+      Pi(
+        //"p",
+        Star(),
+        Pi(
+          //"q",
+          Star(),
+          Pi(
+            Var("p", 2),
+            Pi(Var("q", 2), App(App(Ref("and"), Var("p", 4)), Var("q", 3)))
+          )
+        )
+      )
+    );
+    let result = check(
+      [Def("and", and.term, and.typ)],
+      [],
+      conj.term,
+      conj.typ
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
@@ -246,11 +317,11 @@ describe("typechecker", () => {
       Abs("t", Abs("f", Var("f", 0), Var("X", 1)), Var("X", 0))
     );
 
-    let result = check([], tru, Bool);
+    let result = check([], [], tru, Bool);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
-    let result2 = check([], fls, Bool);
+    let result2 = check([], [], fls, Bool);
     if (result2._ == "typecheckerror") {
       throw new Error(result2.msg);
     }
@@ -455,7 +526,7 @@ describe("evaluation", () => {
     const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
     const expected: Term = Abs("z", Var("z", 0));
 
-    const actual = evaluate([], identity);
+    const actual = whnf(true, [], identity);
 
     expect(actual).toStrictEqual(expected);
   });
@@ -463,7 +534,7 @@ describe("evaluation", () => {
   // Test that substituting top level functions works properly.
   test("TestSubstituteDef", () => {
     const expected = Abs("z", Var("z", 0));
-    const actual = evaluate([id], App(Ref("id"), Abs("z", Var("z", 0))));
+    const actual = whnf(true, [id], App(Ref("id"), Abs("z", Var("z", 0))));
     expect(actual).toStrictEqual(expected);
   });
 
@@ -516,7 +587,7 @@ describe("evaluation", () => {
 
     let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
 
-    const actual = evaluate([], src);
+    const actual = whnf(true, [], src);
 
     expect(actual).toStrictEqual(expected);
   });

@@ -55,31 +55,40 @@ const Result = (term: Term, type: Term): Result => ({
 
 // infer the type of a term. This produces an annotated version of the term
 // whose type can always be checked.
-export const infer = (ctx: Context, term: Term): Result | TypecheckError =>
-  tc(ctx, term);
+export const infer = (
+  defs: Def[],
+  ctx: Context,
+  term: Term
+): Result | TypecheckError => tc(defs, ctx, term);
 
 // check that the given term has the expected type.
 export const check = (
+  defs: Def[],
   ctx: Context,
   tm: Term,
   ty: Term
 ): Result | TypecheckError => {
-  switch (ty._) {
+  let nf = whnf(true, defs, ty);
+  switch (nf._) {
     case "ann":
-      return check(ctx, tm, ty.term);
+      return check(defs, ctx, tm, nf.term);
     default:
-      return tc(ctx, tm, ty);
+      return tc(defs, ctx, tm, nf);
   }
 };
 
 // Make sure that the term is a "type" (i.e. that it has type 'Type')
-export const checkStar = (ctx: Context, term: Term): Result | TypecheckError =>
-  tc(ctx, term, Star());
+export const checkStar = (
+  defs: Def[],
+  ctx: Context,
+  term: Term
+): Result | TypecheckError => tc(defs, ctx, term, Star());
 
 // check a term, producing an elaborated term where all of the type annotations
 // have been filled in. The second argument is undefined in inference mode and
 // an expected type (must be in whnf) in checking mode.
 export const tc = (
+  defs: Def[],
   ctx: Context,
   term: Term,
   type?: Term // this is undefined in inference mode.
@@ -90,11 +99,11 @@ export const tc = (
       // Γ,x:A ⊢ B <= ★
       // ----------------
       // Γ ⊢ Πx:A. B => ★
-      let elA = check(ctx, term.from, Star());
+      let elA = check(defs, ctx, term.from, Star());
       if (elA._ == "typecheckerror") {
         return elA;
       }
-      let elB = check(addTermToCtx(ctx, "x", term.from), term.to, Star());
+      let elB = check(defs, addTermToCtx(ctx, "x", term.from), term.to, Star());
       if (elB._ == "typecheckerror") {
         return elB;
       }
@@ -120,12 +129,13 @@ export const tc = (
         if (term.argtype == undefined) {
           return TypecheckError("lambda requires annotation");
         }
-        let atyA = checkStar(ctx, term.argtype);
+        let atyA = checkStar(defs, ctx, term.argtype);
         if (atyA._ == "typecheckerror") {
           return atyA;
         }
         // infer the type of the body of the lambda expression
         let inferred = infer(
+          defs,
           addTermToCtx(ctx, term.name, atyA.term),
           term.body
         );
@@ -138,11 +148,19 @@ export const tc = (
       }
       // checking mode.
       if (type._ != "pi") {
-        return TypecheckError("expected pi type");
+        return TypecheckError(`expected pi type; got ${type._}`);
       }
+
+      if (term.argtype) {
+        if (!equate(defs, type.from, term.argtype)) {
+          return TypecheckError("annotation on binder doesn't match pi type");
+        }
+      }
+
       // we add the bound variable x:A to the context (assuming that x has type
       // A) then using that context we check the body has type B.
       let ebody = check(
+        defs,
         addTermToCtx(ctx, term.name, type.from),
         term.body,
         type.to
@@ -157,7 +175,7 @@ export const tc = (
     case "app": {
       let t1 = term.left;
       let t2 = term.right;
-      let t1T = infer(ctx, t1);
+      let t1T = infer(defs, ctx, t1);
       if (t1T._ == "typecheckerror") {
         return t1T;
       }
@@ -168,7 +186,7 @@ export const tc = (
       }
       let tyA = ty1.from;
       let tyB = ty1.to;
-      let arg = check(ctx, t2, tyA);
+      let arg = check(defs, ctx, t2, tyA);
       if (arg._ == "typecheckerror") {
         return arg;
       }
@@ -178,12 +196,12 @@ export const tc = (
       return Result(App(et1, et2), substTop(et2, tyB));
     }
     case "ann": {
-      let typ = checkStar(ctx, term.typ);
+      let typ = checkStar(defs, ctx, term.typ);
       if (typ._ == "typecheckerror") {
         return typ;
       }
       // check the annotated type matches the computed type.
-      let ty = check(ctx, term.term, term.typ);
+      let ty = check(defs, ctx, term.term, term.typ);
       if (ty._ == "typecheckerror") {
         return ty;
       }
@@ -234,43 +252,119 @@ export function subst(j: number, s: Term, c: number, t: Term): Term {
   }
 }
 
-// The term being substituted for the bound variable is first shifted up by one, then the
-// substitution is made, and then the whole result is shifted down by one to account for the
-// fact that the bound variable has been used up.
+// Replaces all instances of Var(0) with s in the term t.
 export function substTop(s: Term, t: Term): Term {
+  // The term being substituted for the bound variable is first shifted up by one, then the
+  // substitution is made, and then the whole result is shifted down by one to account for the
+  // fact that the bound variable has been used up.
   return shift(-1, 0, subst(0, shift(1, 0, s), 0, t));
 }
 
-export function isValue(term: Term): boolean {
-  return term._ == "lam";
-}
+// export function isValue(term: Term): boolean {
+//   return term._ == "lam";
+// }
 
-// Big-step evaluation for the given term.
-export function evaluate(defs: Def[], term: Term): Term {
-  switch (term._) {
-    case "app":
-      let e1 = evaluate(defs, term.left);
-      let e2 = evaluate(defs, term.right);
-      if (e1._ == "lam" && isValue(e2)) {
-        return substTop(e2, e1.body);
-      }
-      return App(e1, e2);
-    case "lam":
-      return term;
-    // throw "cannot reduce Abs";
-    case "var":
-      throw "cannot reduce Var";
-    case "ann": // ignored at runtime
-      return evaluate(defs, term.term);
-    case "ref":
-      const match = defs.filter((d) => d.name == term.name);
-      if (match.length == 0) {
-        return term;
-      }
-      return evaluate(defs, match[0].term);
-    case "pi":
-      throw "can't eval pi";
-    case "star":
-      throw "can't eval star";
+// // Big-step evaluation for the given term.
+// export function evaluate(defs: Def[], term: Term): Term {
+//   switch (term._) {
+//     case "app":
+//       let e1 = evaluate(defs, term.left);
+//       let e2 = evaluate(defs, term.right);
+//       if (e1._ == "lam" && isValue(e2)) {
+//         return substTop(e2, e1.body);
+//       }
+//       return App(e1, e2);
+//     case "lam":
+//       return term;
+//     // throw "cannot reduce Abs";
+//     case "var":
+//       throw "cannot reduce Var";
+//     case "ann": // ignored at runtime
+//       return evaluate(defs, term.term);
+//     case "ref":
+//       const match = defs.filter((d) => d.name == term.name);
+//       if (match.length == 0) {
+//         return term;
+//       }
+//       return evaluate(defs, match[0].term);
+//     case "pi":
+//       throw "can't eval pi";
+//     case "star":
+//       throw "can't eval star";
+//   }
+// }
+
+// aeq returns true if the two terms are alpha-equivalent, i.e. they are the
+// same up to renaming of bound variables.
+const aeq = (t1: Term, t2: Term): boolean => {
+  // FIXME: This isn't really correct because the name fields (used for
+  // debugging) would collide.
+  return _.isEqual(t1, t2);
+};
+
+const equate = (defs: Def[], t1: Term, t2: Term): boolean => {
+  if (aeq(t1, t2)) {
+    return true;
   }
-}
+
+  let n1 = whnf(true, defs, t1);
+  let n2 = whnf(true, defs, t2);
+
+  switch (n1._) {
+    case "app":
+      if (n2._ != "app") return false;
+      let a1 = n1.left;
+      let a2 = n1.right;
+      let b1 = n2.left;
+      let b2 = n2.right;
+      return equate(defs, a1, b1) && equate(defs, a2, b2);
+    case "lam":
+      if (n2._ != "lam") return false;
+      return equate(defs, n1.body, n2.body);
+    case "pi":
+      if (n2._ != "pi") return false;
+      return equate(defs, n1.from, n2.from) && equate(defs, n1.to, n2.to);
+    case "ref":
+      if (n2._ == "ref" && n1.name == n2.name) return true;
+      // FIXME: When does this happen?
+      throw "failed to equate ref";
+    case "star":
+      return n2._ == "star";
+    case "var":
+      return n2._ == "var" && n1.index == n2.index;
+    case "ann":
+      // TODO: Make this impossible using proper types.
+      throw "internal checker error: unexpected Ann in whnf term";
+  }
+};
+
+// Compute the weak head normal form for a term.
+export const whnf = (unfold: boolean, defs: Def[], t: Term): Term => {
+  switch (t._) {
+    case "ref":
+      if (!unfold) return t;
+      const match = defs.filter((d) => d.name == t.name);
+      if (match.length == 0) {
+        throw `reference not found: ${t.name}`;
+      }
+      return whnf(false, defs, match[0].term);
+    case "app": {
+      let t1 = t.left;
+      let t2 = t.right;
+      let nf = whnf(unfold, defs, t1);
+      if (nf._ == "lam") {
+        let body = nf.body;
+        return whnf(unfold, defs, substTop(t2, body));
+      }
+      return App(nf, t2);
+    }
+    case "ann":
+      // TODO: Just ignore the Ann?
+      throw "unexpected Ann";
+    case "var":
+    case "lam":
+    case "pi":
+    case "star":
+      return t;
+  }
+};

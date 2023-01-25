@@ -39,6 +39,7 @@ export type Pi = {
   _: "pi";
   from: Type;
   to: Type;
+  //name: string; // name of the binder
 };
 
 export const Pi = (from: Type, to: Type): Pi => ({
