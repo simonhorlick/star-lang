@@ -73,13 +73,13 @@ const logFull = (x: any) => {
 describe("typechecker", () => {
   test("should calculate type of lambda body (id)", () => {
     // check that the type of `λa:A. a` is `A->A`.
-    const program = Abs("a", Var("a", 0), Ref("A"));
+    const program = Abs("a", Var("a", 0), Var("A", 1));
     expect(
       check(
         [],
         [{ type: "bind", name: "A", typ: Star() }],
         program,
-        Pi(Ref("A"), Ref("A"))
+        Pi("", Var("A", 1), Var("A", 2))
       )
     ).toBeTruthy();
   });
@@ -91,7 +91,14 @@ describe("typechecker", () => {
       { type: "bind", name: "b", typ: Ref("B") },
     ];
     const program = Abs("a", Var("b", 1));
-    expect(check([], ctx, program, Pi(Ref("A"), Ref("B")))).toBeTruthy();
+    expect(
+      check(
+        [Def("B", id.term, Star())],
+        ctx,
+        program,
+        Pi("", Ref("A"), Ref("B"))
+      )
+    ).toBeTruthy();
   });
 
   test("should accept well-typed application", () => {
@@ -99,18 +106,15 @@ describe("typechecker", () => {
     // A -> (A->B) -> B
     const program = Abs(
       "a",
-      Abs("f", App(Var("f", 0), Var("a", 1)), Pi(Ref("A"), Ref("B"))),
+      Abs("f", App(Var("f", 0), Var("a", 1)), Pi("", Ref("A"), Ref("B"))),
       Ref("A")
     );
 
     const result = check(
+      [Def("A", id.term, Star()), Def("B", id.term, Star())],
       [],
-      [
-        { type: "bind", name: "B", typ: Star() },
-        { type: "bind", name: "A", typ: Star() },
-      ],
       program,
-      Pi(Ref("A"), Pi(Pi(Ref("A"), Ref("B")), Ref("B")))
+      Pi("", Ref("A"), Pi("", Pi("", Ref("A"), Ref("B")), Ref("B")))
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
@@ -119,9 +123,14 @@ describe("typechecker", () => {
   });
 
   test("bound variable must exist", () => {
-    const ctx: Context = [{ type: "bind", name: "A", typ: Star() }];
     const program = Abs("a", Var("b", 2), Ref("A"));
-    expect(check([], ctx, program, Pi(Ref("A"), Ref("A")))).toStrictEqual({
+    const result = check(
+      [Def("A", id.term, Star())],
+      [],
+      program,
+      Pi("", Ref("A"), Ref("A"))
+    );
+    expect(result).toStrictEqual({
       _: "typecheckerror",
       msg: "undefined variable b",
     });
@@ -129,8 +138,8 @@ describe("typechecker", () => {
 
   test("type shift increments free variables", () => {
     // Both X and Y are free type variables.
-    const type = Pi(Var("X", 0), Var("Y", 1));
-    expect(shift(1, 0, type)).toStrictEqual(Pi(Var("X", 1), Var("Y", 2)));
+    const type = Pi("", Var("X", 0), Var("Y", 1));
+    expect(shift(1, 0, type)).toStrictEqual(Pi("", Var("X", 1), Var("Y", 2)));
   });
 
   // λT:★. λf:T→T. λx:T. f(f(x))
@@ -140,17 +149,25 @@ describe("typechecker", () => {
     Abs(
       "f",
       Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0))), Var("T", 1)),
-      Pi(Var("T", 0), Var("T", 1))
+      Pi("", Var("T", 0), Var("T", 1))
     ),
     Star()
   );
 
   test("polymorphic double function is well-typed", () => {
     const result = check(
-      [Def("T", Abs("x", Var("x", 0)), Pi(Ref("X"), Ref("X")))],
+      [Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))],
       [],
       double,
-      Pi(Star(), Pi(Pi(Var("T", 0), Var("T", 1)), Pi(Var("T", 1), Var("T", 2))))
+      Pi(
+        "",
+        Star(),
+        Pi(
+          "",
+          Pi("", Var("T", 0), Var("T", 1)),
+          Pi("", Var("T", 1), Var("T", 2))
+        )
+      )
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
@@ -165,7 +182,11 @@ describe("typechecker", () => {
       [],
       [{ type: "bind", name: "Nat", typ: Star() }],
       doubleNat,
-      Pi(Pi(Var("Nat", 0), Var("Nat", 1)), Pi(Var("Nat", 1), Var("Nat", 2)))
+      Pi(
+        "",
+        Pi("", Var("Nat", 0), Var("Nat", 1)),
+        Pi("", Var("Nat", 1), Var("Nat", 2))
+      )
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
@@ -174,19 +195,22 @@ describe("typechecker", () => {
 
   test("app requires lhs to be an arrow", () => {
     const ctx: Context = [
-      { type: "bind", name: "b", typ: Ref("B") },
-      { type: "bind", name: "a", typ: Ref("A") },
+      { type: "bind", name: "b", typ: Star() },
+      { type: "bind", name: "a", typ: Star() },
     ];
     const program = App(Var("a", 0), Var("b", 1));
     expect(infer([], ctx, program)).toStrictEqual({
       _: "typecheckerror",
-      msg: "expected pi type",
+      msg: "expected pi type on the left of app; got star: ★",
     });
   });
 
   test("should ensure annotated type matches calculated type", () => {
     // Γ=[A::★]  (λa:A. a):A->A
-    const program = Ann(Abs("a", Var("a", 0)), Pi(Var("A", 0), Var("A", 1)));
+    const program = Ann(
+      Abs("a", Var("a", 0)),
+      Pi("", Var("A", 0), Var("A", 1))
+    );
     const result = infer(
       [],
       [{ type: "bind", name: "A", typ: Star() }],
@@ -223,7 +247,7 @@ describe("typechecker", () => {
     let result = check(
       [],
       [{ type: "bind", name: "Nat", typ: Star() }],
-      Pi(Var("Nat", 0), Var("Nat", 1)),
+      Pi("", Var("Nat", 0), Var("Nat", 1)),
       Star()
     );
     if (result._ == "typecheckerror") {
@@ -231,62 +255,190 @@ describe("typechecker", () => {
     }
   });
 
-  test("type-level and", () => {
-    // and : Type -> Type -> Type
-    // and = \p. \q. (c: Type) -> (p -> q -> c) -> c
-
-    let and = Ann(
+  // and : Type -> Type -> Type
+  // and = \p. \q. (c: Type) -> (p -> q -> c) -> c
+  let and = Ann(
+    Abs(
+      "p",
       Abs(
-        "p",
-        Abs(
-          "q",
-          Pi(
-            // "c"
-            Star(),
-            Pi(Pi(Var("p", 2), Pi(Var("q", 2), Var("c", 2))), Var("c", 0))
-          )
-        )
-      ),
-      Pi(Star(), Pi(Star(), Star()))
-    );
-
-    // conj : (p:Type) -> (q:Type) -> p -> q -> and p q
-    // conj = \p.\q. \x.\y. \c. \f. f x y
-    let conj = Ann(
-      Abs(
-        "p",
-        Abs(
-          "q",
-          Abs(
-            "x",
-            Abs(
-              "y",
-              Abs(
-                "c",
-                Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
-              )
-            )
-          )
-        )
-      ),
-      Pi(
-        //"p",
-        Star(),
+        "q",
         Pi(
-          //"q",
+          "c",
           Star(),
           Pi(
-            Var("p", 2),
-            Pi(Var("q", 2), App(App(Ref("and"), Var("p", 4)), Var("q", 3)))
+            "",
+            Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
+            Var("c", 1)
           )
         )
       )
-    );
+    ),
+    Pi("", Star(), Pi("", Star(), Star()))
+  );
+
+  test("type-level and", () => {
+    let result = check([], [], and.term, and.typ);
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+  });
+
+  // conj : Πp:★. Πq:★. p -> q -> and p q
+  // conj = \p.\q. \x.\y. \c. \f. f x y
+  let conj = Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "x",
+          Abs(
+            "y",
+            Abs("c", Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2))))
+          )
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi(
+          "",
+          Var("p", 2),
+          Pi("", Var("q", 2), App(App(Ref("and"), Var("p", 4)), Var("q", 3)))
+        )
+      )
+    )
+  );
+
+  test("conj checks", () => {
     let result = check(
       [Def("and", and.term, and.typ)],
       [],
       conj.term,
       conj.typ
+    );
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+  });
+
+  // proj1 : Πp:★. Πq:★. and p q → p
+  // proj1 : λp. λq. λa. a p (λx. λy. x)
+  let proj1Body = Abs(
+    "p",
+    Abs(
+      "q",
+      Abs(
+        "a",
+        App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
+      )
+    )
+  );
+  let proj1Type = Pi(
+    "p",
+    Star(),
+    Pi(
+      "q",
+      Star(),
+      Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
+    )
+  );
+  let proj1 = Ann(proj1Body, proj1Type);
+
+  test("proj1 checks", () => {
+    let result = check(
+      [Def("and", and.term, and.typ)],
+      [],
+      proj1.term,
+      proj1.typ
+    );
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+  });
+
+  // proj2 : Πp:★. Πq:★. and p q → q
+  // proj2 : λp. λq. λa. a p (λx. λy. y)
+  let proj2Body = Abs(
+    "p",
+    Abs(
+      "q",
+      Abs(
+        "a",
+        App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("y", 0))))
+      )
+    )
+  );
+  let proj2Type = Pi(
+    "p",
+    Star(),
+    Pi(
+      "q",
+      Star(),
+      Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
+    )
+  );
+  let proj2 = Ann(proj2Body, proj2Type);
+
+  test("proj2 checks", () => {
+    let result = check(
+      [Def("and", and.term, and.typ)],
+      [],
+      proj2.term,
+      proj2.typ
+    );
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+  });
+
+  // and_commutes : Πp:★. Πq:★. and p q → and q p
+  // and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
+  let commType = Pi(
+    "p",
+    Star(),
+    Pi(
+      "q",
+      Star(),
+      Pi(
+        "",
+        App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
+        App(App(Ref("and"), Var("q", 1)), Var("p", 2))
+      )
+    )
+  );
+  let p2 = App(App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)), Var("a", 0));
+  let p1 = App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0));
+  let commBody = Abs(
+    "p",
+    Abs(
+      "q",
+      Abs(
+        "a",
+        App(App(App(App(Ref("conj"), Var("q", 1)), Var("p", 2)), p2), p1)
+      )
+    )
+  );
+  let andCommutes = Ann(commBody, commType);
+
+  test("type-level and commutes", () => {
+    // and(p,q) => and(q,p)
+    // Logically, if we have an and(p,q) we can project out the components p,q
+    // and construct an element of and(q,p) as desired.
+    let result = check(
+      [
+        Def("and", and.term, and.typ),
+        Def("conj", conj.term, conj.typ),
+        Def("proj1", proj1.term, proj1.typ),
+        Def("proj2", proj2.term, proj2.typ),
+      ],
+      [],
+      andCommutes.term,
+      andCommutes.typ
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
@@ -306,7 +458,11 @@ describe("typechecker", () => {
     // fls: Bool = λX. λt:X. λf:X. f
     // if = λX. λb:Bool. λt:X. λf:X. (b(t))(f)
 
-    const Bool = Pi(Star(), Pi(Var("X", 0), Pi(Var("X", 1), Var("X", 2))));
+    const Bool = Pi(
+      "X",
+      Star(),
+      Pi("", Var("X", 0), Pi("", Var("X", 1), Var("X", 2)))
+    );
 
     const tru = Abs(
       "X",
@@ -399,7 +555,7 @@ const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
 const two = Abs("s", Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0)))));
 
 // λx. x
-const id = Def("id", Abs("x", Var("x", 0)), Pi(Ref("X"), Ref("X")));
+const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
 //
 // Evaluation Rules

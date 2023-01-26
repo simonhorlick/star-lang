@@ -1,5 +1,6 @@
 // check implements a typechecker for this language
 import { Context, Term, Type, App, Abs, Var, Ann, Pi, Def, Star } from "./ast";
+import { pretty } from "./pretty";
 
 var _ = require("lodash");
 
@@ -103,11 +104,16 @@ export const tc = (
       if (elA._ == "typecheckerror") {
         return elA;
       }
-      let elB = check(defs, addTermToCtx(ctx, "x", term.from), term.to, Star());
+      let elB = check(
+        defs,
+        addTermToCtx(ctx, term.name, term.from),
+        term.to,
+        Star()
+      );
       if (elB._ == "typecheckerror") {
         return elB;
       }
-      return Result(Pi(elA.term, elB.term), Star());
+      return Result(Pi(term.name, elA.term, elB.term), Star());
     }
     case "star":
       // ----------------
@@ -144,7 +150,10 @@ export const tc = (
         }
         let ebody = inferred.term;
         let atyB = inferred.type;
-        return Result(Abs(term.name, ebody, term.argtype), Pi(atyA.term, atyB));
+        return Result(
+          Abs(term.name, ebody, term.argtype),
+          Pi(term.name, atyA.term, atyB)
+        );
       }
       // checking mode.
       if (type._ != "pi") {
@@ -181,11 +190,12 @@ export const tc = (
       }
       let et1 = t1T.term;
       let ty1 = t1T.type;
-      if (ty1._ != "pi") {
-        return TypecheckError("expected pi type");
+      let nf = ensurePi(defs, ty1);
+      if (nf._ == "typecheckerror") {
+        return nf;
       }
-      let tyA = ty1.from;
-      let tyB = ty1.to;
+      let tyA = nf.from;
+      let tyB = nf.to;
       let arg = check(defs, ctx, t2, tyA);
       if (arg._ == "typecheckerror") {
         return arg;
@@ -208,7 +218,12 @@ export const tc = (
       return Result(ty.term, ty.type);
     }
     case "ref":
-      throw "ref not implemented";
+      const match = defs.filter((d) => d.name == term.name);
+      if (match.length == 0) {
+        return TypecheckError(`reference not found: ${term.name}`);
+      }
+      // FIXME: Don't repeat this work if the term has already been checked.
+      return check(defs, ctx, match[0].term, match[0].typ);
   }
 };
 
@@ -224,7 +239,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "ann":
       return Ann(shift(d, c, t.term), t.typ);
     case "pi":
-      return Pi(shift(d, c, t.from), shift(d, c + 1, t.to));
+      return Pi(t.name, shift(d, c, t.from), shift(d, c + 1, t.to));
     case "star":
     case "ref":
       return t;
@@ -245,7 +260,7 @@ export function subst(j: number, s: Term, c: number, t: Term): Term {
     case "ann":
       return Ann(subst(j, s, c, t.term), t.typ);
     case "pi":
-      return Pi(subst(j, s, c, t.from), subst(j, s, c + 1, t.to));
+      return Pi(t.name, subst(j, s, c, t.from), subst(j, s, c + 1, t.to));
     case "star":
     case "ref":
       return t;
@@ -368,3 +383,14 @@ export const whnf = (unfold: boolean, defs: Def[], t: Term): Term => {
       return t;
   }
 };
+
+// Ensure that ty reduces to a Pi type and return it.
+function ensurePi(defs: Def[], ty: Term): Pi | TypecheckError {
+  const nf = whnf(true, defs, ty);
+  if (nf._ != "pi") {
+    return TypecheckError(
+      `expected pi type on the left of app; got ${nf._}: ${pretty(nf)}`
+    );
+  }
+  return nf;
+}

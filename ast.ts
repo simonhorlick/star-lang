@@ -39,13 +39,14 @@ export type Pi = {
   _: "pi";
   from: Type;
   to: Type;
-  //name: string; // name of the binder
+  name: string; // name of the binder
 };
 
-export const Pi = (from: Type, to: Type): Pi => ({
+export const Pi = (name: string, from: Type, to: Type): Pi => ({
   _: "pi",
   from: from,
   to: to,
+  name: name,
 });
 
 // Abs is a lambda abstraction.
@@ -253,8 +254,9 @@ export const arrow: (type: () => Parser<Type>) => (s: Stream) => Result<Pi> = (
         (r) =>
           pure(
             Pi(
+              "",
               lhs,
-              front(r).reduceRight((prev, curr) => Pi(curr, prev), last(r))
+              front(r).reduceRight((prev, curr) => Pi("", curr, prev), last(r))
             )
           )
       )

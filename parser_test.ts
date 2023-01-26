@@ -219,28 +219,28 @@ describe("parser", () => {
       actual: result(type(ts("(Bool)"))),
     },
     {
-      expected: Pi(Ref("A"), Ref("B")),
+      expected: Pi("", Ref("A"), Ref("B")),
       actual: result(arrow(() => type)(ts("A->B"))),
     },
     {
-      expected: Pi(Ref("A"), Pi(Ref("B"), Ref("C"))),
+      expected: Pi("", Ref("A"), Pi("", Ref("B"), Ref("C"))),
       actual: result(type(ts("A->B->C"))),
     },
     {
-      expected: Pi(Ref("B"), Ref("C")),
+      expected: Pi("", Ref("B"), Ref("C")),
       actual: result(type(ts("B->C"))),
     },
     {
-      expected: Pi(Ref("A"), Pi(Ref("B"), Ref("C"))),
+      expected: Pi("", Ref("A"), Pi("", Ref("B"), Ref("C"))),
       actual: result(arrow(() => type)(ts("A->(B->C)"))),
     },
     {
-      expected: Pi(Pi(Ref("A"), Ref("B")), Ref("C")),
+      expected: Pi("", Pi("", Ref("A"), Ref("B")), Ref("C")),
       actual: resultC(arrow(() => type)(ts("(A->B)->C"))),
     },
 
     {
-      expected: Pi(Pi(Ref("A"), Ref("B")), Pi(Ref("C"), Ref("D"))),
+      expected: Pi("", Pi("", Ref("A"), Ref("B")), Pi("", Ref("C"), Ref("D"))),
       actual: result(arrow(() => type)(ts("(A->B)->(C->D)"))),
     },
   ];
