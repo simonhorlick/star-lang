@@ -317,7 +317,7 @@ const aeq = (t1: Term, t2: Term): boolean => {
   return _.isEqual(t1, t2);
 };
 
-const equate = (defs: Def[], t1: Term, t2: Term): boolean => {
+export const equate = (defs: Def[], t1: Term, t2: Term): boolean => {
   if (aeq(t1, t2)) {
     return true;
   }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context, Def, Term } from "./ast";
-import { check, infer, shift, subst, whnf } from "./check";
+import { check, equate, infer, shift, subst, whnf } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
 
@@ -69,6 +69,15 @@ const logFull = (x: any) => {
 //  Γ ⊢ t:ιx.T
 // ------------ selfInst
 // Γ ⊢ t:[t/x]T
+
+// λs. λz. z
+const zero = Abs("s", Abs("z", Var("z", 0)));
+
+// λs. λz. s z
+const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
+
+// λs. λz. s (s z)
+const two = Abs("s", Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0)))));
 
 describe("typechecker", () => {
   test("should calculate type of lambda body (id)", () => {
@@ -482,54 +491,69 @@ describe("typechecker", () => {
       throw new Error(result2.msg);
     }
   });
+
+  // λx. x
+  const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
+
+  // The identity type operator λX.X: when applied to any type it gives back
+  // the argument.
+  const Id: Term = Abs("A", Var("A", 0), Star());
+
+  const Nat: Term = Ref("Nat");
+  const Bool: Term = Ref("Bool");
+
+  const defs = [Def("Nat", id.term, Star()), Def("Bool", id.term, Star())];
+
+  // The type Nat→Bool.
+  const NatToBool: Term = Pi("", Nat, Bool);
+
+  const eq = (a: Term, b: Term) => equate(defs, a, b);
+
+  test("Nat→Bool === Nat→Bool", () =>
+    expect(eq(NatToBool, NatToBool)).toBe(true));
+
+  test("Nat→Bool === Nat→Id(Bool)", () => {
+    let s = Pi("", Nat, App(Id, Bool));
+    expect(eq(NatToBool, s)).toBe(true);
+  });
+
+  test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
+    expect(eq(NatToBool, Pi("", App(Id, Nat), App(Id, Bool)))).toBe(true));
+
+  test("Nat→Bool === Id(Nat)→Bool", () =>
+    expect(eq(NatToBool, Pi("", App(Id, Nat), Bool))).toBe(true));
+
+  test("Nat→Bool === Id(Nat→Bool)", () =>
+    expect(eq(NatToBool, App(Id, Pi("", Nat, Bool)))).toBe(true));
+
+  test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
+    const t = App(Id, App(Id, Pi("", App(Id, Nat), Bool)));
+    expect(eq(NatToBool, t)).toBe(true);
+  });
+
+  test("★ === Id(★)", () => {
+    expect(eq(Star(), App(Id, Star()))).toBe(true);
+  });
+
+  test("id === id(id)", () => {
+    expect(
+      eq(
+        Abs("x", Var("x", 0)),
+        App(Abs("y", Var("y", 0)), Abs("z", Var("z", 0)))
+      )
+    ).toBe(true);
+  });
+
+  test("true != false", () => {
+    expect(
+      eq(Abs("t", Abs("f", Var("t", 1))), Abs("t", Abs("f", Var("f", 0))))
+    ).toBe(false);
+  });
+
+  test("one != two", () => {
+    expect(eq(one, two)).toBe(false);
+  });
 });
-
-// describe("type operators", () => {
-//   // The identity type operator λX.X: when applied to any type it gives back
-//   // the argument.
-//   const Id: Type = TTAbs("A", Var("A", 0), Star());
-
-//   const Nat: Type = Ref("Nat");
-//   const Bool: Type = Ref("Bool");
-
-//   // The type Nat→Bool.
-//   const NatToBool: Type = Pi(Nat, Bool);
-
-//   const ctx: Context = [];
-//   const n2b = simplifyty(ctx, NatToBool);
-
-//   // In λω, we recapitulated the mechanisms of the simply typed lambda-calculus “one level up,” taking a type and abstracting out a subexpression to obtain a type operator that can later be instantiated by applying it to different types.
-//   test("Nat→Bool === Nat→Bool", () =>
-//     expect(typeEq(n2b, simplifyty(ctx, NatToBool))).toBe(true));
-
-//   test("Nat→Bool === Nat→Id(Bool)", () => {
-//     let s = simplifyty(ctx, Pi(Nat, TTApp(Id, Bool)));
-//     expect(typeEq(n2b, s)).toBe(true);
-//   });
-
-//   test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
-//     expect(
-//       typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), TTApp(Id, Bool))))
-//     ).toBe(true));
-
-//   test("Nat→Bool === Id(Nat)→Bool", () =>
-//     expect(typeEq(n2b, simplifyty(ctx, Pi(TTApp(Id, Nat), Bool)))).toBe(true));
-
-//   test("Nat→Bool === Id(Nat→Bool)", () =>
-//     expect(typeEq(n2b, simplifyty(ctx, TTApp(Id, Pi(Nat, Bool))))).toBe(true));
-
-//   test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
-//     const t = TTApp(Id, TTApp(Id, Pi(TTApp(Id, Nat), Bool)));
-//     console.log(prettyT(t));
-//     const s = simplifyty(ctx, t);
-//     console.log(prettyT(s));
-//     const s2 = simplifyty(ctx, s);
-//     console.log(prettyT(s2));
-//     const s3 = simplifyty(ctx, s2);
-//     console.log(prettyT(s3));
-//     expect(typeEq(n2b, s3)).toBe(true);
-//   });
-// });
 
 // tru = λt. λf. t
 const tru = Def("tru", Abs("t", Abs("f", Var("t", 1))), Ref("unknown"));
@@ -544,18 +568,6 @@ const testfn = Def(
   Abs("l", Abs("m", Abs("n", App(App(Var("l", 2), Var("m", 1)), Var("n", 0))))),
   Ref("unknown")
 );
-
-// λs. λz. z
-// const zero = Abs("s", Abs("z", Var("z", 0)));
-
-// λs. λz. s z
-const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
-
-// λs. λz. s (s z)
-const two = Abs("s", Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0)))));
-
-// λx. x
-const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
 //
 // Evaluation Rules
@@ -686,6 +698,9 @@ describe("evaluation", () => {
 
     expect(actual).toStrictEqual(expected);
   });
+
+  // λx. x
+  const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
   // Test that substituting top level functions works properly.
   test("TestSubstituteDef", () => {
