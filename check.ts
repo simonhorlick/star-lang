@@ -1,6 +1,18 @@
 // check implements a typechecker for this language
-import { Context, Term, Type, App, Abs, Var, Ann, Pi, Def, Star } from "./ast";
-import { pretty } from "./pretty";
+import {
+  Context,
+  Term,
+  Type,
+  App,
+  Abs,
+  Var,
+  Ann,
+  Pi,
+  Def,
+  Star,
+  Self,
+} from "./ast";
+import { pretty, printCtx } from "./pretty";
 
 var _ = require("lodash");
 
@@ -94,7 +106,30 @@ export const tc = (
   term: Term,
   type?: Term // this is undefined in inference mode.
 ): Result | TypecheckError => {
+  console.log(
+    `Γ=${printCtx(ctx)} term=${pretty(term, false)} ${
+      type == undefined ? `` : `type=${pretty(type, false)}`
+    }`
+  );
+
+  if (type != undefined && type._ == "self") {
+    // Γ ⊢ t:[t/x]T
+    // ------------ selfGen
+    // Γ ⊢ t:ιx.T
+    //
+    // Γ ⊢ t:ιx.T
+    // ------------ selfInst
+    // Γ ⊢ t:[t/x]T
+
+    // In the current type, replace any references to the self type by the
+    // value being typed.
+    return check(defs, ctx, term, substTop(term, type.body));
+  }
+
   switch (term._) {
+    case "self": {
+      throw "self term";
+    }
     case "pi": {
       // Γ ⊢ A <= ★
       // Γ,x:A ⊢ B <= ★
@@ -234,6 +269,8 @@ export function shift(d: number, c: number, t: Term): Term {
       return t.index >= c ? Var(t.name, t.index + d) : t;
     case "lam":
       return Abs(t.name, shift(d, c + 1, t.body));
+    case "self":
+      return Self(t.name, shift(d, c + 1, t.body));
     case "app":
       return App(shift(d, c, t.left), shift(d, c, t.right));
     case "ann":
@@ -255,6 +292,8 @@ export function subst(j: number, s: Term, c: number, t: Term): Term {
       return t.index == j + c ? shift(c, 0, s) : t;
     case "lam":
       return Abs(t.name, subst(j, s, c + 1, t.body));
+    case "self":
+      return Self(t.name, subst(j, s, c + 1, t.body));
     case "app":
       return App(subst(j, s, c, t.left), subst(j, s, c, t.right));
     case "ann":
@@ -336,6 +375,9 @@ export const equate = (defs: Def[], t1: Term, t2: Term): boolean => {
     case "lam":
       if (n2._ != "lam") return false;
       return equate(defs, n1.body, n2.body);
+    case "self":
+      if (n2._ != "self") return false;
+      return equate(defs, n1.body, n2.body);
     case "pi":
       if (n2._ != "pi") return false;
       return equate(defs, n1.from, n2.from) && equate(defs, n1.to, n2.to);
@@ -378,6 +420,7 @@ export const whnf = (unfold: boolean, defs: Def[], t: Term): Term => {
       throw "unexpected Ann";
     case "var":
     case "lam":
+    case "self":
     case "pi":
     case "star":
       return t;

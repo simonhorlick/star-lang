@@ -18,6 +18,8 @@ export function pretty(term: Term, indices: boolean = true): string {
         pretty(term.body, indices) +
         ""
       );
+    case "self":
+      return `ι${term.name}. ${pretty(term.body)}`;
     case "app": {
       let l = pretty(term.left, indices);
       let r = "(" + pretty(term.right, indices) + ")";

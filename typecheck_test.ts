@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { Context, Def, Term } from "./ast";
+import { Context, Def, Self, Term } from "./ast";
 import { check, equate, infer, shift, subst, whnf } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
@@ -489,6 +489,33 @@ describe("typechecker", () => {
     let result2 = check([], [], fls, Bool);
     if (result2._ == "typecheckerror") {
       throw new Error(result2.msg);
+    }
+  });
+
+  test("can typecheck bool with self types", () => {
+    const bt = Abs("P", Abs("t", Abs("f", Var("t", 1))));
+    const bf = Abs("P", Abs("t", Abs("f", Var("f", 0))));
+
+    // ιb. ΠP:Bool→★. P(Bool.true) → P(Bool.false) → P(b)
+    const Bool = Self(
+      "b",
+      Pi(
+        "P",
+        Pi("", Ref("Bool"), Star()),
+        Pi(
+          "",
+          App(Var("P", 0), bt),
+          Pi("", App(Var("P", 1), bf), App(Var("P", 2), Var("b", 3)))
+        )
+      )
+    );
+
+    const Booltrue = Def("Bool.true", bt, Bool);
+    const Boolfalse = Def("Bool.false", bf, Bool);
+
+    let result = check([Booltrue, Boolfalse], [], Booltrue.term, Bool);
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
     }
   });
 

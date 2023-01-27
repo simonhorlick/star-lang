@@ -64,6 +64,20 @@ export const Abs = (name: string, body: Term, argtype?: Term): Abs => ({
   argtype: argtype,
 });
 
+// Self is a way of abstracting out the value currently being typechecked so
+// that it can be used within the body.
+export type Self = {
+  _: "self";
+  name: string; // name of the binder
+  body: Term; // the body of the abstraction
+};
+
+export const Self = (name: string, body: Term): Self => ({
+  _: "self",
+  name: name,
+  body: body,
+});
+
 // App is a function application.
 export type App = {
   _: "app";
@@ -134,7 +148,7 @@ export const Ann = (term: Term, type: Type): Ann => ({
   typ: type,
 });
 
-export type Term = Abs | App | Var | Ref | Ann | Pi | Star;
+export type Term = Abs | App | Var | Ref | Ann | Pi | Star | Self;
 export type Type = Term;
 
 // A top-level definition.
