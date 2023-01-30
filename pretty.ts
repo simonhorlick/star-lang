@@ -1,8 +1,8 @@
 import { Context, Term } from "./ast";
 import * as Erased from "./erased";
 
-export function printCtx(ctx: Context): string {
-  return ctx.map((v) => `${v.name}:${pretty(v.typ)}`).join(",");
+export function printCtx(ctx: Context, indices: boolean = true): string {
+  return ctx.map((v) => `\t${v.name}:${pretty(v.typ, indices)}`).join(",\n");
 }
 
 // pretty print a term
@@ -19,7 +19,7 @@ export function pretty(term: Term, indices: boolean = true): string {
         ""
       );
     case "self":
-      return `ι${term.name}. ${pretty(term.body)}`;
+      return `ι${term.name}. ${pretty(term.body, indices)}`;
     case "app": {
       let l = pretty(term.left, indices);
       let r = "(" + pretty(term.right, indices) + ")";
@@ -34,12 +34,19 @@ export function pretty(term: Term, indices: boolean = true): string {
       return term.name;
     case "var":
       if (indices) {
-        return `${term.index}`;
+        return `${term.name}#${term.index}`;
       } else {
         return `${term.name}`;
       }
     case "pi":
-      return pretty(term.from, indices) + "→" + pretty(term.to, indices);
+      if (term.name == "") {
+        return pretty(term.from, indices) + "→" + pretty(term.to, indices);
+      } else {
+        return `Π${term.name}:${pretty(term.from, indices)}. ${pretty(
+          term.to,
+          indices
+        )}`;
+      }
     case "ann":
       return (
         "(" + pretty(term.term, indices) + "):" + pretty(term.typ, indices)

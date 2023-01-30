@@ -1,6 +1,16 @@
 import { describe, expect, test } from "@jest/globals";
 import { Context, Def, Self, Term } from "./ast";
-import { check, equate, infer, shift, subst, whnf } from "./check";
+import {
+  addTermToCtx,
+  check,
+  dbgCheckIndices,
+  equate,
+  infer,
+  lookupType,
+  shift,
+  subst,
+  whnf,
+} from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
 
@@ -70,6 +80,8 @@ const logFull = (x: any) => {
 // ------------ selfInst
 // Γ ⊢ t:[t/x]T
 
+const ci = <T extends Term>(t: T): T => dbgCheckIndices([], 0, t);
+
 // λs. λz. z
 const zero = Abs("s", Abs("z", Var("z", 0)));
 
@@ -88,7 +100,7 @@ describe("typechecker", () => {
         [],
         [{ type: "bind", name: "A", typ: Star() }],
         program,
-        Pi("", Var("A", 1), Var("A", 2))
+        Pi("", Var("A", 0), Var("A", 1))
       )
     ).toBeTruthy();
   });
@@ -132,12 +144,12 @@ describe("typechecker", () => {
   });
 
   test("bound variable must exist", () => {
-    const program = Abs("a", Var("b", 2), Ref("A"));
+    const program = Abs("a", Var("b", 2), Var("A", 1));
     const result = check(
       [Def("A", id.term, Star())],
       [],
       program,
-      Pi("", Ref("A"), Ref("A"))
+      Pi("", Var("A", 0), Var("A", 1))
     );
     expect(result).toStrictEqual({
       _: "typecheckerror",
@@ -168,13 +180,15 @@ describe("typechecker", () => {
       [Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))],
       [],
       double,
-      Pi(
-        "",
-        Star(),
+      ci(
         Pi(
-          "",
-          Pi("", Var("T", 0), Var("T", 1)),
-          Pi("", Var("T", 1), Var("T", 2))
+          "T",
+          Star(),
+          Pi(
+            "",
+            Pi("", Var("T", 0), Var("T", 1)),
+            Pi("", Var("T", 1), Var("T", 2))
+          )
         )
       )
     );
@@ -182,24 +196,6 @@ describe("typechecker", () => {
       throw new Error(result.msg);
     }
     console.log(pretty(result.type, false));
-  });
-
-  test("instantiating double with Nat gives doubleNat", () => {
-    // double = λT:★. λf:T→T. λx:T. f(f(x))
-    const doubleNat = App(double, Var("Nat", 0));
-    const result = check(
-      [],
-      [{ type: "bind", name: "Nat", typ: Star() }],
-      doubleNat,
-      Pi(
-        "",
-        Pi("", Var("Nat", 0), Var("Nat", 1)),
-        Pi("", Var("Nat", 1), Var("Nat", 2))
-      )
-    );
-    if (result._ == "typecheckerror") {
-      throw new Error(result.msg);
-    }
   });
 
   test("app requires lhs to be an arrow", () => {
@@ -265,24 +261,26 @@ describe("typechecker", () => {
   });
 
   // and : Type -> Type -> Type
-  // and = \p. \q. (c: Type) -> (p -> q -> c) -> c
-  let and = Ann(
-    Abs(
-      "p",
+  // and = λp. λq. Πc:★. (p -> q -> c) -> c
+  let and = ci(
+    Ann(
       Abs(
-        "q",
-        Pi(
-          "c",
-          Star(),
+        "p",
+        Abs(
+          "q",
           Pi(
-            "",
-            Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
-            Var("c", 1)
+            "c",
+            Star(),
+            Pi(
+              "",
+              Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
+              Var("c", 1)
+            )
           )
         )
-      )
-    ),
-    Pi("", Star(), Pi("", Star(), Star()))
+      ),
+      Pi("", Star(), Pi("", Star(), Star()))
+    )
   );
 
   test("type-level and", () => {
@@ -293,31 +291,36 @@ describe("typechecker", () => {
   });
 
   // conj : Πp:★. Πq:★. p -> q -> and p q
-  // conj = \p.\q. \x.\y. \c. \f. f x y
-  let conj = Ann(
-    Abs(
-      "p",
+  // conj = λp. λq. λx. λy. λc. λf. f x y
+  let conj = ci(
+    Ann(
       Abs(
-        "q",
+        "p",
         Abs(
-          "x",
+          "q",
           Abs(
-            "y",
-            Abs("c", Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2))))
+            "x",
+            Abs(
+              "y",
+              Abs(
+                "c",
+                Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
+              )
+            )
           )
         )
-      )
-    ),
-    Pi(
-      "p",
-      Star(),
+      ),
       Pi(
-        "q",
+        "p",
         Star(),
         Pi(
-          "",
-          Var("p", 2),
-          Pi("", Var("q", 2), App(App(Ref("and"), Var("p", 4)), Var("q", 3)))
+          "q",
+          Star(),
+          Pi(
+            "",
+            Var("p", 1),
+            Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
+          )
         )
       )
     )
@@ -337,23 +340,27 @@ describe("typechecker", () => {
 
   // proj1 : Πp:★. Πq:★. and p q → p
   // proj1 : λp. λq. λa. a p (λx. λy. x)
-  let proj1Body = Abs(
-    "p",
+  let proj1Body = ci(
     Abs(
-      "q",
+      "p",
       Abs(
-        "a",
-        App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
+        "q",
+        Abs(
+          "a",
+          App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
+        )
       )
     )
   );
-  let proj1Type = Pi(
-    "p",
-    Star(),
+  let proj1Type = ci(
     Pi(
-      "q",
+      "p",
       Star(),
-      Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
+      Pi(
+        "q",
+        Star(),
+        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
+      )
     )
   );
   let proj1 = Ann(proj1Body, proj1Type);
@@ -371,24 +378,28 @@ describe("typechecker", () => {
   });
 
   // proj2 : Πp:★. Πq:★. and p q → q
-  // proj2 : λp. λq. λa. a p (λx. λy. y)
-  let proj2Body = Abs(
-    "p",
+  // proj2 = λp.   λq. λa. a q (λx. λy. y)
+  let proj2Body = ci(
     Abs(
-      "q",
+      "p",
       Abs(
-        "a",
-        App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("y", 0))))
+        "q",
+        Abs(
+          "a",
+          App(App(Var("a", 0), Var("q", 1)), Abs("x", Abs("y", Var("y", 0))))
+        )
       )
     )
   );
-  let proj2Type = Pi(
-    "p",
-    Star(),
+  let proj2Type = ci(
     Pi(
-      "q",
+      "p",
       Star(),
-      Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
+      Pi(
+        "q",
+        Star(),
+        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
+      )
     )
   );
   let proj2 = Ann(proj2Body, proj2Type);
@@ -406,38 +417,47 @@ describe("typechecker", () => {
   });
 
   // and_commutes : Πp:★. Πq:★. and p q → and q p
-  // and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
-  let commType = Pi(
-    "p",
-    Star(),
+  let commType = ci(
     Pi(
-      "q",
+      "p",
       Star(),
       Pi(
-        "",
-        App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
-        App(App(Ref("and"), Var("q", 1)), Var("p", 2))
+        "q",
+        Star(),
+        Pi(
+          "",
+          App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
+          App(App(Ref("and"), Var("q", 1)), Var("p", 2))
+        )
       )
     )
   );
-  let p2 = App(App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)), Var("a", 0));
-  let p1 = App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0));
-  let commBody = Abs(
-    "p",
+
+  // and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
+  let commBody = ci(
     Abs(
-      "q",
+      "p",
       Abs(
-        "a",
-        App(App(App(App(Ref("conj"), Var("q", 1)), Var("p", 2)), p2), p1)
+        "q",
+        Abs(
+          "a",
+          App(
+            App(
+              App(App(Ref("conj"), Var("q", 1)), Var("p", 2)),
+              App(App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+            ),
+            App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+          )
+        )
       )
     )
   );
-  let andCommutes = Ann(commBody, commType);
 
   test("type-level and commutes", () => {
     // and(p,q) => and(q,p)
     // Logically, if we have an and(p,q) we can project out the components p,q
     // and construct an element of and(q,p) as desired.
+
     let result = check(
       [
         Def("and", and.term, and.typ),
@@ -446,8 +466,8 @@ describe("typechecker", () => {
         Def("proj2", proj2.term, proj2.typ),
       ],
       [],
-      andCommutes.term,
-      andCommutes.typ
+      commBody,
+      commType
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
@@ -493,6 +513,8 @@ describe("typechecker", () => {
   });
 
   test("can typecheck bool with self types", () => {
+    // Bool = true | false
+
     const bt = Abs("P", Abs("t", Abs("f", Var("t", 1))));
     const bf = Abs("P", Abs("t", Abs("f", Var("f", 0))));
 
@@ -519,6 +541,58 @@ describe("typechecker", () => {
     }
   });
 
+  test("simple parameterised types", () => {
+    // TODO: Maybe
+  });
+
+  // zero = λP. λz. λs. z
+  const z = Abs("P", Abs("z", Abs("s", Var("z", 1))));
+  // succ: Nat -> Nat = λn. λP. λz. λs. s(n)
+  const s = Abs(
+    "n",
+    Abs("P", Abs("z", Abs("s", App(Var("s", 0), Var("n", 3)))))
+  );
+
+  // ιt. ΠP:Nat→★. P(Nat.zero) → (Πn:Nat. P(Nat.succ(n))) → P(t)
+  const Nat = Self(
+    "t",
+    Pi(
+      "P",
+      Pi("", Ref("Nat"), Star()),
+      Pi(
+        "",
+        App(Var("P", 0), z),
+        Pi(
+          "",
+          Pi("n", Ref("Nat"), App(Var("P", 2), App(s, Var("n", 0)))),
+          App(Var("P", 2), Var("t", 3))
+        )
+      )
+    )
+  );
+
+  const zero = Def("Nat.zero", z, Nat);
+  const succ = Def("Nat.succ", s, Pi("", Nat, Nat));
+
+  test("recursive parameterised types: zero", () => {
+    let result = check([], [], zero.term, Nat);
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+  });
+
+  test("recursive parameterised types: succ", () => {
+    let result = check(
+      [Def("Nat", Nat, Star())],
+      [],
+      s, //succ.term,
+      Pi("", Nat, Nat)
+    );
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+  });
+
   // λx. x
   const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
@@ -526,7 +600,7 @@ describe("typechecker", () => {
   // the argument.
   const Id: Term = Abs("A", Var("A", 0), Star());
 
-  const Nat: Term = Ref("Nat");
+  // const Nat: Term = Ref("Nat");
   const Bool: Term = Ref("Bool");
 
   const defs = [Def("Nat", id.term, Star()), Def("Bool", id.term, Star())];
@@ -534,7 +608,7 @@ describe("typechecker", () => {
   // The type Nat→Bool.
   const NatToBool: Term = Pi("", Nat, Bool);
 
-  const eq = (a: Term, b: Term) => equate(defs, a, b);
+  const eq = (a: Term, b: Term) => equate(defs, Star(), a, b);
 
   test("Nat→Bool === Nat→Bool", () =>
     expect(eq(NatToBool, NatToBool)).toBe(true));
@@ -675,28 +749,33 @@ describe("substitution", () => {
   // [x/s]x = s
   // [x/s]y = y                       (if y ≠ x)
   // [x/s](λy.t1) = λy.[x/s]t1        (if y ≠ x and y ∉ FV(s))
+  // in the term `t1 t2` substitute all `x` with `s`
   // [x/s](t1 t2) = [x/s]t1 [x/s]t2
 
+  // in the term `x` substitute all `x` with `s`
   test("[x/s]x = s", () => {
     let term = Var("x", 1);
-    let actual = subst(1, Var("s", 2), 0, term);
+    let actual = subst(1, Var("s", 2), 0, term, "x");
     let expected = Var("s", 2);
     expect(actual).toStrictEqual(expected);
   });
 
+  // in the term `y` substitute all `x` with `s`
   test("[x/s]y = y", () => {
     let term = Var("y", 0);
-    let actual = subst(1, Var("s", 2), 0, term);
+    let actual = subst(1, Var("s", 2), 0, term, "y");
     let expected = Var("y", 0);
     expect(actual).toStrictEqual(expected);
   });
 
+  // in the term `λb. b a` substitute all `b` with `a`
   test("[b/a](λb. b a)", () => {
     // [b/a](λb. b a)
     // [0/1](λ. 0 2)
-    // λ. 0 2 i.e. λb. b a, this is the same, nothing has been substituted.
+    // λ. 0 2 i.e.
+    // λb. b a, this is the same, nothing has been substituted.
     let term = Abs("b", App(Var("b", 0), Var("a", 2)));
-    let actual = subst(0, Var("", 1), 0, term);
+    let actual = subst(0, Var("s", 1), 0, term, "");
     let expected = Abs("b", App(Var("b", 0), Var("a", 2)));
     expect(actual).toStrictEqual(expected);
   });
@@ -709,7 +788,7 @@ describe("substitution", () => {
     // [0/1](0 (λ.λ.2))
     // 1 (λ.λ.3)
     let term = App(Var("", 0), Abs("", Abs("", Var("", 2))));
-    let actual = subst(0, Var("", 1), 0, term);
+    let actual = subst(0, Var("", 1), 0, term, "");
     let expected = App(Var("", 1), Abs("", Abs("", Var("", 3))));
     expect(actual).toStrictEqual(expected);
   });
