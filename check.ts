@@ -330,6 +330,7 @@ export const tc = (
     if (ty1._ == "typecheckerror") {
       return ty1;
     }
+
     console.log(
       `Γ=[${printCtx(ctx, printIndices)}] inferred\n\t${pretty(
         ty1.type,
@@ -474,6 +475,14 @@ export const equate = (
 
   let n1 = whnf(true, defs, t1);
   let n2 = whnf(true, defs, t2);
+
+  // Normalise any self-types.
+  if (n1._ == "self") {
+    n1 = substTop(term, n1.body, n1.name);
+  }
+  if (n2._ == "self") {
+    n2 = substTop(term, n2.body, n2.name);
+  }
 
   switch (n1._) {
     case "app":
