@@ -248,9 +248,14 @@ export const tc = (
 
     switch (term._) {
       case "self": {
-        throw "self term";
-      }
+        // What's the type of a self-type?
+        if (type._ != "star") {
+          return TypecheckError(`expected star type; got ${type._}`);
+        }
 
+        // FIXME: Is this correct?
+        return Result(term, type);
+      }
       case "lam":
         // Γ,x:A ⊢ a <= B
         // ----------------

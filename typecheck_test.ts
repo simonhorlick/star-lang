@@ -13,6 +13,7 @@ import {
 } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
+import { reduce } from "./evaluation";
 
 const logFull = (x: any) => {
   const util = require("util");
@@ -617,6 +618,26 @@ describe("typechecker", () => {
     );
   };
 
+  // ιt. ΠP:Bool→*. P(Bool.true) → P(Bool.false) → P(t)
+  const Bool = Self(
+    "t",
+    Pi(
+      "P",
+      Pi("", Ref("Bool"), Star()),
+      Pi(
+        "",
+        App(Var("P", 0), Ref("true")),
+        Pi("", App(Var("P", 1), Ref("false")), App(Var("P", 2), Var("t", 3)))
+      )
+    )
+  );
+
+  const bt = Abs("P", Abs("t", Abs("f", Var("t", 1))));
+  const bf = Abs("P", Abs("t", Abs("f", Var("f", 0))));
+
+  const Booltrue = Def("true", bt, Bool);
+  const Boolfalse = Def("false", bf, Bool);
+
   test("can typecheck bool with self types", () => {
     /*
       type Bool = true | false
@@ -669,34 +690,14 @@ describe("typechecker", () => {
         true((t) => String, "t", "f") // def true = (P) (t) (f) t
         "t"
     */
-    const bt = Abs("P", Abs("t", Abs("f", Var("t", 1))));
-    const bf = Abs("P", Abs("t", Abs("f", Var("f", 0))));
-
     expect(bt).toStrictEqual(buildConstructor(["t", "f"], 0));
     expect(bf).toStrictEqual(buildConstructor(["t", "f"], 1));
-
-    // ιt. ΠP:Bool→*. P(Bool.true) → P(Bool.false) → P(t)
-    const Bool = Self(
-      "t",
-      Pi(
-        "P",
-        Pi("", Ref("Bool"), Star()),
-        Pi(
-          "",
-          App(Var("P", 0), Ref("true")),
-          Pi("", App(Var("P", 1), Ref("false")), App(Var("P", 2), Var("t", 3)))
-        )
-      )
-    );
 
     const builtBool = buildType("Bool", [
       { name: "true", args: [] },
       { name: "false", args: [] },
     ]).term;
     expect(builtBool).toStrictEqual(Bool);
-
-    const Booltrue = Def("true", bt, Bool);
-    const Boolfalse = Def("false", bf, Bool);
 
     let result = check([Booltrue, Boolfalse], [], Booltrue.term, Bool);
     if (result._ == "typecheckerror") {
@@ -765,10 +766,27 @@ describe("typechecker", () => {
     /*
       type Maybe<T *> = null | just(value T)
             
-      This creates the following functions:
+      This creates the following functions (in the final language design: T is
+      always inferred from the usage, if it's unclear an annotation is
+      required). We need to create the definitions with the type parameters
+      first (the T) followed by any constructor arguments:
         null : (T *) → Maybe<T>
         just : (T *) → T → Maybe<T>
-      
+        
+      The parser generates:
+        Maybe: (A *) → * =
+          (A)
+            ιm. ΠP:Maybe(A)→*.
+            P(null(A)) →
+            ((value A) → P(just(A)(value))) →
+            P(m)
+        just: (A *) → (value A) → Maybe(A) =
+          (A) (value)
+          (P) (null) (just) just(value)
+        null: (A *) → Maybe(A) = 
+          (A)
+          (P) (null) (just) null
+          
       Example values of this type:
         null(Int) : Maybe<Int>
         just(Int, 6) : Maybe<Int>
@@ -785,6 +803,137 @@ describe("typechecker", () => {
           just => "j"
           : String
     */
+
+    // λA. ιm. ΠP:Maybe(A)→*. P(null(A)) → ((value A) → P(just(A)(value))) → P(m)
+    const Maybe = dbgCheckIndices(
+      [],
+      0,
+      Abs(
+        "A",
+        Self(
+          "m",
+          Pi(
+            "P",
+            Pi("", App(Ref("Maybe"), Var("A", 1)), Star()),
+            Pi(
+              "",
+              App(Var("P", 0), App(Ref("null"), Var("A", 2))),
+              Pi(
+                "",
+                Pi(
+                  "value",
+                  Var("A", 3),
+                  App(
+                    Var("P", 2),
+                    App(App(Ref("just"), Var("A", 4)), Var("value", 0))
+                  )
+                ),
+                App(Var("P", 2), Var("m", 3))
+              )
+            )
+          )
+        ),
+        Star()
+      )
+    );
+    console.log(pretty(Maybe));
+
+    // const builtMaybe = buildType("Maybe", [
+    //   { name: "null", args: [] },
+    //   { name: "just", args: [{ name: "value", type: Ref("T") }] },
+    // ]).term;
+    // console.log(pretty(builtMaybe));
+
+    /*
+        just: (A *) → (value A) → Maybe(A) =
+          (A) (value)
+          (P) (null) (just) just(value)
+        null: (A *) → Maybe(A) = 
+          (A)
+          (P) (null) (just) null
+    */
+    const fjust = Abs(
+      "A",
+      Abs(
+        "value",
+        Abs("P", Abs("null", Abs("just", App(Var("just", 0), Var("value", 3)))))
+      )
+    );
+    const fnull = Abs("A", Abs("P", Abs("null", Abs("just", Var("null", 1)))));
+    const Maybejust = Def(
+      "just",
+      fjust,
+      Pi("A", Star(), Pi("value", Var("A", 0), App(Maybe, Var("A", 1))))
+    );
+    const Maybenull = Def(
+      "null",
+      fnull,
+      Pi("A", Star(), App(Maybe, Var("A", 0)))
+    );
+
+    let result = check(
+      [Maybenull, Maybejust],
+      [],
+      Maybenull.term,
+      Maybenull.typ
+    );
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+
+    let result2 = check(
+      [Maybenull, Maybejust],
+      [],
+      Maybejust.term,
+      Maybejust.typ
+    );
+    if (result2._ == "typecheckerror") {
+      throw new Error(result2.msg);
+    }
+
+    // Check an instantiation: just(Bool, true)
+    let result3 = check(
+      [
+        Def("Bool", Bool, Star()),
+        Booltrue,
+        Boolfalse,
+        Def("Maybe", Maybe, Star()),
+        Maybenull,
+        Maybejust,
+      ],
+      [],
+      App(App(Ref("just"), Ref("Bool")), Ref("true")),
+      App(Maybe, Ref("Bool"))
+    );
+    if (result3._ == "typecheckerror") {
+      throw new Error(result3.msg);
+    }
+
+    // x = just(Bool)(true)
+    // case x of
+    //  null -> false
+    //  just -> x.value
+    // => evaluates to true
+    // is:
+    // x((m) Bool, false, (value) value)
+    const caseExp = App(
+      App(App(result3.term, Abs("m", Ref("Bool"))), Ref("false")),
+      Abs("value", Var("value", 0))
+    );
+
+    const reduced = whnf(
+      true,
+      [
+        Def("Bool", Bool, Star()),
+        Booltrue,
+        Boolfalse,
+        Def("Maybe", Maybe, Star()),
+        Maybenull,
+        Maybejust,
+      ],
+      caseExp
+    );
+    expect(reduced).toStrictEqual(bt);
   });
 
   test("recursive parameterised types", () => {
@@ -1006,7 +1155,7 @@ describe("typechecker", () => {
   const Id: Term = Abs("A", Var("A", 0), Star());
 
   // const Nat: Term = Ref("Nat");
-  const Bool: Term = Ref("Bool");
+  //const Bool: Term = Ref("Bool");
 
   const defs = [Def("Nat", id.term, Star()), Def("Bool", id.term, Star())];
 
