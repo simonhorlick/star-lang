@@ -108,25 +108,6 @@ export const tc = (
   type?: Term // this is undefined in inference mode.
 ): Result | TypecheckError => {
   const printIndices = false;
-  if (type) {
-    // checking mode
-    console.log(
-      `Γ=[${printCtx(ctx, printIndices)}] checking \n${pretty(
-        term,
-        printIndices
-      )} <= ${pretty(type, printIndices)}`
-    );
-  } else {
-    // inference mode
-    console.log(
-      `Γ=[${printCtx(ctx, printIndices)}] inferring type for \n${pretty(
-        term,
-        printIndices
-      )}`
-    );
-  }
-
-  dbgCheckIndices(ctx, 0, term);
 
   // inference mode
   if (type == undefined) {
@@ -152,25 +133,17 @@ export const tc = (
         if (elB._ == "typecheckerror") {
           return elB;
         }
-        console.log(`inferred type is ${pretty(Star(), printIndices)}`);
         return Result(Pi(term.name, elA.term, elB.term), Star());
       }
       case "star":
         // ----------------
         // Γ ⊢ ★ => ★
-        console.log(`inferred type is ${pretty(Star(), printIndices)}`);
         return Result(Star(), Star());
       case "var":
         // Look up its type in the context.
         if (term.index >= ctx.length) {
           return TypecheckError("undefined variable " + term.name);
         }
-        console.log(
-          `inferred type is ${pretty(
-            lookupType(ctx, term.index, term.name),
-            printIndices
-          )}`
-        );
         return Result(term, lookupType(ctx, term.index, term.name));
       case "lam": {
         // Γ,x:A ⊢ a <= B
@@ -197,12 +170,6 @@ export const tc = (
         }
         let ebody = inferred.term;
         let atyB = inferred.type;
-        console.log(
-          `inferred type is ${pretty(
-            Pi(term.name, atyA.term, atyB),
-            printIndices
-          )}`
-        );
 
         return Result(
           Abs(term.name, ebody, term.argtype),
@@ -236,11 +203,9 @@ export const tc = (
           return arg;
         }
         let et2 = arg.term;
-        console.log(`inferred type is ${pretty(tyB, printIndices)}`);
         // Substitute the argument in the pi type with the elaborated argument to
         // the app inside of tyB.
         let typ = substTop(et2, tyB, nf.name);
-        console.log(`subst type is ${pretty(typ, printIndices)}`);
 
         return Result(App(fTypeElaborated, et2), typ);
       }
@@ -255,8 +220,6 @@ export const tc = (
           return ty;
         }
 
-        console.log(`inferred type is ${pretty(ty.type, printIndices)}`);
-
         return Result(ty.term, ty.type);
       }
       case "ref":
@@ -264,14 +227,11 @@ export const tc = (
         if (match.length == 0) {
           return TypecheckError(`reference not found: ${term.name}`);
         }
-        console.log(`inferred type is ${pretty(match[0].typ, printIndices)}`);
 
         // FIXME: Don't repeat this work if the term has already been checked.
         return check(defs, ctx, match[0].term, match[0].typ);
     }
   } else {
-    dbgCheckIndices(ctx, 0, type);
-
     if (type._ == "self") {
       // Γ ⊢ t:[t/x]T
       // ------------ selfGen
@@ -330,13 +290,6 @@ export const tc = (
     if (ty1._ == "typecheckerror") {
       return ty1;
     }
-
-    console.log(
-      `Γ=[${printCtx(ctx, printIndices)}] inferred\n\t${pretty(
-        ty1.type,
-        printIndices
-      )};\nchecking it matches\n\t${pretty(type, printIndices)}`
-    );
 
     if (!equate(defs, term, type, ty1.type)) {
       return TypecheckError(

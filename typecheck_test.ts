@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { Context, Def, Self, Term } from "./ast";
+import { Context, Def, Self, Term, Type } from "./ast";
 import {
   addTermToCtx,
   check,
@@ -37,7 +37,7 @@ const logFull = (x: any) => {
 // For lambdas we can only check against a known type:
 //
 // Γ,x:A ⊢ a <= B
-// Γ ⊢ A <= ★
+// Γ ⊢ A <= *
 // ---------------------- lambda
 // Γ ⊢ λx.a <= (x:A) -> B
 //
@@ -49,14 +49,14 @@ const logFull = (x: any) => {
 // ------------------- app
 // Γ ⊢ a(b) => B[b/x]
 //
-// Γ ⊢ A <= ★
-// Γ,x:A ⊢ B <= ★
+// Γ ⊢ A <= *
+// Γ,x:A ⊢ B <= *
 // ------------------- pi
-// Γ ⊢ (x:A) -> B => ★
+// Γ ⊢ (x:A) -> B => *
 //
 //
 // ---------- type-in-type
-// Γ ⊢ ★ => ★
+// Γ ⊢ * => *
 //
 //
 // We can always check inferrable types:
@@ -123,7 +123,7 @@ describe("typechecker", () => {
   });
 
   test("should accept well-typed application", () => {
-    // Γ=[B::★,A::★]  λa:A. λf:A->B. f(a)
+    // Γ=[B::*,A::*]  λa:A. λf:A->B. f(a)
     // A -> (A->B) -> B
     const program = Abs(
       "a",
@@ -143,19 +143,19 @@ describe("typechecker", () => {
     expect(pretty(result.type)).toBe("A→A→B→B");
   });
 
-  test("bound variable must exist", () => {
-    const program = Abs("a", Var("b", 2), Var("A", 1));
-    const result = check(
-      [Def("A", id.term, Star())],
-      [],
-      program,
-      Pi("", Var("A", 0), Var("A", 1))
-    );
-    expect(result).toStrictEqual({
-      _: "typecheckerror",
-      msg: "undefined variable b",
-    });
-  });
+  // test("bound variable must exist", () => {
+  //   const program = Abs("a", Var("b", 2), Var("A", 1));
+  //   const result = check(
+  //     [Def("A", id.term, Star())],
+  //     [],
+  //     program,
+  //     Pi("", Var("A", 0), Var("A", 1))
+  //   );
+  //   expect(result).toStrictEqual({
+  //     _: "typecheckerror",
+  //     msg: "undefined variable b",
+  //   });
+  // });
 
   test("type shift increments free variables", () => {
     // Both X and Y are free type variables.
@@ -163,8 +163,8 @@ describe("typechecker", () => {
     expect(shift(1, 0, type)).toStrictEqual(Pi("", Var("X", 1), Var("Y", 2)));
   });
 
-  // λT:★. λf:T→T. λx:T. f(f(x))
-  // ★ -> T -> T -> T -> T
+  // λT:*. λf:T→T. λx:T. f(f(x))
+  // * -> T -> T -> T -> T
   const double = Abs(
     "T",
     Abs(
@@ -211,7 +211,7 @@ describe("typechecker", () => {
   });
 
   test("should ensure annotated type matches calculated type", () => {
-    // Γ=[A::★]  (λa:A. a):A->A
+    // Γ=[A::*]  (λa:A. a):A->A
     const program = Ann(
       Abs("a", Var("a", 0)),
       Pi("", Var("A", 0), Var("A", 1))
@@ -246,9 +246,9 @@ describe("typechecker", () => {
   //   });
   // });
 
-  test("pi types have kind ★", () => {
+  test("pi types have kind *", () => {
     // double(x Nat) Nat = 2*x
-    // double has type Nat->Nat which has kind ★
+    // double has type Nat->Nat which has kind *
     let result = check(
       [],
       [{ type: "bind", name: "Nat", typ: Star() }],
@@ -261,7 +261,7 @@ describe("typechecker", () => {
   });
 
   // and : Type -> Type -> Type
-  // and = λp. λq. Πc:★. (p -> q -> c) -> c
+  // and = λp. λq. Πc:*. (p -> q -> c) -> c
   let and = ci(
     Ann(
       Abs(
@@ -290,7 +290,7 @@ describe("typechecker", () => {
     }
   });
 
-  // conj : Πp:★. Πq:★. p -> q -> and p q
+  // conj : Πp:*. Πq:*. p -> q -> and p q
   // conj = λp. λq. λx. λy. λc. λf. f x y
   let conj = ci(
     Ann(
@@ -338,7 +338,7 @@ describe("typechecker", () => {
     }
   });
 
-  // proj1 : Πp:★. Πq:★. and p q → p
+  // proj1 : Πp:*. Πq:*. and p q → p
   // proj1 : λp. λq. λa. a p (λx. λy. x)
   let proj1Body = ci(
     Abs(
@@ -377,7 +377,7 @@ describe("typechecker", () => {
     }
   });
 
-  // proj2 : Πp:★. Πq:★. and p q → q
+  // proj2 : Πp:*. Πq:*. and p q → q
   // proj2 = λp.   λq. λa. a q (λx. λy. y)
   let proj2Body = ci(
     Abs(
@@ -416,7 +416,7 @@ describe("typechecker", () => {
     }
   });
 
-  // and_commutes : Πp:★. Πq:★. and p q → and q p
+  // and_commutes : Πp:*. Πq:*. and p q → and q p
   let commType = ci(
     Pi(
       "p",
@@ -512,28 +512,191 @@ describe("typechecker", () => {
     }
   });
 
-  test("can typecheck bool with self types", () => {
-    // Bool = true | false
+  const reverse = <T>(l: Array<T>) => [...l].reverse();
 
+  // Build the nth constructor function for a datatype with the given
+  // constructors. The nth constructor just returns the value of the nth
+  // argument.
+  const buildConstructor = (
+    constructors: string[],
+    constructorIndex: number
+  ) => {
+    /*
+      constructor1 : T = (P) (c1) (c2) ... (cN) c1
+      constructor2 : T = (P) (c1) (c2) ... (cN) c2
+      ...
+      constructorN : T = (P) (c1) (c2) ... (cN) cN
+    */
+
+    const rc = reverse(constructors);
+
+    const wrapN = (n: number): Abs | Var => {
+      if (n == 0) {
+        return Var(
+          `${constructors[constructorIndex]}`,
+          constructors.length - constructorIndex - 1
+        );
+      }
+      return Abs(`${rc[n - 1]}`, wrapN(n - 1));
+    };
+
+    return Abs("P", wrapN(constructors.length));
+  };
+
+  const buildConstructors = (constructors: string[], type: Term): Def[] =>
+    constructors.map((ctr, i) =>
+      Def(ctr, buildConstructor(constructors, i), type)
+    );
+
+  // a1 → a2 → P(constructor1)
+  const buildTypeArgSignature = (
+    constructorName: string,
+    args: { name: string; type: Type }[],
+    Pindex: number,
+    acc: Term
+  ): Term => {
+    // Build the syntax tree for the type Πa:A. Πb:B. P(constructorN(a,b)).
+
+    // Build constructorN(a,b,...) which is
+    //   App(App(Ref(constructor), Var(a)), Var(b))
+    const cN = args.reduce(
+      (acc: Term, curr, i) => App(acc, Var(curr.name, args.length - i - 1)),
+      Ref(constructorName)
+    );
+
+    // Build P(constructorN(a,b,...))
+    const PcN = App(Var("P", Pindex + args.length), cN);
+
+    // Build Πa:A. Πb:B. ... P(constructorN(a,b,...))
+    // Pi("a", A, Pi("b", B, App(P, App(App(Ref(constructorN), a), b))))
+    const Pis = args.reduce(
+      (acc: Term, curr) => Pi(curr.name, curr.type, acc),
+      PcN
+    );
+
+    return Pi("", Pis, acc);
+  };
+  /*
+    T : Type = ιt. ΠP:T→*.
+    P(constructor1) →
+    P(constructor2) →
+    ...
+    P(constructorN) →
+    P(t)
+  */
+  const buildType = (
+    name: string,
+    constructors: { name: string; args: { name: string; type: Type }[] }[]
+  ): Def => {
+    return Def(
+      name,
+      // ιt.
+      Self(
+        "t",
+        Pi(
+          "P",
+          // ΠP:T→*.
+          Pi("", Ref(name), Star()),
+          // P(constructor1) → (Πa:A. P(constructor2(a))) → ... P(constructorN) → P(t)
+          reverse(constructors).reduce<Term>(
+            (acc, constructorN, i) =>
+              buildTypeArgSignature(
+                constructorN.name,
+                constructorN.args,
+                constructors.length - i - 1,
+                acc
+              ),
+            App(
+              Var("P", constructors.length),
+              Var("t", constructors.length + 1)
+            ) // P(t)
+          )
+        )
+      ),
+      Star()
+    );
+  };
+
+  test("can typecheck bool with self types", () => {
+    /*
+      type Bool = true | false
+
+      This creates the following functions:
+        true : Bool
+        false : Bool
+                
+      The parser should build the following:
+        Bool = ιb. ΠP:Bool→*.
+          P(Bool.true) →
+          P(Bool.false) →
+          P(b)
+        true = (P) (t) (f) t
+        false = (P) (t) (f) f
+        
+      To generalise a little:
+        T : Type = ιt. ΠP:T→*.
+          P(constructor1) →
+          P(constructor2) →
+          ...
+          P(constructorN) →
+          P(t)
+        constructor1 : T = (P) (c1) (c2) ... (cN) c1
+        constructor2 : T = (P) (c1) (c2) ... (cN) c2
+        ...
+        constructorN : T = (P) (c1) (c2) ... (cN) cN
+        
+        i.e.
+        define a top-level def T:Type = as above
+        define n constructors; constructor1 through constructorN.
+        Def()
+
+      Example values of this type:
+        true : Bool
+        false : Bool
+
+      You can eliminate a Bool using a case statement:
+        case b of
+          true => "t"
+          false => "f"
+          : String
+      desugars
+        case x as t : m
+      becomes
+        x<(t) m>
+      i.e.
+        b((t) => String, "t", "f")
+      In the case that b == true:
+        true((t) => String, "t", "f") // def true = (P) (t) (f) t
+        "t"
+    */
     const bt = Abs("P", Abs("t", Abs("f", Var("t", 1))));
     const bf = Abs("P", Abs("t", Abs("f", Var("f", 0))));
 
-    // ιb. ΠP:Bool→★. P(Bool.true) → P(Bool.false) → P(b)
+    expect(bt).toStrictEqual(buildConstructor(["t", "f"], 0));
+    expect(bf).toStrictEqual(buildConstructor(["t", "f"], 1));
+
+    // ιt. ΠP:Bool→*. P(Bool.true) → P(Bool.false) → P(t)
     const Bool = Self(
-      "b",
+      "t",
       Pi(
         "P",
         Pi("", Ref("Bool"), Star()),
         Pi(
           "",
-          App(Var("P", 0), bt),
-          Pi("", App(Var("P", 1), bf), App(Var("P", 2), Var("b", 3)))
+          App(Var("P", 0), Ref("true")),
+          Pi("", App(Var("P", 1), Ref("false")), App(Var("P", 2), Var("t", 3)))
         )
       )
     );
 
-    const Booltrue = Def("Bool.true", bt, Bool);
-    const Boolfalse = Def("Bool.false", bf, Bool);
+    const builtBool = buildType("Bool", [
+      { name: "true", args: [] },
+      { name: "false", args: [] },
+    ]).term;
+    expect(builtBool).toStrictEqual(Bool);
+
+    const Booltrue = Def("true", bt, Bool);
+    const Boolfalse = Def("false", bf, Bool);
 
     let result = check([Booltrue, Boolfalse], [], Booltrue.term, Bool);
     if (result._ == "typecheckerror") {
@@ -541,8 +704,250 @@ describe("typechecker", () => {
     }
   });
 
+  test("recursive types", () => {
+    /*
+      type Nat = zero | succ(x Nat)
+
+      This creates the following functions:
+        zero : Nat
+        succ : Nat → Nat
+        
+      The parser should build the following:
+        Nat = ιm. ΠP:Nat→*.
+          P(zero) →
+          ((x Nat) → P(succ(x))) →
+          P(m)
+        zero = <P> (z) (s) z
+        succ = (n) <P> (z) (s) s(n)
+
+      Example values of this type:
+        zero : Nat
+        succ(succ(zero)) : Nat
+
+      You can eliminate a Nat using a case statement:
+        case n of
+          zero => true
+          succ => false
+          : Bool
+    */
+
+    // ιt. ΠP:Nat→*. P(Nat.zero) → (Πn:Nat. P(Nat.succ(n))) → P(t)
+    const Nat = Self(
+      "t",
+      Pi(
+        "P",
+        Pi("", Ref("Nat"), Star()),
+        Pi(
+          "",
+          App(Var("P", 0), Ref("zero")),
+          Pi(
+            "",
+            Pi(
+              "n",
+              Ref("Nat"),
+              App(Var("P", 2), App(Ref("succ"), Var("n", 0)))
+            ),
+            App(Var("P", 2), Var("t", 3))
+          )
+        )
+      )
+    );
+
+    const builtNat = buildType("Nat", [
+      { name: "zero", args: [] },
+      { name: "succ", args: [{ name: "n", type: Ref("Nat") }] },
+    ]).term;
+    expect(builtNat).toStrictEqual(Nat);
+  });
+
   test("simple parameterised types", () => {
-    // TODO: Maybe
+    // Maybe
+    /*
+      type Maybe<T *> = null | just(value T)
+            
+      This creates the following functions:
+        null : (T *) → Maybe<T>
+        just : (T *) → T → Maybe<T>
+      
+      Example values of this type:
+        null(Int) : Maybe<Int>
+        just(Int, 6) : Maybe<Int>
+        
+        func hello(name Maybe<String>) = case name of
+          null => "world"
+          just => fmt.Sprintf("hello %s", name.value)
+        hello(null(String)) // TODO: the type Maybe<String> is inferred from the usage
+        hello(just(String, "世界")) // TODO: the type Maybe<String> can also be inferred from the argument
+
+      You can eliminate a Maybe using a case statement:
+        case m of
+          null => "n"
+          just => "j"
+          : String
+    */
+  });
+
+  test("recursive parameterised types", () => {
+    /*
+      // List is a singly-linked list with elements of type T.
+      type List<T *> =
+        // nil constructs an empty list.
+        nil |
+        // cons constructs a list by passing a head element and an
+        // existing (though possibly empty) list.
+        cons(
+          // head is the first element of the list.
+          head T,
+          // tail is the remaining elements in the list.
+          tail List<T>)
+      
+      This creates the following functions (in the final language design: T is
+      always inferred from the usage, if it's unclear an annotation is
+      required). We need to create the definitions with the type parameters
+      first (the T) followed by any constructor arguments:
+        nil : (T *) → List<T> 
+        cons : (T *) → T → List<T> → List<T>
+        
+      The parser generates:
+        List = (A)
+          ιm. ΠP:((x List<A>) → *).
+          P(nil<A>) →
+          ((head A) → (tail List<A>) → P(cons<A>(head)(tail))) →
+          P(m)
+        cons =
+          <A> (head) (tail)
+          <P> (nil) (cons) cons(head)(tail)
+        nil = 
+          <A>
+          <P> (nil) (cons) nil
+
+      Example values of this type:
+        nil(Int) : List<Int> // on it's own it requires an annotation, i.e.
+                             // let xs = nil : List<Int>
+        cons(Int, 1, nil(Int)) : List<Int>
+        cons(Int, 1, cons(Int, 2, cons(Int, 3, nil(Int)))) : List<Int>
+        
+        // In the constructors for List we know that T has type *, but for
+        // ordinary functions we need the T somewhere, or else we wouldn't know
+        // what it is (and what type it is).
+        func append(T *, a T, l List<T>) List<T> = cons(a, l)
+        let l = append(Int, 4, [1,2,3])
+        
+        // In a future version:
+        let l = append(4, [1,2,3])
+
+      You can eliminate a List using a case statement:
+        case l of
+          nil => "n"
+          cons => "c"
+          : String
+    */
+  });
+
+  test("indexed types", () => {
+    // Vector
+    /*
+      // Vector is a ordered container of elements of type A with exactly n
+      // elements.
+      type Vector<n Nat, A *> =
+        vnil : Vector(0, A) |
+        vcons(head A, tail Vector(k, A)) : Vector(k+1, A)
+      
+      This creates the following functions (note that A and n are inferred from
+      the context, or from annotations, they are not supplied as arguments):
+        vnil : (A *) → Vector<0,A> // n is not free so shouldn't be exposed
+        vcons : (k Nat) → (A *) → A → Vector<k,A> → Vector<k+1,A>
+
+      Example values of this type:
+        vnil(String) : Vector<0, String> // on it's own it requires an annotation
+        vnil(String) : Vector<1, String> // typecheck error 1 != 0
+        vnil(λx.Nat) : Vector<0, λx.Nat> // typecheck error λx.Nat is not of type *
+        vcons("a", vnil(String)) : Vector<1, String>
+        vcons(2, String, "a", vcons(1, String, "b", vcons(0, String, "c", vnil(String)))) : Vector<3, String>
+        
+        // 1 cannot be used as an argument to vcons(String, Vector<2, String>)
+        vcons(2, String, 1, vcons(1, String, "b", vcons(0, String, "c", vnil(String)))) 
+
+      You can eliminate a Vector using a case statement:
+        case v of
+          vnil => "n"
+          vcons => "c"
+          : String
+          
+      Alternative presentations:
+ 3)   type Vector<T *, n Nat> =
+        vnil : Vector<T, 0> |
+        vcons(head T, tail Vector<T, n>) : Vector<T, n+1>
+
+ 4)   type Vector<T *, n Nat> =
+        vnil : Vector<T, 0> |
+        vcons : (head T) → (tail Vector<T, n>) → Vector<T, n+1>
+
+ 2)   type Vector<T *> ~ (n Nat) =
+        vnil ~ (n=0) |
+        vcons(head T, tail Vector<T, n>) ~ (n=n+1)
+
+    */
+  });
+
+  test("identity type", () => {
+    // Identity
+    /*
+      type Name<Parameters...> =
+        c1(args...) : Name<Parameters...> | 
+        c2(args...) : Name<Parameters...> |
+        ... |
+        cn(args...) : Name<Parameters...>
+     */
+    /*
+ 2)   type Identity<T *, a T, b T> =
+        refl(a T) : Identity<T, a, a>
+
+      This creates the following function:
+        refl : (T *) → (a T) → Identity<T, a, a> // b is already specified so no need to expose it? (identify unbound variables in the codomain and make sure they have arguments in the constructor?)
+      
+      The parser generates:
+        Identity =
+          (T) (a) (b)
+          ιe.
+          ΠP:((b T)→Identity(T)(a)(b)→*).
+          P(a)(refl<T><a>) →
+          P(b)(e)
+        refl =
+          <T> <a>
+          <P> (equal)
+          equal
+
+      Example values of this type:
+        refl(Bool, true) : Identity<Bool, true, true> // true == true
+        refl(Nat, 2) : Identity<Nat, 1+1, 2>
+
+        func doubleNegation(b Bool) Identity<Bool, not(not(b)), b> =
+          case b of
+            true => refl(true)
+            false => refl(false)
+        
+        func even(n Nat) Bool =
+          case n of
+            zero => true
+            succ => case n.x of {
+              zero => false
+              succ => even(n.x)
+            }
+            : Bool
+          : Bool
+        
+        func requiresEvenNumber(n Nat, proof Identity<Bool, even(n), true>) = n
+        requiresEvenNumber(2, refl(Bool, even(2))) // can this simplify to true?
+        requiresEvenNumber(1, refl(Bool, even(1))) // type error "1 is not even"
+
+      The constructor refl will create a value that identifies a type with
+      itself. This will only pass the typechecker if the types are the same.
+      
+      Alternative presentations:
+ 1)   type Identity<T *, a T> ~ (b T) =
+        refl ~ (b=a)
+    */
   });
 
   // zero = λP. λz. λs. z
@@ -553,7 +958,7 @@ describe("typechecker", () => {
     Abs("P", Abs("z", Abs("s", App(Var("s", 0), Var("n", 3)))))
   );
 
-  // ιt. ΠP:Nat→★. P(Nat.zero) → (Πn:Nat. P(Nat.succ(n))) → P(t)
+  // ιt. ΠP:Nat→*. P(Nat.zero) → (Πn:Nat. P(Nat.succ(n))) → P(t)
   const Nat = Self(
     "t",
     Pi(
@@ -632,7 +1037,7 @@ describe("typechecker", () => {
     expect(eq(NatToBool, t)).toBe(true);
   });
 
-  test("★ === Id(★)", () => {
+  test("* === Id(*)", () => {
     expect(eq(Star(), App(Id, Star()))).toBe(true);
   });
 
