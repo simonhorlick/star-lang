@@ -673,11 +673,6 @@ describe("typechecker", () => {
     return Abs("P", wrapN(constructors.length));
   };
 
-  const buildConstructors = (constructors: string[], type: Term): Def[] =>
-    constructors.map((ctr, i) =>
-      Def(ctr, buildConstructor(constructors, i), type)
-    );
-
   // a1 → a2 → P(constructor1)
   const buildTypeArgSignature = (
     parameters: { name: string; type: Type }[],
@@ -993,22 +988,20 @@ describe("typechecker", () => {
     );
     console.log(pretty(Maybe));
 
-    const builtMaybe = buildType(
-      "Maybe",
-      [{ name: "A", type: Star() }],
-      [
-        { name: "null", args: [] },
-        {
-          name: "just",
-          args: [
-            {
-              name: "value",
-              type: Par("A"),
-            },
-          ],
-        },
-      ]
-    ).term;
+    const maybeParams = [{ name: "A", type: Star() }];
+    const maybeConstructors = [
+      { name: "null", args: [] },
+      {
+        name: "just",
+        args: [
+          {
+            name: "value",
+            type: Par("A"),
+          },
+        ],
+      },
+    ];
+    const builtMaybe = buildType("Maybe", maybeParams, maybeConstructors).term;
     expect(builtMaybe).toStrictEqual(Maybe);
 
     /*
@@ -1027,32 +1020,56 @@ describe("typechecker", () => {
       )
     );
     const fnull = Abs("A", Abs("P", Abs("null", Abs("just", Var("null", 1)))));
-    const Maybejust = Def(
+    const maybeJustDef = Def(
       "just",
       fjust,
-      Pi("A", Star(), Pi("value", Var("A", 0), App(Maybe, Var("A", 1))))
+      Pi("A", Star(), Pi("value", Var("A", 0), App(Ref("Maybe"), Var("A", 1))))
     );
-    const Maybenull = Def(
+    const maybeNullDef = Def(
       "null",
       fnull,
-      Pi("A", Star(), App(Maybe, Var("A", 0)))
+      Pi("A", Star(), App(Ref("Maybe"), Var("A", 0)))
     );
 
+    console.log(
+      pretty(
+        GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
+      )
+    );
+    console.log(pretty(maybeNullDef.typ));
+    expect(
+      GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
+    ).toStrictEqual(maybeNullDef.typ);
+
+    expect(
+      GenerateConstructorTerm("Maybe", maybeParams, maybeConstructors, 0)
+    ).toStrictEqual(maybeNullDef.term);
+
+    expect(
+      GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
+    ).toStrictEqual(maybeJustDef.typ);
+
+    expect(
+      GenerateConstructorTerm("Maybe", maybeParams, maybeConstructors, 1)
+    ).toStrictEqual(maybeJustDef.term);
+
+    const maybeTypeDef = Def("Maybe", Maybe, Star());
+
     let result = check(
-      [Maybenull, Maybejust],
+      [maybeTypeDef, maybeNullDef, maybeJustDef],
       [],
-      Maybenull.term,
-      Maybenull.typ
+      maybeNullDef.term,
+      maybeNullDef.typ
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
 
     let result2 = check(
-      [Maybenull, Maybejust],
+      [maybeTypeDef, maybeNullDef, maybeJustDef],
       [],
-      Maybejust.term,
-      Maybejust.typ
+      maybeJustDef.term,
+      maybeJustDef.typ
     );
     if (result2._ == "typecheckerror") {
       throw new Error(result2.msg);
@@ -1064,13 +1081,13 @@ describe("typechecker", () => {
         Def("Bool", Bool, Star()),
         Booltrue,
         Boolfalse,
-        Def("Maybe", Maybe, Star()),
-        Maybenull,
-        Maybejust,
+        maybeTypeDef,
+        maybeNullDef,
+        maybeJustDef,
       ],
       [],
       App(App(Ref("just"), Ref("Bool")), Ref("true")),
-      App(Maybe, Ref("Bool"))
+      App(Ref("Maybe"), Ref("Bool"))
     );
     if (result3._ == "typecheckerror") {
       throw new Error(result3.msg);
@@ -1095,8 +1112,8 @@ describe("typechecker", () => {
         Booltrue,
         Boolfalse,
         Def("Maybe", Maybe, Star()),
-        Maybenull,
-        Maybejust,
+        maybeNullDef,
+        maybeJustDef,
       ],
       caseExp
     );
