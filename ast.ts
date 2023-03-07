@@ -109,6 +109,19 @@ export const Var = (name: string, index: number): Var => ({
   index: index,
 });
 
+// A bound variable that has not yet been resolved to a debruijin index.
+export type Par = {
+  _: "par";
+
+  // The variable name.
+  name: string;
+};
+
+export const Par = (name: string): Par => ({
+  _: "par",
+  name: name,
+});
+
 // A reference.
 export type Ref = {
   _: "ref";
@@ -148,7 +161,7 @@ export const Ann = (term: Term, type: Type): Ann => ({
   typ: type,
 });
 
-export type Term = Abs | App | Var | Ref | Ann | Pi | Star | Self;
+export type Term = Abs | App | Var | Par | Ref | Ann | Pi | Star | Self;
 export type Type = Term;
 
 // A top-level definition.

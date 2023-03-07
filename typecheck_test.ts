@@ -1,19 +1,148 @@
 import { describe, expect, test } from "@jest/globals";
-import { Context, Def, Self, Term, Type } from "./ast";
+import { Context, Def, Par, Self, Term, Type } from "./ast";
 import {
   addTermToCtx,
   check,
   dbgCheckIndices,
   equate,
   infer,
-  lookupType,
   shift,
   subst,
   whnf,
 } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
-import { reduce } from "./evaluation";
+
+// processPars removes all Par nodes from the tree t.
+const processPars = (t: Term, ctx: Context): Term => {
+  switch (t._) {
+    case "ann":
+      return Ann(processPars(t.term, ctx), processPars(t.typ, ctx));
+    case "app":
+      return App(processPars(t.left, ctx), processPars(t.right, ctx));
+    case "lam":
+      // The type in this context is not important so just set it as *.
+      return Abs(
+        t.name,
+        processPars(t.body, addTermToCtx(ctx, t.name, Star())),
+        t.argtype
+      );
+    case "par":
+      for (let i = 0; i < ctx.length; i++) {
+        const binding = ctx[ctx.length - i - 1];
+        if (binding.name == t.name) {
+          return Var(binding.name, i);
+        }
+      }
+      throw "undefined variable " + t.name;
+    case "pi":
+      return Pi(
+        t.name,
+        processPars(t.from, ctx),
+        processPars(t.to, addTermToCtx(ctx, t.name, Star()))
+      );
+    case "self":
+      return Self(
+        t.name,
+        processPars(t.body, addTermToCtx(ctx, t.name, Star()))
+      );
+    case "ref":
+    case "star":
+    case "var":
+      return t;
+  }
+};
+
+const GenerateConstructorType = (
+  typeName: string,
+  params: {
+    name: string;
+    type: Star;
+  }[],
+  constructor: {
+    name: string;
+    args: {
+      name: string;
+      type: Type;
+    }[];
+  }
+) => {
+  // nil : (T *) → List<T>
+  // cons : (T *) → (head T) → (tail List<T>) → List<T>
+
+  // The type and all params. i.e. List(T), or Pair(A,B)
+  const apps = params.reduce<Term>(
+    (acc, curr) => App(acc, Par(curr.name)),
+    Ref(typeName)
+  );
+
+  // For example
+  // (head T) → (tail List<T>) → List<T>
+  const prependConstructorArgs = constructor.args.reduceRight<Term>(
+    (acc, curr) => Pi(curr.name, curr.type, acc),
+    apps
+  );
+
+  // Prepend type parameters, for example
+  // (T *) → (head T) → (tail List<T>) → List<T>
+  const typeParams = params.reduce<Term>(
+    (acc, curr) => Pi(curr.name, curr.type, acc),
+    prependConstructorArgs
+  );
+
+  return processPars(typeParams, []);
+};
+
+const GenerateConstructorTerm = (
+  typeName: string,
+  params: {
+    name: string;
+    type: Star;
+  }[],
+  constructors: {
+    name: string;
+    args: {
+      name: string;
+      type: Type;
+    }[];
+  }[],
+  i: number
+) => {
+  /*
+    cons = <A> (head) (tail) <P> (nil) (cons) cons(head)(tail)
+    nil = <A> <P> (nil) (cons) nil
+  */
+  // Working from right to left.
+
+  // Apply all arguments to the constructor
+  const apps = constructors[i].args.reduce<Term>(
+    (acc, curr) => App(acc, Par(curr.name)),
+    Par(constructors[i].name)
+  );
+
+  // Abstract constructors
+  const absConstructors = constructors.reduceRight<Term>(
+    (acc, curr) => Abs(curr.name, acc),
+    apps
+  );
+
+  // Abstract P
+  const absP = Abs("P", absConstructors);
+
+  // Abstract arguments
+  const absArgs = constructors[i].args.reduceRight<Term>(
+    (acc, curr) => Abs(curr.name, acc),
+    absP
+  );
+
+  // Abstract type parameters
+  const absParams = params.reduceRight<Term>(
+    (acc, curr) => Abs(curr.name, acc),
+    absArgs
+  );
+
+  return processPars(absParams, []);
+};
 
 const logFull = (x: any) => {
   const util = require("util");
@@ -551,22 +680,30 @@ describe("typechecker", () => {
 
   // a1 → a2 → P(constructor1)
   const buildTypeArgSignature = (
+    parameters: { name: string; type: Type }[],
     constructorName: string,
     args: { name: string; type: Type }[],
-    Pindex: number,
     acc: Term
   ): Term => {
     // Build the syntax tree for the type Πa:A. Πb:B. P(constructorN(a,b)).
 
-    // Build constructorN(a,b,...) which is
-    //   App(App(Ref(constructor), Var(a)), Var(b))
-    const cN = args.reduce(
-      (acc: Term, curr, i) => App(acc, Var(curr.name, args.length - i - 1)),
+    // Apply all type parameters to the constructor first.
+    const cNParams = parameters.reduce(
+      (acc: Term, curr) =>
+        // We need to add args.length as there will be that many Pi nodes wrapping this.
+        App(acc, Par(curr.name)),
       Ref(constructorName)
     );
 
+    // Build constructorN(a,b,...) which is
+    //   App(App(Ref(constructor), Var(a)), Var(b))
+    const cN = args.reduce(
+      (acc: Term, curr) => App(acc, Par(curr.name)),
+      cNParams
+    );
+
     // Build P(constructorN(a,b,...))
-    const PcN = App(Var("P", Pindex + args.length), cN);
+    const PcN = App(Par("P"), cN);
 
     // Build Πa:A. Πb:B. ... P(constructorN(a,b,...))
     // Pi("a", A, Pi("b", B, App(P, App(App(Ref(constructorN), a), b))))
@@ -587,32 +724,44 @@ describe("typechecker", () => {
   */
   const buildType = (
     name: string,
+    parameters: { name: string; type: Type }[],
     constructors: { name: string; args: { name: string; type: Type }[] }[]
   ): Def => {
-    return Def(
-      name,
-      // ιt.
+    // T(A,B,C)
+    const typ = parameters.reduce<Term>(
+      (acc, paramN) => App(acc, Par(paramN.name)),
+      Ref(name)
+    );
+
+    const self = // ιt.
       Self(
         "t",
         Pi(
           "P",
           // ΠP:T→*.
-          Pi("", Ref(name), Star()),
+          Pi("", typ, Star()),
           // P(constructor1) → (Πa:A. P(constructor2(a))) → ... P(constructorN) → P(t)
           reverse(constructors).reduce<Term>(
-            (acc, constructorN, i) =>
+            (acc, constructorN) =>
               buildTypeArgSignature(
+                parameters,
                 constructorN.name,
                 constructorN.args,
-                constructors.length - i - 1,
                 acc
               ),
-            App(
-              Var("P", constructors.length),
-              Var("t", constructors.length + 1)
-            ) // P(t)
+            App(Par("P"), Par("t")) // P(t)
           )
         )
+      );
+
+    return Def(
+      name,
+      processPars(
+        parameters.reduce<Term>(
+          (acc, paramN) => Abs(paramN.name, acc, paramN.type),
+          self
+        ),
+        []
       ),
       Star()
     );
@@ -693,10 +842,14 @@ describe("typechecker", () => {
     expect(bt).toStrictEqual(buildConstructor(["t", "f"], 0));
     expect(bf).toStrictEqual(buildConstructor(["t", "f"], 1));
 
-    const builtBool = buildType("Bool", [
-      { name: "true", args: [] },
-      { name: "false", args: [] },
-    ]).term;
+    const builtBool = buildType(
+      "Bool",
+      [],
+      [
+        { name: "true", args: [] },
+        { name: "false", args: [] },
+      ]
+    ).term;
     expect(builtBool).toStrictEqual(Bool);
 
     let result = check([Booltrue, Boolfalse], [], Booltrue.term, Bool);
@@ -754,10 +907,14 @@ describe("typechecker", () => {
       )
     );
 
-    const builtNat = buildType("Nat", [
-      { name: "zero", args: [] },
-      { name: "succ", args: [{ name: "n", type: Ref("Nat") }] },
-    ]).term;
+    const builtNat = buildType(
+      "Nat",
+      [],
+      [
+        { name: "zero", args: [] },
+        { name: "succ", args: [{ name: "n", type: Ref("Nat") }] },
+      ]
+    ).term;
     expect(builtNat).toStrictEqual(Nat);
   });
 
@@ -776,10 +933,10 @@ describe("typechecker", () => {
       The parser generates:
         Maybe: (A *) → * =
           (A)
-            ιm. ΠP:Maybe(A)→*.
+            ιt. ΠP:Maybe(A)→*.
             P(null(A)) →
             ((value A) → P(just(A)(value))) →
-            P(m)
+            P(t)
         just: (A *) → (value A) → Maybe(A) =
           (A) (value)
           (P) (null) (just) just(value)
@@ -804,14 +961,12 @@ describe("typechecker", () => {
           : String
     */
 
-    // λA. ιm. ΠP:Maybe(A)→*. P(null(A)) → ((value A) → P(just(A)(value))) → P(m)
-    const Maybe = dbgCheckIndices(
-      [],
-      0,
+    // λA. ιt. ΠP:Maybe(A)→*. P(null(A)) → ((value A) → P(just(A)(value))) → P(t)
+    const Maybe = ci(
       Abs(
         "A",
         Self(
-          "m",
+          "t",
           Pi(
             "P",
             Pi("", App(Ref("Maybe"), Var("A", 1)), Star()),
@@ -828,7 +983,7 @@ describe("typechecker", () => {
                     App(App(Ref("just"), Var("A", 4)), Var("value", 0))
                   )
                 ),
-                App(Var("P", 2), Var("m", 3))
+                App(Var("P", 2), Var("t", 3))
               )
             )
           )
@@ -838,11 +993,23 @@ describe("typechecker", () => {
     );
     console.log(pretty(Maybe));
 
-    // const builtMaybe = buildType("Maybe", [
-    //   { name: "null", args: [] },
-    //   { name: "just", args: [{ name: "value", type: Ref("T") }] },
-    // ]).term;
-    // console.log(pretty(builtMaybe));
+    const builtMaybe = buildType(
+      "Maybe",
+      [{ name: "A", type: Star() }],
+      [
+        { name: "null", args: [] },
+        {
+          name: "just",
+          args: [
+            {
+              name: "value",
+              type: Par("A"),
+            },
+          ],
+        },
+      ]
+    ).term;
+    expect(builtMaybe).toStrictEqual(Maybe);
 
     /*
         just: (A *) → (value A) → Maybe(A) =
@@ -955,11 +1122,11 @@ describe("typechecker", () => {
       required). We need to create the definitions with the type parameters
       first (the T) followed by any constructor arguments:
         nil : (T *) → List<T> 
-        cons : (T *) → T → List<T> → List<T>
+        cons : (T *) → (head T) → (tail List<T>) → List<T>
         
       The parser generates:
         List = (A)
-          ιm. ΠP:((x List<A>) → *).
+          ιm. ΠP:List<A>→*.
           P(nil<A>) →
           ((head A) → (tail List<A>) → P(cons<A>(head)(tail))) →
           P(m)
@@ -991,6 +1158,116 @@ describe("typechecker", () => {
           cons => "c"
           : String
     */
+
+    const ListParams = [{ name: "A", type: Star() }];
+    const ListConstructors = [
+      { name: "nil", args: [] },
+      {
+        name: "cons",
+        args: [
+          {
+            name: "head",
+            type: Par("A"),
+          },
+          {
+            name: "tail",
+            type: App(Ref("List"), Par("A")),
+          },
+        ],
+      },
+    ];
+
+    const List = buildType("List", ListParams, ListConstructors).term;
+
+    /*
+    nil: (T *) → List<T>  = 
+      <T>
+      <P> (nil) (cons) nil
+      
+    cons: (T *) → T → List<T> → List<T> =
+      <T> (head) (tail)
+      <P> (nil) (cons) cons(head)(tail)
+    */
+
+    // TODO: Need a generator for types:
+    //   params -> args -> X(params)
+    // and implementations:
+    //   abs for params + abs for args + P + abs for constructors + constructor(args)
+    const Listnil = Def(
+      "nil",
+      Abs("A", Abs("P", Abs("nil", Abs("cons", Var("nil", 1))))),
+      Pi("A", Star(), App(Ref("List"), Var("A", 0)))
+    );
+
+    const generated = GenerateConstructorType(
+      "List",
+      ListParams,
+      ListConstructors[0]
+    );
+    expect(Listnil.typ).toStrictEqual(generated);
+
+    const generatedBody = GenerateConstructorTerm(
+      "List",
+      ListParams,
+      ListConstructors,
+      0
+    );
+    expect(Listnil.term).toStrictEqual(generatedBody);
+
+    const Listcons = Def(
+      "cons",
+      ci(
+        Abs(
+          "A",
+          Abs(
+            "head",
+            Abs(
+              "tail",
+              Abs(
+                "P",
+                Abs(
+                  "nil",
+                  Abs(
+                    "cons",
+                    App(App(Var("cons", 0), Var("head", 4)), Var("tail", 3))
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      ci(
+        Pi(
+          "A",
+          Star(),
+          Pi(
+            "head",
+            Var("A", 0),
+            Pi(
+              "tail",
+              App(Ref("List"), Var("A", 1)),
+              App(Ref("List"), Var("A", 2))
+            )
+          )
+        )
+      )
+    );
+
+    const generatedBody2 = GenerateConstructorTerm(
+      "List",
+      ListParams,
+      ListConstructors,
+      1
+    );
+    expect(Listcons.term).toStrictEqual(generatedBody2);
+
+    const generated2 = GenerateConstructorType(
+      "List",
+      ListParams,
+      ListConstructors[1]
+    );
+    expect(Listcons.typ).toStrictEqual(generated2);
   });
 
   test("indexed types", () => {

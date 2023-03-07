@@ -38,6 +38,8 @@ export function pretty(term: Term, indices: boolean = true): string {
       } else {
         return `${term.name}`;
       }
+    case "par":
+      return `${term.name}`;
     case "pi":
       if (term.name == "") {
         return pretty(term.from, indices) + "→" + pretty(term.to, indices);

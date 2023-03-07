@@ -109,6 +109,9 @@ export const tc = (
 ): Result | TypecheckError => {
   const printIndices = false;
 
+  // TODO: When adding a variable to the context, ensure it doesn't shadow an
+  // existing variable.
+
   // inference mode
   if (type == undefined) {
     switch (term._) {
@@ -145,6 +148,8 @@ export const tc = (
           return TypecheckError("undefined variable " + term.name);
         }
         return Result(term, lookupType(ctx, term.index, term.name));
+      case "par":
+        throw "Internal error: unexpected Par during typechecking";
       case "lam": {
         // Γ,x:A ⊢ a <= B
         // ----------------
@@ -327,6 +332,7 @@ export function shift(d: number, c: number, t: Term): Term {
       return Pi(t.name, shift(d, c, t.from), shift(d, c + 1, t.to));
     case "star":
     case "ref":
+    case "par":
       return t;
   }
 }
@@ -364,6 +370,8 @@ export function subst(
         subst(j, s, c, t.from, name),
         subst(j, s, c + 1, t.to, name)
       );
+    case "par":
+      throw "unexpected par";
     case "star":
     case "ref":
       return t;
@@ -472,6 +480,9 @@ export const equate = (
     case "ann":
       // TODO: Make this impossible using proper types.
       throw "internal checker error: unexpected Ann in whnf term";
+    case "par":
+      // TODO: Make this impossible using proper types.
+      throw "internal checker error: unexpected Par in whnf term";
   }
 };
 
@@ -496,8 +507,9 @@ export const whnf = (unfold: boolean, defs: Def[], t: Term): Term => {
       return App(nf, t2);
     }
     case "ann":
-      // TODO: Just ignore the Ann?
       throw "unexpected Ann";
+    case "par":
+      throw "unexpected Par";
     case "var":
     case "lam":
     case "self":
@@ -548,6 +560,7 @@ export const dbgCheckIndices = <T extends Term>(
       return t;
     case "star":
     case "ref":
+    case "par":
       return t;
   }
 };
