@@ -193,6 +193,14 @@ export const any3 = <A, B, C>(p1: Parser<A>, p2: Parser<B>, p3: Parser<C>) =>
   either(p1, either(p2, p3));
 
 // see any
+export const any4 = <A, B, C, D>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>
+) => either(p1, either(p2, either(p3, p4)));
+
+// see any
 export const any5 = <A, B, C, D, E>(
   p1: Parser<A>,
   p2: Parser<B>,
@@ -223,6 +231,23 @@ export const many = <T>(parser: Parser<T>) =>
   // Either return at least one element from the parser, or return an empty
   // list.
   either(many1(parser), pure<T[]>([]));
+
+// join1 runs the first parser and the separator many times. Requires at least
+// one element.
+export const join1 = <T, S>(parser: Parser<T>, separator: Parser<S>) =>
+  // Parse the first element.
+  bind(parser, (x) =>
+    // Then parse the separator followed by another element, many times.
+    bind(many(bind(separator, (_) => bind(parser, (x) => pure(x)))), (xs) =>
+      pure([x].concat(xs))
+    )
+  );
+
+// join runs the first parser and the separator many times.
+export const join = <T, S>(parser: Parser<T>, separator: Parser<S>) =>
+  // Either return at least one element from the parser, or return an empty
+  // list.
+  either(join1(parser, separator), pure<T[]>([]));
 
 // oneOf matches a single character from any of the characters in the string.
 export const oneOf = (str: string): Parser<string> =>

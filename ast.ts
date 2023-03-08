@@ -26,6 +26,9 @@ import {
   optional,
   orFail,
   whitespace,
+  join,
+  join1,
+  any4,
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
@@ -164,6 +167,44 @@ export const Ann = (term: Term, type: Type): Ann => ({
 export type Term = Abs | App | Var | Par | Ref | Ann | Pi | Star | Self;
 export type Type = Term;
 
+type Argument = {
+  name: string;
+  type: Type;
+};
+
+export const Argument = (name: string, type: Type): Argument => ({
+  name: name,
+  type: type,
+});
+
+export type Constructor = {
+  name: string;
+  args: Argument[];
+};
+
+export const Constructor = (name: string, args: Argument[]): Constructor => ({
+  name: name,
+  args: args,
+});
+
+export type ADT = {
+  _: "adt";
+  name: string;
+  params: Argument[];
+  constructors: Constructor[];
+};
+
+export const ADT = (
+  name: string,
+  params: Argument[],
+  constructors: Constructor[]
+): ADT => ({
+  _: "adt",
+  name: name,
+  params: params,
+  constructors: constructors,
+});
+
 // A top-level definition.
 export type Def = {
   _: "def";
@@ -289,9 +330,12 @@ export const arrow: (type: () => Parser<Type>) => (s: Stream) => Result<Pi> = (
       )
   );
 
-export const type: Parser<Type> = any3(
+const star: Parser<Star> = bind(char("*"), () => pure(Star()));
+
+export const type: Parser<Type> = any4(
   arrow(() => type),
   parenthesis(lazy(() => type)),
+  star,
   reference
 );
 
@@ -372,7 +416,7 @@ export const term: Parser<Term> = any3(
 );
 
 // definition parses a top-level function definition, for example
-// `func id = λx.x`.
+// `func id: A->A = λx.x`.
 export const definition: Parser<Def> = bind(str("func"), (_) =>
   bind(whitespace, (_) =>
     bind(identifier, (name) =>
@@ -389,6 +433,38 @@ export const definition: Parser<Def> = bind(str("func"), (_) =>
               )
             )
           )
+        )
+      )
+    )
+  )
+);
+
+// argument parses a single argument, i.e. `identifier Type`.
+export const argument: Parser<Argument> = bind(identifier, (name) =>
+  bind(whitespace, (_) => bind(type, (typ) => pure(Argument(name, typ))))
+);
+
+// argumentList parses a list of arguments, i.e. `(a A, ..., z Z)`.
+export const argumentList: Parser<Argument[]> = bind(
+  optional(parenthesis(join(argument, whitespace))),
+  (args) => pure(args || [])
+);
+
+// name(arg1 ArgType1, ..., ArgN ArgTypeN)
+export const constructor: Parser<Constructor> = bind(identifier, (name) =>
+  bind(optional(whitespace), (_) =>
+    bind(argumentList, (args) => pure(Constructor(name, args)))
+  )
+);
+
+// adt parses an abstract data type, for example
+// `type List(A *) = nil | cons(head A, tail List(A))`
+export const adt: Parser<ADT> = bind(str("type"), (_) =>
+  bind(whitespace, (_) =>
+    bind(constructor, (c) =>
+      bind(char("="), (_) =>
+        bind(join1(constructor, char("|")), (ctrs) =>
+          pure(ADT(c.name, c.args, ctrs))
         )
       )
     )
