@@ -31,6 +31,7 @@ import {
   any4,
   spaces,
   spc,
+  spc1,
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
@@ -205,6 +206,28 @@ export const ADT = (
   name: name,
   params: params,
   constructors: constructors,
+});
+
+type Branch = {
+  constructor: string;
+  term: Term;
+};
+
+export const Branch = (constructor: string, term: Term): Branch => ({
+  constructor: constructor,
+  term: term,
+});
+
+export type Case = {
+  _: "case";
+  name: Ref;
+  branches: Branch[];
+};
+
+export const Case = (name: Ref, branches: Branch[]): Case => ({
+  _: "case",
+  name: name,
+  branches: branches,
 });
 
 // A top-level definition.
@@ -474,6 +497,26 @@ export const adt: Parser<ADT> = bind(str("type"), (_) =>
             )
           )
         )
+      )
+    )
+  )
+);
+
+//  true -> false
+const caseBranch: Parser<Branch> = bind(identifier, (id) =>
+  bind(str("->"), (_) =>
+    bind(term, (t) => bind(newline, (_) => pure(Branch(id, t))))
+  )
+);
+
+// case b of
+//  true -> false
+//  false -> true
+export const caseStatment: Parser<Case> = bind(str("case"), (_) =>
+  bind(spc1(identifier), (id) =>
+    bind(str("of"), (_) =>
+      bind(newline, () =>
+        bind(many1(caseBranch), (branches) => pure(Case(Ref(id), branches)))
       )
     )
   )

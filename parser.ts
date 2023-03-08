@@ -280,6 +280,10 @@ export const spc = <T>(between: Parser<T>): Parser<T> =>
     bind(between, (x) => bind(optional(spaces), (_) => pure(x)))
   );
 
+// spc1 is a parser that requires leading and trailing whitespace.
+export const spc1 = <T>(between: Parser<T>): Parser<T> =>
+  bind(spaces, (_) => bind(between, (x) => bind(spaces, (_) => pure(x))));
+
 // orFail raises a specific parse error if the parser is unsuccessful.
 export const orFail = <A>(msg: string, p: Parser<A>): Parser<A> =>
   either(p, zero<A>(msg));
