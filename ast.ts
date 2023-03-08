@@ -275,7 +275,9 @@ export const block =
 
 // parsePackage parses a package declaration such as `package abc`.
 export const parsePackage: Parser<Pkg> = bind(str("package"), (_) =>
-  bind(whitespace, (_) => bind(identifier, (a) => pure({ _: "pkg", name: a })))
+  bind(many1(whitespace), (_) =>
+    bind(identifier, (a) => pure({ _: "pkg", name: a }))
+  )
 );
 
 // parseLineComment parses an end-of-line comment and stops either at the end of
@@ -344,15 +346,15 @@ export const type: Parser<Type> = any4(
 // // abstraction parses a lambda abstraction `λx:X. t`.
 export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
   bind(char("λ"), (_) =>
-    bind(optional(whitespace), (_) =>
+    bind(optional(spaces), (_) =>
       bind(identifier, (name) =>
-        bind(optional(whitespace), (_) =>
+        bind(optional(spaces), (_) =>
           bind(char(":"), (_) =>
-            bind(optional(whitespace), (_) =>
+            bind(optional(spaces), (_) =>
               bind(type, (typ) =>
-                bind(optional(whitespace), () =>
+                bind(optional(spaces), () =>
                   bind(char("."), () =>
-                    bind(optional(whitespace), () =>
+                    bind(optional(spaces), () =>
                       bind(lazy(term), (body) =>
                         pure(Abs(name, body /*, typ*/))
                       )
@@ -420,15 +422,15 @@ export const term: Parser<Term> = any3(
 // definition parses a top-level function definition, for example
 // `func id: A->A = λx.x`.
 export const definition: Parser<Def> = bind(str("func"), (_) =>
-  bind(whitespace, (_) =>
+  bind(many1(whitespace), (_) =>
     bind(identifier, (name) =>
-      bind(optional(whitespace), (_) =>
+      bind(many(whitespace), (_) =>
         bind(char(":"), (_) =>
-          bind(optional(whitespace), (_) =>
+          bind(many(whitespace), (_) =>
             bind(type, (typ) =>
-              bind(optional(whitespace), (_) =>
+              bind(spaces, (_) =>
                 bind(char("="), (_) =>
-                  bind(whitespace, (_) =>
+                  bind(spaces, (_) =>
                     bind(term, (tm) => pure(Def(name, tm, typ)))
                   )
                 )
@@ -454,7 +456,7 @@ export const argumentList: Parser<Argument[]> = bind(
 
 // name(arg1 ArgType1, ..., ArgN ArgTypeN)
 export const constructor: Parser<Constructor> = bind(identifier, (name) =>
-  bind(optional(spaces), (_) =>
+  bind(many(whitespace), (_) =>
     bind(optional(argumentList), (args) => pure(Constructor(name, args || [])))
   )
 );
