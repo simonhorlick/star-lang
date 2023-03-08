@@ -29,6 +29,8 @@ import {
   join,
   join1,
   any4,
+  spaces,
+  spc,
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
@@ -441,30 +443,34 @@ export const definition: Parser<Def> = bind(str("func"), (_) =>
 
 // argument parses a single argument, i.e. `identifier Type`.
 export const argument: Parser<Argument> = bind(identifier, (name) =>
-  bind(whitespace, (_) => bind(type, (typ) => pure(Argument(name, typ))))
+  bind(spaces, (_) => bind(type, (typ) => pure(Argument(name, typ))))
 );
 
 // argumentList parses a list of arguments, i.e. `(a A, ..., z Z)`.
 export const argumentList: Parser<Argument[]> = bind(
-  optional(parenthesis(join(argument, whitespace))),
-  (args) => pure(args || [])
+  parenthesis(join(argument, spc(char(",")))),
+  (args) => pure(args)
 );
 
 // name(arg1 ArgType1, ..., ArgN ArgTypeN)
 export const constructor: Parser<Constructor> = bind(identifier, (name) =>
-  bind(optional(whitespace), (_) =>
-    bind(argumentList, (args) => pure(Constructor(name, args)))
+  bind(optional(spaces), (_) =>
+    bind(optional(argumentList), (args) => pure(Constructor(name, args || [])))
   )
 );
 
 // adt parses an abstract data type, for example
 // `type List(A *) = nil | cons(head A, tail List(A))`
 export const adt: Parser<ADT> = bind(str("type"), (_) =>
-  bind(whitespace, (_) =>
+  bind(spaces, (_) =>
     bind(constructor, (c) =>
-      bind(char("="), (_) =>
-        bind(join1(constructor, char("|")), (ctrs) =>
-          pure(ADT(c.name, c.args, ctrs))
+      bind(optional(spaces), (_) =>
+        bind(char("="), (_) =>
+          bind(optional(spaces), (_) =>
+            bind(join1(constructor, spc(char("|"))), (ctrs) =>
+              pure(ADT(c.name, c.args, ctrs))
+            )
+          )
         )
       )
     )

@@ -271,6 +271,15 @@ export const line: Parser<string> = bind(
 export const whitespace = char(" ");
 export const newline = char("\n");
 
+// spaces parses required whitespace (spaces and newlines)
+export const spaces = many1(either(whitespace, newline));
+
+// spc is a parser that allows optional leading and trailing whitespace.
+export const spc = <T>(between: Parser<T>): Parser<T> =>
+  bind(optional(spaces), (_) =>
+    bind(between, (x) => bind(optional(spaces), (_) => pure(x)))
+  );
+
 // orFail raises a specific parse error if the parser is unsuccessful.
 export const orFail = <A>(msg: string, p: Parser<A>): Parser<A> =>
   either(p, zero<A>(msg));
