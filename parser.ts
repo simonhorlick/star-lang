@@ -209,6 +209,16 @@ export const any5 = <A, B, C, D, E>(
   p5: Parser<E>
 ) => either(p1, either(p2, either(p3, either(p4, p5))));
 
+// see any
+export const any6 = <A, B, C, D, E, F>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>,
+  p5: Parser<E>,
+  p6: Parser<F>
+) => either(p1, either(p2, either(p3, either(p4, either(p5, p6)))));
+
 // optional returns a parser that attempts to use the supplied parser, but
 // if it fails it doesn't return a parse error and instead allows the parsing to
 // continue.

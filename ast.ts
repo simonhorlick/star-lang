@@ -32,6 +32,7 @@ import {
   spaces,
   spc,
   spc1,
+  any6,
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
@@ -167,7 +168,7 @@ export const Ann = (term: Term, type: Type): Ann => ({
   typ: type,
 });
 
-export type Term = Abs | App | Var | Par | Ref | Ann | Pi | Star | Self;
+export type Term = Abs | App | Var | Par | Ref | Ann | Pi | Star | Self | Case;
 export type Type = Term;
 
 type Argument = {
@@ -254,7 +255,7 @@ export type Newline = { _: "nl" };
 
 export type File = {
   _: "file";
-  content: (Pkg | Com | Def | Space | Newline)[];
+  content: (Pkg | Com | Def | ADT | Space | Newline)[];
 };
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
@@ -431,13 +432,41 @@ export const application = (term: () => Parser<Term>): Parser<App> =>
     )
   );
 
+//  true -> false
+const caseBranch: Parser<Branch> = orFail(
+  "case branch not well formed",
+  bind(spaces, (_) =>
+    bind(identifier, (id) =>
+      bind(many(whitespace), (_) =>
+        bind(str("->"), (_) =>
+          bind(many(whitespace), (_) => bind(term, (t) => pure(Branch(id, t))))
+        )
+      )
+    )
+  )
+);
+
+// case b of
+//  true -> false
+//  false -> true
+export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
+  bind(spc1(identifier), (id) =>
+    bind(str("of"), (_) =>
+      bind(newline, (_) =>
+        bind(many1(caseBranch), (branches) => pure(Case(Ref(id), branches)))
+      )
+    )
+  )
+);
+
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
-export const term: Parser<Term> = any3(
+export const term: Parser<Term> = any4(
   // abstraction `λx.t`
   abstraction(() => term),
   // application `f(x)`
   application(() => term),
+  caseStatement,
   // a reference for example `t`
   reference
 );
@@ -502,26 +531,6 @@ export const adt: Parser<ADT> = bind(str("type"), (_) =>
   )
 );
 
-//  true -> false
-const caseBranch: Parser<Branch> = bind(identifier, (id) =>
-  bind(str("->"), (_) =>
-    bind(term, (t) => bind(newline, (_) => pure(Branch(id, t))))
-  )
-);
-
-// case b of
-//  true -> false
-//  false -> true
-export const caseStatment: Parser<Case> = bind(str("case"), (_) =>
-  bind(spc1(identifier), (id) =>
-    bind(str("of"), (_) =>
-      bind(newline, () =>
-        bind(many1(caseBranch), (branches) => pure(Case(Ref(id), branches)))
-      )
-    )
-  )
-);
-
 const parseWhitespace: Parser<Space> = map(whitespace, () => ({ _: "sp" }));
 const parseNewline: Parser<Newline> = map(newline, () => ({ _: "nl" }));
 
@@ -529,11 +538,12 @@ const parseNewline: Parser<Newline> = map(newline, () => ({ _: "nl" }));
 export const parseFile: Parser<File> = map(
   consumeAll(
     many(
-      any5(
+      any6(
         parseWhitespace,
         parseNewline,
         parsePackage,
         definition,
+        adt,
         parseLineComment
       )
     )
