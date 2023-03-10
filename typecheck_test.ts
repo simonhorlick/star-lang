@@ -211,7 +211,9 @@ describe("typechecker", () => {
     const program = App(Var("a", 0), Var("b", 1));
     expect(infer([], ctx, program)).toStrictEqual({
       _: "typecheckerror",
+      end: 0,
       msg: "expected pi type on the left of app; got star: ★",
+      start: 0,
     });
   });
 
