@@ -2,6 +2,7 @@ import { Term } from "./ast";
 import * as Erased from "./erased";
 
 export function erase(term: Term): Erased.Term {
+  // TODO: remove unused arguments
   switch (term._) {
     case "var":
       return Erased.Var(term.name, term.index);
@@ -17,6 +18,15 @@ export function erase(term: Term): Erased.Term {
       throw "unexpected pi";
     case "star":
       throw "unexpected star";
+    case "case":
+      throw "unexpected case";
+    case "self":
+      // throw "unexpected self";
+      return Erased.Abs("erased", Erased.Var("erased", 0));
+    case "orig":
+      return erase(term.child);
+    case "par":
+      throw "unexpected par";
   }
 }
 

@@ -19,6 +19,13 @@ import { pretty, printCtx } from "./pretty";
 
 var _ = require("lodash");
 
+export const logFull = (x: any) => {
+  const util = require("util");
+  console.log(
+    util.inspect(x, { showHidden: false, depth: null, colors: true })
+  );
+};
+
 export const typeEq = (A: Type, B: Type) => _.isEqual(A, B);
 
 export const ctxContains = (name: string, ctx: Context) =>
@@ -96,8 +103,17 @@ export const infer = (
   term: Term,
   originStart: number = 0,
   originEnd: number = 0
-): Result | TypecheckError =>
-  tc(defs, ctx, term, undefined, originStart, originEnd);
+): Result | TypecheckError => {
+  const inferred = tc(defs, ctx, term, undefined, originStart, originEnd);
+  if (inferred._ == "result") {
+    console.log(
+      `${" ".repeat(ctx.length)} inferred type ${pretty(
+        inferred.type
+      )} for ${pretty(term)}`
+    );
+  }
+  return inferred;
+};
 
 // check that the given term has the expected type.
 export const check = (
@@ -141,9 +157,11 @@ export const tc = (
   const printIndices = false;
 
   if (type) {
-    console.log(`checking ${pretty(term)} has type ${pretty(type)}`);
-  } else {
-    console.log(`inferring type for ${pretty(term)} `);
+    console.log(
+      `${" ".repeat(ctx.length)} checking ${pretty(term)} has type ${pretty(
+        type
+      )}`
+    );
   }
 
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
@@ -289,15 +307,17 @@ export const tc = (
           );
         }
 
-        // FIXME: Don't repeat this work if the term has already been checked.
-        return check(
-          defs,
-          ctx,
-          match[0].term,
-          match[0].typ,
-          originStart,
-          originEnd
-        );
+        return Result(term, match[0].typ);
+
+      // // FIXME: Don't repeat this work if the term has already been checked.
+      // return check(
+      //   defs,
+      //   ctx,
+      //   match[0].term,
+      //   match[0].typ,
+      //   originStart,
+      //   originEnd
+      // );
       case "case":
         throw "unexpected case";
     }
@@ -314,7 +334,9 @@ export const tc = (
         (acc, curr) => App(acc, curr.term),
         App(term.name, P)
       );
-      return check(defs, ctx, desugared, type, originStart, originEnd);
+      const checked = check(defs, ctx, desugared, type, originStart, originEnd);
+      // logFull(checked);
+      return checked;
     }
 
     if (type._ == "self") {
@@ -370,7 +392,7 @@ export const tc = (
         }
 
         if (term.argtype) {
-          if (!equate(defs, term, type.from, term.argtype)) {
+          if (!equate(defs, term, type.from, term.argtype, ctx.length)) {
             return TypecheckError(
               "annotation on binder doesn't match pi type",
               originStart,
@@ -405,7 +427,7 @@ export const tc = (
       return ty1;
     }
 
-    if (!equate(defs, term, type, ty1.type)) {
+    if (!equate(defs, term, type, ty1.type, ctx.length)) {
       return TypecheckError(
         `typecheck failed: \n\t${pretty(
           type,
@@ -439,8 +461,9 @@ export function shift(d: number, c: number, t: Term): Term {
     case "star":
     case "ref":
     case "par":
-    case "orig":
       return t;
+    case "orig":
+      return shift(d, c, t.child);
     case "case":
       return Case(
         shift(d, c, t.name),
@@ -490,7 +513,12 @@ export function subst(
     case "orig":
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
     case "case":
-      throw "subst: unexpected case";
+      return Case(
+        subst(j, s, c, t.name, name),
+        t.branches.map((b) =>
+          Branch(b.constructor, subst(j, s, c, b.term, name))
+        )
+      );
   }
 }
 
@@ -502,40 +530,6 @@ export function substTop(s: Term, t: Term, name: string): Term {
   // fact that the bound variable has been used up.
   return shift(-1, 0, subst(0, shift(1, 0, s), 0, t, name));
 }
-
-// export function isValue(term: Term): boolean {
-//   return term._ == "lam";
-// }
-
-// // Big-step evaluation for the given term.
-// export function evaluate(defs: Def[], term: Term): Term {
-//   switch (term._) {
-//     case "app":
-//       let e1 = evaluate(defs, term.left);
-//       let e2 = evaluate(defs, term.right);
-//       if (e1._ == "lam" && isValue(e2)) {
-//         return substTop(e2, e1.body);
-//       }
-//       return App(e1, e2);
-//     case "lam":
-//       return term;
-//     // throw "cannot reduce Abs";
-//     case "var":
-//       throw "cannot reduce Var";
-//     case "ann": // ignored at runtime
-//       return evaluate(defs, term.term);
-//     case "ref":
-//       const match = defs.filter((d) => d.name == term.name);
-//       if (match.length == 0) {
-//         return term;
-//       }
-//       return evaluate(defs, match[0].term);
-//     case "pi":
-//       throw "can't eval pi";
-//     case "star":
-//       throw "can't eval star";
-//   }
-// }
 
 // aeq returns true if the two terms are alpha-equivalent, i.e. they are the
 // same up to renaming of bound variables.
@@ -552,7 +546,7 @@ export const equate = (
   t2: Term,
   depth: number = 0
 ): boolean => {
-  console.log(`equate ${pretty(t1)} == ${pretty(t2)}`);
+  console.log(`${" ".repeat(depth)}equate ${pretty(t1)} == ${pretty(t2)}`);
   if (aeq(t1, t2)) {
     return true;
   }
@@ -566,6 +560,14 @@ export const equate = (
   }
   if (n2._ == "self") {
     n2 = substTop(term, n2.body, n2.name);
+  }
+
+  // Ensure we resolve any references first.
+  if (n1._ != "ref" && n2._ == "ref") {
+    const x = n2.name;
+    const def = defs.find((def) => def.name == x);
+    if (def == undefined) throw `definition not found: ${x}`;
+    return equate(defs, term, n1, def.term, depth + 1);
   }
 
   switch (n1._) {
@@ -649,7 +651,7 @@ export const whnf = (unfold: boolean, defs: Def[], t: Term): Term => {
     case "case":
       throw "whnf: unexpected case";
     case "orig": // remove origins
-      return t.child;
+      return whnf(unfold, defs, t.child);
   }
 };
 
