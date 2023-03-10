@@ -226,6 +226,15 @@ const desugarTerm = (t: Term, ann: Term | undefined, ctx: Context): Term => {
 
       return desugared;
     case "ref":
+      // At this point we're still unsure whether this node is a Var or a Ref.
+      // So look it up first and if a Var exists then use that.
+      for (let i = 0; i < ctx.length; i++) {
+        const binding = ctx[ctx.length - i - 1];
+        if (binding.name == t.name) {
+          return Var(binding.name, i);
+        }
+      }
+      return t;
     case "star":
     case "var":
       return t;

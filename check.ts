@@ -305,7 +305,7 @@ export const tc = (
         const match = defs.filter((d) => d.name == term.name);
         if (match.length == 0) {
           return TypecheckError(
-            `reference not found: ${term.name}`,
+            `reference not found: ${term.name}; ctx is ${printCtx(ctx)}`,
             originStart,
             originEnd
           );
