@@ -164,6 +164,10 @@ export const tc = (
     );
   }
 
+  if (term._ == "case") {
+    throw "unexpected case";
+  }
+
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
   // existing variable.
 
@@ -307,38 +311,10 @@ export const tc = (
           );
         }
 
+        // Assume definitions are already checked and accurate.
         return Result(term, match[0].typ);
-
-      // // FIXME: Don't repeat this work if the term has already been checked.
-      // return check(
-      //   defs,
-      //   ctx,
-      //   match[0].term,
-      //   match[0].typ,
-      //   originStart,
-      //   originEnd
-      // );
-      case "case":
-        throw "unexpected case";
     }
   } else {
-    // Desugar case statement before doing anything else.
-    if (term._ == "case") {
-      //  case x of
-      //    c1 -> t1
-      //    c2 -> t2
-      // desugars to:
-      //  x(() MotiveType, t1, t2)
-      const P = Abs("", shift(1, 0, type)); // P just returns the expected type
-      const desugared = term.branches.reduce(
-        (acc, curr) => App(acc, curr.term),
-        App(term.name, P)
-      );
-      const checked = check(defs, ctx, desugared, type, originStart, originEnd);
-      // logFull(checked);
-      return checked;
-    }
-
     if (type._ == "self") {
       // Γ ⊢ t:[t/x]T
       // ------------ selfGen

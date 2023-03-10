@@ -24,7 +24,7 @@ import {
   Branch,
   Origin,
 } from "./ast";
-import { addTermToCtx } from "./check";
+import { addTermToCtx, shift } from "./check";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 
@@ -173,17 +173,21 @@ export const processADTs = (f: File): File => {
 
 // TODO: Re-think this. There's a lot of places where we're doing thing kind of
 // thing.
-const desugarTerm = (t: Term, ctx: Context): Term => {
+const desugarTerm = (t: Term, ann: Term | undefined, ctx: Context): Term => {
   switch (t._) {
     case "ann":
-      return Ann(desugarTerm(t.term, ctx), desugarTerm(t.typ, ctx));
+      const desugaredType = desugarTerm(t.typ, undefined, ctx);
+      return Ann(desugarTerm(t.term, desugaredType, ctx), desugaredType);
     case "app":
-      return App(desugarTerm(t.left, ctx), desugarTerm(t.right, ctx));
+      return App(
+        desugarTerm(t.left, undefined, ctx),
+        desugarTerm(t.right, undefined, ctx)
+      );
     case "lam":
       // The type in this context is not important so just set it as *.
       return Abs(
         t.name,
-        desugarTerm(t.body, addTermToCtx(ctx, t.name, Star())),
+        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star())),
         t.argtype
       );
     case "par":
@@ -197,32 +201,45 @@ const desugarTerm = (t: Term, ctx: Context): Term => {
     case "pi":
       return Pi(
         t.name,
-        desugarTerm(t.from, ctx),
-        desugarTerm(t.to, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.from, undefined, ctx),
+        desugarTerm(t.to, undefined, addTermToCtx(ctx, t.name, Star()))
       );
     case "self":
       return Self(
         t.name,
-        desugarTerm(t.body, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star()))
       );
     case "case":
-      return Case(
-        desugarTerm(t.name, ctx),
-        t.branches.map((branch) =>
-          Branch(branch.constructor, desugarTerm(branch.term, ctx))
-        )
+      //  case x of
+      //    c1 -> t1
+      //    c2 -> t2
+      // desugars to:
+      //  x(() MotiveType, t1, t2)
+      if (ann == undefined) {
+        throw "case needs annotation";
+      }
+      const P = Abs("", shift(1, 0, ann)); // P just returns the expected type
+      const desugared = t.branches.reduce(
+        (acc, curr) => App(acc, desugarTerm(curr.term, undefined, ctx)),
+        App(desugarTerm(t.name, undefined, ctx), P)
       );
+
+      return desugared;
     case "ref":
     case "star":
     case "var":
       return t;
     case "orig":
-      return Origin(t.start, t.end, desugarTerm(t.child, ctx));
+      return Origin(t.start, t.end, desugarTerm(t.child, ann, ctx));
   }
 };
 
 export const desugar = (def: Def): Def => {
-  return Def(def.name, desugarTerm(def.term, []), desugarTerm(def.typ, []));
+  return Def(
+    def.name,
+    desugarTerm(def.term, undefined, []),
+    desugarTerm(def.typ, undefined, [])
+  );
 };
 
 // processPars removes all Par nodes from the tree t.

@@ -474,16 +474,23 @@ export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
   )
 );
 
+export const annotation = (term: () => Parser<Term>): Parser<Ann> =>
+  bind(parenthesis(lazy(term)), (body) =>
+    bind(str(":"), (_) => bind(lazy(term), (typ) => pure(Ann(body, typ))))
+  );
+
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
-export const term: Parser<Term> = any4(
+export const term: Parser<Term> = any5(
   // abstraction `λx.t`
   block(abstraction(() => term)),
   // application `f(x)`
   block(application(() => term)),
   block(caseStatement),
   // a reference for example `t`
-  block(reference)
+  block(reference),
+  // an annotation for example `(f(x)):Y`
+  block(annotation(() => term))
 );
 
 // definition parses a top-level function definition, for example
