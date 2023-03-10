@@ -11,6 +11,9 @@ import {
   Def,
   Star,
   Self,
+  Case,
+  Branch,
+  Origin,
 } from "./ast";
 import { pretty, printCtx } from "./pretty";
 
@@ -18,11 +21,21 @@ var _ = require("lodash");
 
 export const typeEq = (A: Type, B: Type) => _.isEqual(A, B);
 
+export const ctxContains = (name: string, ctx: Context) =>
+  ctx.find((b) => b.name == name) != undefined;
+
 export const addTermToCtx = (
   ctx: Context,
   name: string,
   type: Type
-): Context => [...ctx, { type: "bind", name: name, typ: type }];
+): Context => {
+  if (name != "" && name != "P" && ctxContains(name, ctx)) {
+    throw `variable ${name} shadows existing variable; context is ${printCtx(
+      ctx
+    )}`;
+  }
+  return [...ctx, { type: "bind", name: name, typ: type }];
+};
 
 export const lookupType = (
   ctx: Context,
@@ -45,14 +58,22 @@ export const lookupType = (
   return shift(index, 0, x.typ);
 };
 
-type TypecheckError = {
+export type TypecheckError = {
   _: "typecheckerror";
   msg: string;
+  start: number;
+  end: number;
 };
 
-const TypecheckError = (msg: string): TypecheckError => ({
+export const TypecheckError = (
+  msg: string,
+  start: number,
+  end: number
+): TypecheckError => ({
   _: "typecheckerror",
   msg: msg,
+  start: start,
+  end: end,
 });
 
 interface Result {
@@ -72,22 +93,27 @@ const Result = (term: Term, type: Term): Result => ({
 export const infer = (
   defs: Def[],
   ctx: Context,
-  term: Term
-): Result | TypecheckError => tc(defs, ctx, term);
+  term: Term,
+  originStart: number = 0,
+  originEnd: number = 0
+): Result | TypecheckError =>
+  tc(defs, ctx, term, undefined, originStart, originEnd);
 
 // check that the given term has the expected type.
 export const check = (
   defs: Def[],
   ctx: Context,
   tm: Term,
-  ty: Term
+  ty: Term,
+  originStart: number = 0,
+  originEnd: number = 0
 ): Result | TypecheckError => {
   let nf = whnf(true, defs, ty);
   switch (nf._) {
     case "ann":
-      return check(defs, ctx, tm, nf.term);
+      return check(defs, ctx, tm, nf.term, originStart, originEnd);
     default:
-      return tc(defs, ctx, tm, nf);
+      return tc(defs, ctx, tm, nf, originStart, originEnd);
   }
 };
 
@@ -95,8 +121,11 @@ export const check = (
 export const checkStar = (
   defs: Def[],
   ctx: Context,
-  term: Term
-): Result | TypecheckError => tc(defs, ctx, term, Star());
+  term: Term,
+  originStart: number,
+  originEnd: number
+): Result | TypecheckError =>
+  tc(defs, ctx, term, Star(), originStart, originEnd);
 
 // check a term, producing an elaborated term where all of the type annotations
 // have been filled in. The second argument is undefined in inference mode and
@@ -105,9 +134,17 @@ export const tc = (
   defs: Def[],
   ctx: Context,
   term: Term,
-  type?: Term // this is undefined in inference mode.
+  type: Term | undefined, // this is undefined in inference mode.
+  originStart: number,
+  originEnd: number
 ): Result | TypecheckError => {
   const printIndices = false;
+
+  if (type) {
+    console.log(`checking ${pretty(term)} has type ${pretty(type)}`);
+  } else {
+    console.log(`inferring type for ${pretty(term)} `);
+  }
 
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
   // existing variable.
@@ -115,6 +152,9 @@ export const tc = (
   // inference mode
   if (type == undefined) {
     switch (term._) {
+      case "orig": {
+        return infer(defs, ctx, term.child, term.start, term.end);
+      }
       case "self": {
         throw "self term";
       }
@@ -123,7 +163,7 @@ export const tc = (
         // Γ,x:A ⊢ B <= ★
         // ----------------
         // Γ ⊢ Πx:A. B => ★
-        let elA = check(defs, ctx, term.from, Star());
+        let elA = check(defs, ctx, term.from, Star(), originStart, originEnd);
         if (elA._ == "typecheckerror") {
           return elA;
         }
@@ -131,7 +171,9 @@ export const tc = (
           defs,
           addTermToCtx(ctx, term.name, term.from),
           term.to,
-          Star()
+          Star(),
+          originStart,
+          originEnd
         );
         if (elB._ == "typecheckerror") {
           return elB;
@@ -145,7 +187,11 @@ export const tc = (
       case "var":
         // Look up its type in the context.
         if (term.index >= ctx.length) {
-          return TypecheckError("undefined variable " + term.name);
+          return TypecheckError(
+            "undefined variable " + term.name,
+            originStart,
+            originEnd
+          );
         }
         return Result(term, lookupType(ctx, term.index, term.name));
       case "par":
@@ -158,9 +204,13 @@ export const tc = (
         // infer the type of a lambda expression, when an annotation on the
         // binder is present
         if (term.argtype == undefined) {
-          return TypecheckError("lambda requires annotation");
+          return TypecheckError(
+            "lambda requires annotation",
+            originStart,
+            originEnd
+          );
         }
-        let atyA = checkStar(defs, ctx, term.argtype);
+        let atyA = checkStar(defs, ctx, term.argtype, originStart, originEnd);
         if (atyA._ == "typecheckerror") {
           return atyA;
         }
@@ -168,7 +218,9 @@ export const tc = (
         let inferred = infer(
           defs,
           addTermToCtx(ctx, term.name, atyA.term),
-          term.body
+          term.body,
+          originStart,
+          originEnd
         );
         if (inferred._ == "typecheckerror") {
           return inferred;
@@ -192,18 +244,18 @@ export const tc = (
 
         let f = term.left;
         let b = term.right;
-        let fType = infer(defs, ctx, f);
+        let fType = infer(defs, ctx, f, originStart, originEnd);
         if (fType._ == "typecheckerror") {
           return fType;
         }
         let fTypeElaborated = fType.term;
-        let nf = ensurePi(defs, fType.type);
+        let nf = ensurePi(defs, term, fType.type, originStart, originEnd);
         if (nf._ == "typecheckerror") {
           return nf;
         }
         let tyA = nf.from;
         let tyB = nf.to;
-        let arg = check(defs, ctx, b, tyA);
+        let arg = check(defs, ctx, b, tyA, originStart, originEnd);
         if (arg._ == "typecheckerror") {
           return arg;
         }
@@ -215,12 +267,12 @@ export const tc = (
         return Result(App(fTypeElaborated, et2), typ);
       }
       case "ann": {
-        let typ = checkStar(defs, ctx, term.typ);
+        let typ = checkStar(defs, ctx, term.typ, originStart, originEnd);
         if (typ._ == "typecheckerror") {
           return typ;
         }
         // check the annotated type matches the computed type.
-        let ty = check(defs, ctx, term.term, term.typ);
+        let ty = check(defs, ctx, term.term, term.typ, originStart, originEnd);
         if (ty._ == "typecheckerror") {
           return ty;
         }
@@ -230,13 +282,41 @@ export const tc = (
       case "ref":
         const match = defs.filter((d) => d.name == term.name);
         if (match.length == 0) {
-          return TypecheckError(`reference not found: ${term.name}`);
+          return TypecheckError(
+            `reference not found: ${term.name}`,
+            originStart,
+            originEnd
+          );
         }
 
         // FIXME: Don't repeat this work if the term has already been checked.
-        return check(defs, ctx, match[0].term, match[0].typ);
+        return check(
+          defs,
+          ctx,
+          match[0].term,
+          match[0].typ,
+          originStart,
+          originEnd
+        );
+      case "case":
+        throw "unexpected case";
     }
   } else {
+    // Desugar case statement before doing anything else.
+    if (term._ == "case") {
+      //  case x of
+      //    c1 -> t1
+      //    c2 -> t2
+      // desugars to:
+      //  x(() MotiveType, t1, t2)
+      const P = Abs("", shift(1, 0, type)); // P just returns the expected type
+      const desugared = term.branches.reduce(
+        (acc, curr) => App(acc, curr.term),
+        App(term.name, P)
+      );
+      return check(defs, ctx, desugared, type, originStart, originEnd);
+    }
+
     if (type._ == "self") {
       // Γ ⊢ t:[t/x]T
       // ------------ selfGen
@@ -248,14 +328,28 @@ export const tc = (
 
       // In the current type, replace any references to the self type by the
       // value being typed.
-      return check(defs, ctx, term, substTop(term, type.body, type.name));
+      return check(
+        defs,
+        ctx,
+        term,
+        substTop(term, type.body, type.name),
+        originStart,
+        originEnd
+      );
     }
 
     switch (term._) {
+      case "orig": {
+        return check(defs, ctx, term.child, type, term.start, term.end);
+      }
       case "self": {
         // What's the type of a self-type?
         if (type._ != "star") {
-          return TypecheckError(`expected star type; got ${type._}`);
+          return TypecheckError(
+            `expected star type; got ${type._}`,
+            originStart,
+            originEnd
+          );
         }
 
         // FIXME: Is this correct?
@@ -268,12 +362,20 @@ export const tc = (
 
         // checking mode.
         if (type._ != "pi") {
-          return TypecheckError(`expected pi type; got ${type._}`);
+          return TypecheckError(
+            `expected pi type; got ${type._}`,
+            originStart,
+            originEnd
+          );
         }
 
         if (term.argtype) {
           if (!equate(defs, term, type.from, term.argtype)) {
-            return TypecheckError("annotation on binder doesn't match pi type");
+            return TypecheckError(
+              "annotation on binder doesn't match pi type",
+              originStart,
+              originEnd
+            );
           }
         }
 
@@ -283,7 +385,9 @@ export const tc = (
           defs,
           addTermToCtx(ctx, term.name, shift(1, 0, type.from)),
           term.body,
-          type.to
+          type.to,
+          originStart,
+          originEnd
         );
         if (ebody._ == "typecheckerror") {
           return ebody;
@@ -296,7 +400,7 @@ export const tc = (
 
     // If there's a type, and one of the other rules doesn't apply, then check
     // the type matches inferred type.
-    let ty1 = infer(defs, ctx, term);
+    let ty1 = infer(defs, ctx, term, originStart, originEnd);
     if (ty1._ == "typecheckerror") {
       return ty1;
     }
@@ -306,7 +410,9 @@ export const tc = (
         `typecheck failed: \n\t${pretty(
           type,
           printIndices
-        )}\nis not\n\t${pretty(ty1.type, printIndices)}`
+        )}\nis not\n\t${pretty(ty1.type, printIndices)}`,
+        originStart,
+        originEnd
       );
     }
     return Result(term, ty1.type);
@@ -314,9 +420,9 @@ export const tc = (
 };
 
 // Shifting renumbers the indices of the free variables in a term.
+// If the variable index is greater than the cutoff, c, then adjust the index
+// by d.
 export function shift(d: number, c: number, t: Term): Term {
-  // If the variable index is greater than the cutoff, c, then adjust the index
-  // by d.
   switch (t._) {
     case "var":
       return t.index >= c ? Var(t.name, t.index + d) : t;
@@ -333,7 +439,13 @@ export function shift(d: number, c: number, t: Term): Term {
     case "star":
     case "ref":
     case "par":
+    case "orig":
       return t;
+    case "case":
+      return Case(
+        shift(d, c, t.name),
+        t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term)))
+      );
   }
 }
 
@@ -371,10 +483,14 @@ export function subst(
         subst(j, s, c + 1, t.to, name)
       );
     case "par":
-      throw "unexpected par";
+      throw "subst: unexpected par";
     case "star":
     case "ref":
       return t;
+    case "orig":
+      return Origin(t.start, t.end, subst(j, s, c, t.child, name));
+    case "case":
+      throw "subst: unexpected case";
   }
 }
 
@@ -433,8 +549,10 @@ export const equate = (
   defs: Def[],
   term: Term,
   t1: Term,
-  t2: Term
+  t2: Term,
+  depth: number = 0
 ): boolean => {
+  console.log(`equate ${pretty(t1)} == ${pretty(t2)}`);
   if (aeq(t1, t2)) {
     return true;
   }
@@ -457,22 +575,28 @@ export const equate = (
       let a2 = n1.right;
       let b1 = n2.left;
       let b2 = n2.right;
-      return equate(defs, term, a1, b1) && equate(defs, term, a2, b2);
+      return (
+        equate(defs, term, a1, b1, depth + 1) &&
+        equate(defs, term, a2, b2, depth + 1)
+      );
     case "lam":
       if (n2._ != "lam") return false;
-      return equate(defs, term, n1.body, n2.body);
+      return equate(defs, term, n1.body, n2.body, depth + 1);
     case "self":
       if (n2._ != "self") return false;
-      return equate(defs, term, n1.body, n2.body);
+      return equate(defs, term, n1.body, n2.body, depth + 1);
     case "pi":
       if (n2._ != "pi") return false;
       return (
-        equate(defs, term, n1.from, n2.from) && equate(defs, term, n1.to, n2.to)
+        equate(defs, term, n1.from, n2.from, depth + 1) &&
+        equate(defs, term, n1.to, n2.to, depth + 1)
       );
     case "ref":
       if (n2._ == "ref" && n1.name == n2.name) return true;
-      // FIXME: When does this happen?
-      throw "failed to equate ref";
+      const x = n1.name;
+      const def = defs.find((def) => def.name == x);
+      if (def == undefined) throw `definition not found: ${x}`;
+      return equate(defs, term, def.term, n2, depth + 1);
     case "star":
       return n2._ == "star";
     case "var":
@@ -483,6 +607,10 @@ export const equate = (
     case "par":
       // TODO: Make this impossible using proper types.
       throw "internal checker error: unexpected Par in whnf term";
+    case "case":
+      throw "internal checker error: unexpected case";
+    case "orig":
+      throw "internal checker error: unexpected origin";
   }
 };
 
@@ -493,7 +621,7 @@ export const whnf = (unfold: boolean, defs: Def[], t: Term): Term => {
       if (!unfold) return t;
       const match = defs.filter((d) => d.name == t.name);
       if (match.length == 0) {
-        throw `reference not found: ${t.name}`;
+        throw `whnf: reference not found: ${t.name}`;
       }
       return whnf(false, defs, match[0].term);
     case "app": {
@@ -507,24 +635,45 @@ export const whnf = (unfold: boolean, defs: Def[], t: Term): Term => {
       return App(nf, t2);
     }
     case "ann":
-      throw "unexpected Ann";
+      return t.term;
     case "par":
-      throw "unexpected Par";
+      throw "whnf: unexpected Par";
+    case "self":
+    // eliminate self? what's the term being checked?
+    //return whnf(unfold, defs, substTop(term, t.body, t.name));
     case "var":
     case "lam":
-    case "self":
     case "pi":
     case "star":
       return t;
+    case "case":
+      throw "whnf: unexpected case";
+    case "orig": // remove origins
+      return t.child;
   }
 };
 
 // Ensure that ty reduces to a Pi type and return it.
-function ensurePi(defs: Def[], ty: Term): Pi | TypecheckError {
-  const nf = whnf(true, defs, ty);
+function ensurePi(
+  defs: Def[],
+  tm: Term,
+  ty: Term,
+  originStart: number,
+  originEnd: number
+): Pi | TypecheckError {
+  let nf = whnf(true, defs, ty);
+
+  // If we're expecting a pi, but there's a self type here, then eliminate the
+  // self type first.
+  if (nf._ == "self") {
+    nf = substTop(tm, nf.body, nf.name);
+  }
+
   if (nf._ != "pi") {
     return TypecheckError(
-      `expected pi type on the left of app; got ${nf._}: ${pretty(nf)}`
+      `expected pi type on the left of app; got ${nf._}: ${pretty(nf)}`,
+      originStart,
+      originEnd
     );
   }
   return nf;
@@ -561,6 +710,12 @@ export const dbgCheckIndices = <T extends Term>(
     case "star":
     case "ref":
     case "par":
+      return t;
+    case "case":
+      // FIXME: Improve the types here.
+      throw "unexpected case at typecheck";
+    case "orig":
+      dbgCheckIndices(ctx, depth, t.child);
       return t;
   }
 };

@@ -168,10 +168,21 @@ export const Ann = (term: Term, type: Type): Ann => ({
   typ: type,
 });
 
-export type Term = Abs | App | Var | Par | Ref | Ann | Pi | Star | Self | Case;
+export type Term =
+  | Abs
+  | App
+  | Var
+  | Par
+  | Ref
+  | Ann
+  | Pi
+  | Star
+  | Self
+  | Case
+  | Origin;
 export type Type = Term;
 
-type Argument = {
+export type Argument = {
   name: string;
   type: Type;
 };
@@ -221,11 +232,11 @@ export const Branch = (constructor: string, term: Term): Branch => ({
 
 export type Case = {
   _: "case";
-  name: Ref;
+  name: Term; // This should be a Par or a Ref.
   branches: Branch[];
 };
 
-export const Case = (name: Ref, branches: Branch[]): Case => ({
+export const Case = (name: Term, branches: Branch[]): Case => ({
   _: "case",
   name: name,
   branches: branches,
@@ -269,18 +280,25 @@ export const identifier: Parser<string> = orFail(
   )
 );
 
-type Origin<T> = {
-  _: "ori";
+export type Origin = {
+  _: "orig";
   start: number;
   end: number;
-  child: T;
+  child: Term;
 };
+
+export const Origin = (start: number, end: number, child: Term): Origin => ({
+  _: "orig",
+  start: start,
+  end: end,
+  child: child,
+});
 
 // block is a parser that adds origin information into the parse tree. It can be
 // disabled by setting origins to false in the stream.
 export const block =
-  <T>(parser: Parser<T>): Parser<Origin<T>> =>
-  (s: Stream): Result<Origin<T>> => {
+  <T extends Term>(parser: Parser<T>): Parser<Origin> =>
+  (s: Stream): Result<Origin> => {
     const start = s.idx;
     const result = parser(s);
 
@@ -288,13 +306,7 @@ export const block =
       return result;
     }
 
-    const origin: Origin<T> = {
-      _: "ori",
-      start: start,
-      end: result.stream.idx,
-      child: result.value,
-    };
-    return pure(origin)(result.stream);
+    return pure(Origin(start, result.stream.idx, result.value))(result.stream);
   };
 
 // parsePackage parses a package declaration such as `package abc`.
@@ -361,10 +373,10 @@ export const arrow: (type: () => Parser<Type>) => (s: Stream) => Result<Pi> = (
 const star: Parser<Star> = bind(char("*"), () => pure(Star()));
 
 export const type: Parser<Type> = any4(
-  arrow(() => type),
-  parenthesis(lazy(() => type)),
-  star,
-  reference
+  block(arrow(() => type)),
+  block(parenthesis(lazy(() => type))),
+  block(star),
+  block(reference)
 );
 
 // // abstraction parses a lambda abstraction `λx:X. t`.
@@ -450,10 +462,13 @@ const caseBranch: Parser<Branch> = orFail(
 //  true -> false
 //  false -> true
 export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
-  bind(spc1(identifier), (id) =>
-    bind(str("of"), (_) =>
-      bind(newline, (_) =>
-        bind(many1(caseBranch), (branches) => pure(Case(Ref(id), branches)))
+  orFail(
+    "case statment not well formed",
+    bind(spc1(identifier), (id) =>
+      bind(str("of"), (_) =>
+        bind(newline, (_) =>
+          bind(many1(caseBranch), (branches) => pure(Case(Par(id), branches)))
+        )
       )
     )
   )
@@ -463,12 +478,12 @@ export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
 // that can be evaluated.
 export const term: Parser<Term> = any4(
   // abstraction `λx.t`
-  abstraction(() => term),
+  block(abstraction(() => term)),
   // application `f(x)`
-  application(() => term),
-  caseStatement,
+  block(application(() => term)),
+  block(caseStatement),
   // a reference for example `t`
-  reference
+  block(reference)
 );
 
 // definition parses a top-level function definition, for example

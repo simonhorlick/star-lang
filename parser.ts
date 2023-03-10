@@ -330,6 +330,12 @@ type Loc = {
   line: number;
 };
 
+// Range is a span of locations in a source file.
+export type Range = {
+  begin: Loc;
+  end: Loc;
+};
+
 // indexToLineCol converts an index into a pair (line,col) describing the line
 // number and character where idx appears in src.
 export const indexToLineCol = (src: string, idx: number) =>
@@ -349,7 +355,7 @@ export const indexToLineCol = (src: string, idx: number) =>
       { col: 0, line: 0 }
     );
 
-const printLine = (src: string, line: number) => src.split("\n")[line];
+export const printLine = (src: string, line: number) => src.split("\n")[line];
 
 export const parseErrorDiagnostic = (err: ParseError) => {
   const lc = indexToLineCol(err.stream.src, err.stream.idx);

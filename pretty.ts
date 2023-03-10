@@ -55,6 +55,12 @@ export function pretty(term: Term, indices: boolean = true): string {
       );
     case "star":
       return "★";
+    case "case":
+      return `case ${pretty(term.name)} of ${term.branches
+        .map((b) => `${b.constructor} -> ${pretty(b.term)}`)
+        .join(" | ")}`;
+    case "orig":
+      return pretty(term.child);
   }
 }
 
