@@ -61,14 +61,12 @@ export type Abs = {
   _: "lam";
   name: string; // name of the binder
   body: Term; // the body of the abstraction
-  argtype?: Term; // the type of the argument
 };
 
 export const Abs = (name: string, body: Term, argtype?: Term): Abs => ({
   _: "lam",
   name: name,
   body: body,
-  argtype: argtype,
 });
 
 // Self is a way of abstracting out the value currently being typechecked so

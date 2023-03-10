@@ -219,41 +219,42 @@ export const tc = (
       case "par":
         throw "Internal error: unexpected Par during typechecking";
       case "lam": {
-        // Γ,x:A ⊢ a <= B
-        // ----------------
-        // Γ ⊢ λx.a <= Πx:A. B
+        throw "unsupported";
+        // // Γ,x:A ⊢ a <= B
+        // // ----------------
+        // // Γ ⊢ λx.a <= Πx:A. B
 
-        // infer the type of a lambda expression, when an annotation on the
-        // binder is present
-        if (term.argtype == undefined) {
-          return TypecheckError(
-            "lambda requires annotation",
-            originStart,
-            originEnd
-          );
-        }
-        let atyA = checkStar(defs, ctx, term.argtype, originStart, originEnd);
-        if (atyA._ == "typecheckerror") {
-          return atyA;
-        }
-        // infer the type of the body of the lambda expression
-        let inferred = infer(
-          defs,
-          addTermToCtx(ctx, term.name, atyA.term),
-          term.body,
-          originStart,
-          originEnd
-        );
-        if (inferred._ == "typecheckerror") {
-          return inferred;
-        }
-        let ebody = inferred.term;
-        let atyB = inferred.type;
+        // // infer the type of a lambda expression, when an annotation on the
+        // // binder is present
+        // if (term.argtype == undefined) {
+        //   return TypecheckError(
+        //     "lambda requires annotation",
+        //     originStart,
+        //     originEnd
+        //   );
+        // }
+        // let atyA = checkStar(defs, ctx, term.argtype, originStart, originEnd);
+        // if (atyA._ == "typecheckerror") {
+        //   return atyA;
+        // }
+        // // infer the type of the body of the lambda expression
+        // let inferred = infer(
+        //   defs,
+        //   addTermToCtx(ctx, term.name, atyA.term),
+        //   term.body,
+        //   originStart,
+        //   originEnd
+        // );
+        // if (inferred._ == "typecheckerror") {
+        //   return inferred;
+        // }
+        // let ebody = inferred.term;
+        // let atyB = inferred.type;
 
-        return Result(
-          Abs(term.name, ebody, term.argtype),
-          Pi(term.name, atyA.term, atyB)
-        );
+        // return Result(
+        //   Abs(term.name, ebody, term.argtype),
+        //   Pi(term.name, atyA.term, atyB)
+        // );
       }
       case "app": {
         // We must infer the type of the function f, but once we have that type, we may
@@ -311,7 +312,9 @@ export const tc = (
           );
         }
 
-        // Assume definitions are already checked and accurate.
+        // Without loss of generality we can assume that other definitions
+        // typecheck because if we use a definition that later fails to check
+        // the compilation will fail with a typecheck error.
         return Result(term, match[0].typ);
     }
   } else {
@@ -367,15 +370,15 @@ export const tc = (
           );
         }
 
-        if (term.argtype) {
-          if (!equate(defs, term, type.from, term.argtype, ctx.length)) {
-            return TypecheckError(
-              "annotation on binder doesn't match pi type",
-              originStart,
-              originEnd
-            );
-          }
-        }
+        // if (term.argtype) {
+        //   if (!equate(defs, term, type.from, term.argtype, ctx.length)) {
+        //     return TypecheckError(
+        //       "annotation on binder doesn't match pi type",
+        //       originStart,
+        //       originEnd
+        //     );
+        //   }
+        // }
 
         // we add the bound variable x:A to the context (assuming that x has type
         // A) then using that context we check the body has type B.
@@ -390,10 +393,7 @@ export const tc = (
         if (ebody._ == "typecheckerror") {
           return ebody;
         }
-        return Result(
-          Abs(term.name, Ann(ebody.term, ebody.type), term.argtype),
-          type
-        );
+        return Result(Abs(term.name, Ann(ebody.term, ebody.type)), type);
     }
 
     // If there's a type, and one of the other rules doesn't apply, then check
@@ -441,10 +441,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "orig":
       return shift(d, c, t.child);
     case "case":
-      return Case(
-        shift(d, c, t.name),
-        t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term)))
-      );
+      throw "shift: unexpected case";
   }
 }
 
@@ -489,12 +486,7 @@ export function subst(
     case "orig":
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
     case "case":
-      return Case(
-        subst(j, s, c, t.name, name),
-        t.branches.map((b) =>
-          Branch(b.constructor, subst(j, s, c, b.term, name))
-        )
-      );
+      throw "subst: unexpected case";
   }
 }
 

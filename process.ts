@@ -187,8 +187,7 @@ const desugarTerm = (t: Term, ann: Term | undefined, ctx: Context): Term => {
       // The type in this context is not important so just set it as *.
       return Abs(
         t.name,
-        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star())),
-        t.argtype
+        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star()))
       );
     case "par":
       for (let i = 0; i < ctx.length; i++) {
@@ -262,8 +261,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
       // The type in this context is not important so just set it as *.
       return Abs(
         t.name,
-        processPars(t.body, addTermToCtx(ctx, t.name, Star())),
-        t.argtype
+        processPars(t.body, addTermToCtx(ctx, t.name, Star()))
       );
     case "par":
       for (let i = 0; i < ctx.length; i++) {
