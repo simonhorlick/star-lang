@@ -163,7 +163,7 @@ export const str = (st: string): Parser<string> =>
         bind(char(st[0]), (x) => bind(str(st.substring(1)), (y) => pure(x + y)))
       );
 
-// identity is an parser that does the same as parser.
+// identity is a parser that does the same as parser.
 const identity = <T>(parser: Parser<T>): Parser<T> => {
   return (s: Stream) => {
     return parser(s);

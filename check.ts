@@ -105,6 +105,10 @@ export const infer = (
   originEnd: number = 0
 ): Result | TypecheckError => {
   const inferred = tc(defs, ctx, term, undefined, originStart, originEnd);
+  
+  
+  
+  
   if (inferred._ == "result") {
     console.log(
       `${" ".repeat(ctx.length)} inferred type ${pretty(
@@ -128,6 +132,8 @@ export const check = (
   switch (nf._) {
     case "ann":
       return check(defs, ctx, tm, nf.term, originStart, originEnd);
+      case "orig":
+        
     default:
       return tc(defs, ctx, tm, nf, originStart, originEnd);
   }
@@ -156,6 +162,14 @@ export const tc = (
 ): Result | TypecheckError => {
   const printIndices = false;
 
+  if (term._ == "case") {
+    throw "unexpected case";
+  }
+
+  if (term._ == "orig") {
+    return tc(defs, ctx, term.child, type, term.start, term.end);
+  }
+
   if (type) {
     console.log(
       `${" ".repeat(ctx.length)} checking ${pretty(term)} has type ${pretty(
@@ -164,19 +178,12 @@ export const tc = (
     );
   }
 
-  if (term._ == "case") {
-    throw "unexpected case";
-  }
-
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
   // existing variable.
 
   // inference mode
   if (type == undefined) {
     switch (term._) {
-      case "orig": {
-        return infer(defs, ctx, term.child, term.start, term.end);
-      }
       case "self": {
         throw "self term";
       }
@@ -340,9 +347,6 @@ export const tc = (
     }
 
     switch (term._) {
-      case "orig": {
-        return check(defs, ctx, term.child, type, term.start, term.end);
-      }
       case "self": {
         // What's the type of a self-type?
         if (type._ != "star") {
@@ -530,14 +534,6 @@ export const equate = (
     n2 = substTop(term, n2.body, n2.name);
   }
 
-  // Ensure we resolve any references first.
-  if (n1._ != "ref" && n2._ == "ref") {
-    const x = n2.name;
-    const def = defs.find((def) => def.name == x);
-    if (def == undefined) throw `definition not found: ${x}`;
-    return equate(defs, term, n1, def.term, depth + 1);
-  }
-
   switch (n1._) {
     case "app":
       if (n2._ != "app") return false;
@@ -562,11 +558,7 @@ export const equate = (
         equate(defs, term, n1.to, n2.to, depth + 1)
       );
     case "ref":
-      if (n2._ == "ref" && n1.name == n2.name) return true;
-      const x = n1.name;
-      const def = defs.find((def) => def.name == x);
-      if (def == undefined) throw `definition not found: ${x}`;
-      return equate(defs, term, def.term, n2, depth + 1);
+      return n2._ == "ref" && n1.name == n2.name;
     case "star":
       return n2._ == "star";
     case "var":

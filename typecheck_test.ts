@@ -538,6 +538,7 @@ describe("typechecker", () => {
 
   const Booltrue = Def("true", bt, Bool);
   const Boolfalse = Def("false", bf, Bool);
+  const Booldef = Def("Bool", Bool, Star());
 
   test("can typecheck bool with self types", () => {
     /*
@@ -610,6 +611,11 @@ describe("typechecker", () => {
     }
   });
 
+  const natConstructors = [
+    { name: "zero", args: [] },
+    { name: "succ", args: [{ name: "n", type: Ref("Nat") }] },
+  ];
+
   test("recursive types", () => {
     /*
       type Nat = zero | succ(x Nat)
@@ -659,15 +665,26 @@ describe("typechecker", () => {
       )
     );
 
-    const builtNat = buildType(
-      "Nat",
-      [],
-      [
-        { name: "zero", args: [] },
-        { name: "succ", args: [{ name: "n", type: Ref("Nat") }] },
-      ]
-    ).term;
+    const builtNat = buildType("Nat", [], natConstructors).term;
     expect(builtNat).toStrictEqual(Nat);
+  });
+
+  const natZeroDef = Def(
+    "zero",
+    GenerateConstructorTerm("Nat", [], natConstructors, 0),
+    GenerateConstructorType("Nat", [], natConstructors[0])
+  );
+  const natSuccDef = Def(
+    "succ",
+    GenerateConstructorTerm("Nat", [], natConstructors, 1),
+    GenerateConstructorType("Nat", [], natConstructors[1])
+  );
+
+  test("equate loop", () => {
+    const defs = [NatDef, natZeroDef, natSuccDef, Booldef, Booltrue, Boolfalse];
+    expect(
+      equate(defs, Ref("false"), Ref("Nat"), Pi("", Ref("Bool"), Star()))
+    ).toBeFalsy();
   });
 
   test("simple parameterised types", () => {
@@ -1186,9 +1203,11 @@ describe("typechecker", () => {
     }
   });
 
+  const NatDef = Def("Nat", Nat, Star());
+
   test("recursive parameterised types: succ", () => {
     let result = check(
-      [Def("Nat", Nat, Star())],
+      [NatDef],
       [],
       s, //succ.term,
       Pi("", Nat, Nat)

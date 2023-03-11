@@ -448,7 +448,7 @@ const caseBranch: Parser<Branch> = orFail(
   bind(spaces, (_) =>
     bind(identifier, (id) =>
       bind(many(whitespace), (_) =>
-        bind(str("->"), (_) =>
+        bind(either(str("->"), str("=>")), (_) =>
           bind(many(whitespace), (_) => bind(term, (t) => pure(Branch(id, t))))
         )
       )
@@ -494,16 +494,21 @@ export const term: Parser<Term> = any5(
 // definition parses a top-level function definition, for example
 // `func id: A->A = λx.x`.
 export const definition: Parser<Def> = bind(str("func"), (_) =>
-  bind(many1(whitespace), (_) =>
-    bind(identifier, (name) =>
-      bind(many(whitespace), (_) =>
-        bind(char(":"), (_) =>
-          bind(many(whitespace), (_) =>
-            bind(type, (typ) =>
-              bind(spaces, (_) =>
-                bind(char("="), (_) =>
-                  bind(spaces, (_) =>
-                    bind(term, (tm) => pure(Def(name, tm, typ)))
+  // FIXME: This doesn't actually work because `either` will just skip past this
+  // and try the next parser.
+  orFail(
+    "failed to parse function definition",
+    bind(many1(whitespace), (_) =>
+      bind(identifier, (name) =>
+        bind(many(whitespace), (_) =>
+          bind(char(":"), (_) =>
+            bind(many(whitespace), (_) =>
+              bind(type, (typ) =>
+                bind(spaces, (_) =>
+                  bind(char("="), (_) =>
+                    bind(spaces, (_) =>
+                      bind(term, (tm) => pure(Def(name, tm, typ)))
+                    )
                   )
                 )
               )
