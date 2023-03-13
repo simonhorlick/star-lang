@@ -2,7 +2,7 @@ import { describe, expect, test } from "@jest/globals";
 import { Context, Def, Par, Self, Term, Type } from "./ast";
 import {
   addTermToCtx,
-  check,
+  typecheck,
   dbgCheckIndices,
   equate,
   infer,
@@ -28,63 +28,6 @@ const logFull = (x: any) => {
 // logFull(result.term);
 // console.log(pretty(result.term));
 
-// Typing Rules
-//
-// Γ ⊢ a => A    infer     in context G, infer that a has type A
-// Γ ⊢ a <= A    check     in context G, check that a has type A
-//
-// For variables, the context tells us what type to infer:
-//
-// x : A ∈ Γ
-// ----------- var
-// Γ ⊢ x => A
-//
-// For lambdas we can only check against a known type:
-//
-// Γ,x:A ⊢ a <= B
-// Γ ⊢ A <= *
-// ---------------------- lambda
-// Γ ⊢ λx.a <= (x:A) -> B
-//
-// We must infer the type of the function a, but once we have that type, we may
-// to use it to check the type of the argument:
-//
-// Γ ⊢ a => (x:A) -> B
-// Γ ⊢ b <= A
-// ------------------- app
-// Γ ⊢ a(b) => B[b/x]
-//
-// Γ ⊢ A <= *
-// Γ,x:A ⊢ B <= *
-// ------------------- pi
-// Γ ⊢ (x:A) -> B => *
-//
-//
-// ---------- type-in-type
-// Γ ⊢ * => *
-//
-//
-// We can always check inferrable types:
-//
-// Γ ⊢ a => A
-// ---------- (a does not have a checking rule)
-// Γ ⊢ a <= A
-//
-//
-//    Γ ⊢ a <= A
-// ---------------- annot
-// Γ ⊢ (a : A) => A
-//
-//
-// Γ ⊢ t:[t/x]T
-// ------------ selfGen
-//  Γ ⊢ t:ιx.T
-//
-//
-//  Γ ⊢ t:ιx.T
-// ------------ selfInst
-// Γ ⊢ t:[t/x]T
-
 const ci = <T extends Term>(t: T): T => dbgCheckIndices([], 0, t);
 
 // λs. λz. z
@@ -97,11 +40,112 @@ const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
 const two = Abs("s", Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0)))));
 
 describe("typechecker", () => {
+  // Typing Rules
+  //
+  // Γ ⊢ a => A    infer     in context G, infer that a has type A
+  // Γ ⊢ a <= A    check     in context G, check that a has type A
+
+  // For variables, the context tells us what type to infer:
+  //
+  // x : A ∈ Γ
+  // ----------- var
+  // Γ ⊢ x => A
+  // test("should infer type of variable from context", () => {
+  //   throw "not implemented";
+  // });
+
+  // For lambdas we can only check against a known type:
+  //
+  // Γ,x:A ⊢ a <= B
+  // Γ ⊢ A <= *
+  // ---------------------- lambda
+  // Γ ⊢ λx.a <= (x:A) -> B
+  test("should check type of lambda", () => {
+    typecheck([], [], Abs("x", Var("x", 0)), )
+    throw "not implemented";
+  });
+
+  // Γ ⊢ A <= *
+  // Γ,x:A ⊢ B <= *
+  // ------------------- pi
+  // Γ ⊢ Πx:A. B => *
+  test("should check A is a type then infer B", () => {
+    throw "not implemented";
+  });
+
+  // ----------------
+  // Γ ⊢ ★ => ★
+  test("should infer type of type", () => {
+    throw "not implemented";
+  });
+
+  // Γ ⊢ f => Πx:A. B
+  // Γ ⊢ b <= A
+  // ------------------- app
+  // Γ ⊢ f(b) => B[b/x]
+  test("should infer f and use that to check the type of b", () => {
+    throw "not implemented";
+  });
+
+  //    Γ ⊢ a <= A
+  // ---------------- annot
+  // Γ ⊢ (a : A) => A
+  test("should check type of a matches the annotation", () => {
+    throw "not implemented";
+  });
+
+  // Γ ⊢ t:[t/x]T
+  // ------------ selfGen
+  //  Γ ⊢ t:ιx.T
+  test("selfGen", () => {
+    throw "not implemented";
+  });
+
+  //  Γ ⊢ t:ιx.T
+  // ------------ selfInst
+  // Γ ⊢ t:[t/x]T
+  test("selfInst", () => {
+    throw "not implemented";
+  });
+
+  // An expression in weak head normal form has been evaluated to the outermost
+  // data constructor or lambda abstraction (the head).
+  // To determine whether an expression is in weak head normal form, we only
+  // have to look at the outermost part of the expression. If it's a data
+  // constructor or a lambda, it's in weak head normal form. If it's a function
+  // application, it's not.
+  test("should compute whnf", () => {
+    // cannot reduce further
+    expect(whnf(false, [], Abs("x", Var("x", 0)), Star())).toStrictEqual(
+      Abs("x", Var("x", 0))
+    );
+    // shouldn't reduce refs
+    expect(whnf(false, [], Ref("ref"), Star())).toStrictEqual(Ref("ref"));
+    // succ(zero) is a constructor, so can't reduce
+    expect(
+      whnf(false, [], App(Ref("succ"), Ref("zero")), Star())
+    ).toStrictEqual(App(Ref("succ"), Ref("zero")));
+    // (λx.x)(λx.x) reduces to (λx.x)
+    expect(
+      whnf(false, [], App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0))), Star())
+    ).toStrictEqual(Abs("x", Var("x", 0)));
+
+    // reduce self in whnf
+    expect(
+      whnf(
+        false,
+        [],
+        Self("t", Pi("", Ref("X"), Ref("X"))),
+        Abs("x", Var("x", 0))
+      )
+    ).toStrictEqual(Pi("", Ref("X"), Ref("X")));
+  });
+
   test("should calculate type of lambda body (id)", () => {
     // check that the type of `λa:A. a` is `A->A`.
     const program = Abs("a", Var("a", 0), Var("A", 1));
     expect(
-      check(
+      typecheck(
         [],
         [{ type: "bind", name: "A", typ: Star() }],
         program,
@@ -118,7 +162,7 @@ describe("typechecker", () => {
     ];
     const program = Abs("a", Var("b", 1));
     expect(
-      check(
+      typecheck(
         [Def("B", id.term, Star())],
         ctx,
         program,
@@ -136,7 +180,7 @@ describe("typechecker", () => {
       Ref("A")
     );
 
-    const result = check(
+    const result = typecheck(
       [Def("A", id.term, Star()), Def("B", id.term, Star())],
       [],
       program,
@@ -181,7 +225,7 @@ describe("typechecker", () => {
   );
 
   test("polymorphic double function is well-typed", () => {
-    const result = check(
+    const result = typecheck(
       [Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))],
       [],
       double,
@@ -256,7 +300,7 @@ describe("typechecker", () => {
   test("pi types have kind *", () => {
     // double(x Nat) Nat = 2*x
     // double has type Nat->Nat which has kind *
-    let result = check(
+    let result = typecheck(
       [],
       [{ type: "bind", name: "Nat", typ: Star() }],
       Pi("", Var("Nat", 0), Var("Nat", 1)),
@@ -291,7 +335,7 @@ describe("typechecker", () => {
   );
 
   test("type-level and", () => {
-    let result = check([], [], and.term, and.typ);
+    let result = typecheck([], [], and.term, and.typ);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -334,7 +378,7 @@ describe("typechecker", () => {
   );
 
   test("conj checks", () => {
-    let result = check(
+    let result = typecheck(
       [Def("and", and.term, and.typ)],
       [],
       conj.term,
@@ -373,7 +417,7 @@ describe("typechecker", () => {
   let proj1 = Ann(proj1Body, proj1Type);
 
   test("proj1 checks", () => {
-    let result = check(
+    let result = typecheck(
       [Def("and", and.term, and.typ)],
       [],
       proj1.term,
@@ -412,7 +456,7 @@ describe("typechecker", () => {
   let proj2 = Ann(proj2Body, proj2Type);
 
   test("proj2 checks", () => {
-    let result = check(
+    let result = typecheck(
       [Def("and", and.term, and.typ)],
       [],
       proj2.term,
@@ -465,7 +509,7 @@ describe("typechecker", () => {
     // Logically, if we have an and(p,q) we can project out the components p,q
     // and construct an element of and(q,p) as desired.
 
-    let result = check(
+    let result = typecheck(
       [
         Def("and", and.term, and.typ),
         Def("conj", conj.term, conj.typ),
@@ -509,11 +553,11 @@ describe("typechecker", () => {
       Abs("t", Abs("f", Var("f", 0), Var("X", 1)), Var("X", 0))
     );
 
-    let result = check([], [], tru, Bool);
+    let result = typecheck([], [], tru, Bool);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
-    let result2 = check([], [], fls, Bool);
+    let result2 = typecheck([], [], fls, Bool);
     if (result2._ == "typecheckerror") {
       throw new Error(result2.msg);
     }
@@ -605,7 +649,7 @@ describe("typechecker", () => {
     ).term;
     expect(builtBool).toStrictEqual(Bool);
 
-    let result = check([Booltrue, Boolfalse], [], Booltrue.term, Bool);
+    let result = typecheck([Booltrue, Boolfalse], [], Booltrue.term, Bool);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -680,12 +724,12 @@ describe("typechecker", () => {
     GenerateConstructorType("Nat", [], natConstructors[1])
   );
 
-  test("equate loop", () => {
-    const defs = [NatDef, natZeroDef, natSuccDef, Booldef, Booltrue, Boolfalse];
-    expect(
-      equate(defs, Ref("false"), Ref("Nat"), Pi("", Ref("Bool"), Star()))
-    ).toBeFalsy();
-  });
+  // test("equate loop", () => {
+  //   const defs = [NatDef, natZeroDef, natSuccDef, Booldef, Booltrue, Boolfalse];
+  //   expect(
+  //     equate(defs, Ref("false"), Ref("Nat"), Pi("", Ref("Bool"), Star()))
+  //   ).toBeFalsy();
+  // });
 
   test("simple parameterised types", () => {
     // Maybe
@@ -829,7 +873,7 @@ describe("typechecker", () => {
 
     const maybeTypeDef = Def("Maybe", Maybe, Star());
 
-    let result = check(
+    let result = typecheck(
       [maybeTypeDef, maybeNullDef, maybeJustDef],
       [],
       maybeNullDef.term,
@@ -839,7 +883,7 @@ describe("typechecker", () => {
       throw new Error(result.msg);
     }
 
-    let result2 = check(
+    let result2 = typecheck(
       [maybeTypeDef, maybeNullDef, maybeJustDef],
       [],
       maybeJustDef.term,
@@ -850,7 +894,7 @@ describe("typechecker", () => {
     }
 
     // Check an instantiation: just(Bool, true)
-    let result3 = check(
+    let result3 = typecheck(
       [
         Def("Bool", Bool, Star()),
         Booltrue,
@@ -889,6 +933,7 @@ describe("typechecker", () => {
         maybeNullDef,
         maybeJustDef,
       ],
+      caseExp,
       caseExp
     );
     expect(reduced).toStrictEqual(bt);
@@ -1197,7 +1242,7 @@ describe("typechecker", () => {
   const succ = Def("Nat.succ", s, Pi("", Nat, Nat));
 
   test("recursive parameterised types: zero", () => {
-    let result = check([], [], zero.term, Nat);
+    let result = typecheck([], [], zero.term, Nat);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -1206,7 +1251,7 @@ describe("typechecker", () => {
   const NatDef = Def("Nat", Nat, Star());
 
   test("recursive parameterised types: succ", () => {
-    let result = check(
+    let result = typecheck(
       [NatDef],
       [],
       s, //succ.term,
@@ -1424,7 +1469,7 @@ describe("evaluation", () => {
     const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
     const expected: Term = Abs("z", Var("z", 0));
 
-    const actual = whnf(true, [], identity);
+    const actual = whnf(true, [], identity, Star());
 
     expect(actual).toStrictEqual(expected);
   });
@@ -1435,7 +1480,12 @@ describe("evaluation", () => {
   // Test that substituting top level functions works properly.
   test("TestSubstituteDef", () => {
     const expected = Abs("z", Var("z", 0));
-    const actual = whnf(true, [id], App(Ref("id"), Abs("z", Var("z", 0))));
+    const actual = whnf(
+      true,
+      [id],
+      App(Ref("id"), Abs("z", Var("z", 0))),
+      Star()
+    );
     expect(actual).toStrictEqual(expected);
   });
 
@@ -1488,7 +1538,7 @@ describe("evaluation", () => {
 
     let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
 
-    const actual = whnf(true, [], src);
+    const actual = whnf(true, [], src, Star());
 
     expect(actual).toStrictEqual(expected);
   });

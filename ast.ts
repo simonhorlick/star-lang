@@ -63,7 +63,7 @@ export type Abs = {
   body: Term; // the body of the abstraction
 };
 
-export const Abs = (name: string, body: Term, argtype?: Term): Abs => ({
+export const Abs = (name: string, body: Term): Abs => ({
   _: "lam",
   name: name,
   body: body,
@@ -179,6 +179,9 @@ export type Term =
   | Case
   | Origin;
 export type Type = Term;
+
+// Normal is a hint to the user that the term is in weak head normal form.
+export type Normal = Term;
 
 export type Argument = {
   name: string;
