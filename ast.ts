@@ -380,25 +380,15 @@ export const type: Parser<Type> = any4(
   block(reference)
 );
 
-// // abstraction parses a lambda abstraction `λx:X. t`.
+// abstraction parses a lambda abstraction `λx. t`.
 export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
   bind(char("λ"), (_) =>
     bind(optional(spaces), (_) =>
       bind(identifier, (name) =>
         bind(optional(spaces), (_) =>
-          bind(char(":"), (_) =>
-            bind(optional(spaces), (_) =>
-              bind(type, (typ) =>
-                bind(optional(spaces), () =>
-                  bind(char("."), () =>
-                    bind(optional(spaces), () =>
-                      bind(lazy(term), (body) =>
-                        pure(Abs(name, body /*, typ*/))
-                      )
-                    )
-                  )
-                )
-              )
+          bind(char("."), () =>
+            bind(optional(spaces), () =>
+              bind(lazy(term), (body) => pure(Abs(name, body)))
             )
           )
         )
