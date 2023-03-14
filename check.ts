@@ -329,6 +329,10 @@ export const typecheck = (
   originStart: number = 0,
   originEnd: number = 0
 ): Result | TypecheckError => {
+  if (tm._ == "orig") {
+    return typecheck(defs, ctx, tm.child, ty, tm.start, tm.end);
+  }
+
   const tmnf = whnf(true, defs, tm, undefined);
   const tynf = whnf(true, defs, ty, tm);
   if (tynf._ == "typecheckerror") {
