@@ -275,7 +275,7 @@ export type File = {
 export const identifier: Parser<string> = orFail(
   "expected identifier",
   bind(alpha, (a) =>
-    bind(many(any(alpha, digit, oneOf("_"))), (b) =>
+    bind(many(any(alpha, digit, oneOf("_."))), (b) =>
       pure(a + (b?.join("") ?? ""))
     )
   )
@@ -380,18 +380,13 @@ export const type: Parser<Type> = any4(
   block(reference)
 );
 
-// abstraction parses a lambda abstraction `λx. t`.
+// abstraction parses a lambda abstraction `λx t`. The binder x is separated
+// from the body by spaces.
 export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
   bind(char("λ"), (_) =>
     bind(optional(spaces), (_) =>
       bind(identifier, (name) =>
-        bind(optional(spaces), (_) =>
-          bind(char("."), () =>
-            bind(optional(spaces), () =>
-              bind(lazy(term), (body) => pure(Abs(name, body)))
-            )
-          )
-        )
+        bind(spaces, (_) => bind(lazy(term), (body) => pure(Abs(name, body))))
       )
     )
   );
