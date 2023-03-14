@@ -2,6 +2,9 @@ import { describe, expect, test } from "@jest/globals";
 import { Abs, App, Ref, Term, Var } from "./ast";
 import { erase } from "./evaluation";
 
+describe("", () => {
+  test("", () => {});
+});
 // describe("debruijin", () => {
 //   test("TestComputeDebruijinIndicesSingleBinder", () => {
 //     // Γ = [t]; λx.t

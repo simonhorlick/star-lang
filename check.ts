@@ -38,9 +38,11 @@ export const addTermToCtx = (
   type: Type
 ): Context => {
   if (name != "" && name != "P" && ctxContains(name, ctx)) {
-    throw `variable ${name} shadows existing variable; context is ${printCtx(
-      ctx
-    )}`;
+    console.log(
+      `warning: variable ${name} shadows existing variable; context is ${printCtx(
+        ctx
+      )}`
+    );
   }
   return [...ctx, { type: "bind", name: name, typ: type }];
 };
@@ -84,13 +86,13 @@ export const TypecheckError = (
   end: end,
 });
 
-interface Result {
+export interface Result {
   _: "result";
   term: Term;
   type: Type;
 }
 
-const Result = (term: Term, type: Term): Result => ({
+export const Result = (term: Term, type: Term): Result => ({
   _: "result",
   term: term,
   type: type,
@@ -111,11 +113,11 @@ export const infer = (
       // Γ,x:A ⊢ B <= ★
       // ----------------
       // Γ ⊢ Πx:A. B => ★
-      let elA = typecheck(defs, ctx, term.from, Star(), originStart, originEnd);
+      let elA = check(defs, ctx, term.from, Star(), originStart, originEnd);
       if (elA._ == "typecheckerror") {
         return elA;
       }
-      let elB = typecheck(
+      let elB = check(
         defs,
         addTermToCtx(ctx, term.name, term.from),
         term.to,
@@ -172,6 +174,13 @@ export const infer = (
       // Substitute the argument in the pi type with the elaborated argument to
       // the app inside of tyB.
       let typ = substTop(et2, tyB, nf.name);
+
+      console.log(
+        `Γ ⊢ ${pretty(f)} => ${pretty(fType.type)}
+Γ ⊢ ${pretty(b)} <= ${pretty(tyA)}
+------------------- app
+Γ ⊢ ${pretty(term)} => ${pretty(typ)}`
+      );
 
       return Result(App(fTypeElaborated, et2), typ);
     }
@@ -240,6 +249,7 @@ const check = (
     return typecheck(defs, ctx, term, type.term, originStart, originEnd);
   }
 
+  console.log(`${" ".repeat(ctx.length)} ctx ${printCtx(ctx)}`);
   console.log(
     `${" ".repeat(ctx.length)} checking ${pretty(term)} has type ${pretty(
       type
@@ -306,6 +316,7 @@ const check = (
       originEnd
     );
   }
+
   return Result(term, ty1.type);
 };
 
@@ -318,7 +329,15 @@ export const typecheck = (
   originStart: number = 0,
   originEnd: number = 0
 ): Result | TypecheckError => {
-  return check(defs, ctx, tm, whnf(true, defs, ty, tm), originStart, originEnd);
+  const tmnf = whnf(true, defs, tm, undefined);
+  const tynf = whnf(true, defs, ty, tm);
+  if (tynf._ == "typecheckerror") {
+    return tynf;
+  }
+  if (tmnf._ == "typecheckerror") {
+    return tmnf;
+  }
+  return check(defs, ctx, tmnf, tynf, originStart, originEnd);
 };
 
 // Shifting renumbers the indices of the free variables in a term.
@@ -423,8 +442,13 @@ export const equate = (
     return true;
   }
 
-  let n1 = whnf(true, defs, ty1, term);
-  let n2 = whnf(true, defs, ty2, term);
+  const bothref = ty1._ == "ref" && ty2._ == "ref";
+
+  let n1 = whnf(!bothref, defs, ty1, term);
+  let n2 = whnf(!bothref, defs, ty2, term);
+  if (n1._ == "typecheckerror" || n2._ == "typecheckerror") return false;
+
+  console.log(`${" ".repeat(depth)}equate ${pretty(n1)} == ${pretty(n2)}`);
 
   if (n1._ == "app" && n2._ == "app") {
     let a1 = n1.left;
@@ -460,25 +484,30 @@ export const whnf = (
   unfold: boolean,
   defs: Def[],
   t: Term,
-  selfTerm: Term
-): Normal => {
+  selfTerm: Term | undefined
+): Normal | TypecheckError => {
   switch (t._) {
     case "ref":
       if (!unfold) return t;
       const match = defs.filter((d) => d.name == t.name);
       if (match.length == 0) {
-        throw `whnf: reference not found: ${t.name}`;
+        return TypecheckError(`whnf: reference not found: ${t.name}`, 0, 0);
       }
       return whnf(false, defs, match[0].term, selfTerm);
     case "app": {
-      let t1 = t.left;
-      let t2 = t.right;
-      let nf = whnf(unfold, defs, t1, selfTerm);
-      if (nf._ == "lam") {
-        let body = nf.body;
-        return whnf(unfold, defs, substTop(t2, body, nf.name), selfTerm);
+      let nf = whnf(unfold, defs, t.left, selfTerm);
+      if (nf._ == "typecheckerror") {
+        return nf;
       }
-      return App(nf, t2);
+      if (nf._ == "lam") {
+        return whnf(
+          unfold,
+          defs,
+          substTop(t.right, nf.body, nf.name),
+          selfTerm
+        );
+      }
+      return App(nf, t.right);
     }
     case "ann":
       return whnf(unfold, defs, t.term, selfTerm);
@@ -486,6 +515,14 @@ export const whnf = (
       throw "whnf: unexpected Par";
     case "self":
       // eliminate self
+      if (selfTerm == undefined) {
+        // This can happen if we're checking a type definition, i.e. Nat:*.
+        const nf = whnf(unfold, defs, t.body, selfTerm);
+        if (nf._ == "typecheckerror") {
+          return nf;
+        }
+        return Self(t.name, nf);
+      }
       return whnf(unfold, defs, substTop(selfTerm, t.body, t.name), selfTerm);
     case "var":
     case "lam":
@@ -508,6 +545,9 @@ function ensurePi(
   originEnd: number
 ): Pi | TypecheckError {
   let nf = whnf(true, defs, ty, tm);
+  if (nf._ == "typecheckerror") {
+    return nf;
+  }
   if (nf._ != "pi") {
     return TypecheckError(
       `expected pi type on the left of app; got ${nf._}: ${pretty(nf)}`,

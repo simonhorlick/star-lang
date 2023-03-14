@@ -25,6 +25,7 @@ import {
   Origin,
 } from "./ast";
 import { addTermToCtx, shift } from "./check";
+import { pretty } from "./pretty";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 
@@ -157,10 +158,7 @@ export const buildType = (
   return Def(
     name,
     processPars(
-      parameters.reduce<Term>(
-        (acc, paramN) => Abs(paramN.name, acc, paramN.type),
-        self
-      ),
+      parameters.reduce<Term>((acc, paramN) => Abs(paramN.name, acc), self),
       []
     ),
     Star()
@@ -173,21 +171,26 @@ export const processADTs = (f: File): File => {
 
 // TODO: Re-think this. There's a lot of places where we're doing thing kind of
 // thing.
-const desugarTerm = (t: Term, ann: Term | undefined, ctx: Context): Term => {
+const desugarTerm = (
+  t: Term,
+  ann: Term | undefined,
+  adts: ADT[],
+  ctx: Context
+): Term => {
   switch (t._) {
     case "ann":
-      const desugaredType = desugarTerm(t.typ, undefined, ctx);
-      return Ann(desugarTerm(t.term, desugaredType, ctx), desugaredType);
+      const desugaredType = desugarTerm(t.typ, undefined, adts, ctx);
+      return Ann(desugarTerm(t.term, desugaredType, adts, ctx), desugaredType);
     case "app":
       return App(
-        desugarTerm(t.left, undefined, ctx),
-        desugarTerm(t.right, undefined, ctx)
+        desugarTerm(t.left, undefined, adts, ctx),
+        desugarTerm(t.right, undefined, adts, ctx)
       );
     case "lam":
       // The type in this context is not important so just set it as *.
       return Abs(
         t.name,
-        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
       );
     case "par":
       for (let i = 0; i < ctx.length; i++) {
@@ -200,13 +203,13 @@ const desugarTerm = (t: Term, ann: Term | undefined, ctx: Context): Term => {
     case "pi":
       return Pi(
         t.name,
-        desugarTerm(t.from, undefined, ctx),
-        desugarTerm(t.to, undefined, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.from, undefined, adts, ctx),
+        desugarTerm(t.to, undefined, adts, addTermToCtx(ctx, t.name, Star()))
       );
     case "self":
       return Self(
         t.name,
-        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
       );
     case "case":
       //  case x of
@@ -214,14 +217,46 @@ const desugarTerm = (t: Term, ann: Term | undefined, ctx: Context): Term => {
       //    c2 -> t2
       // desugars to:
       //  x(() MotiveType, t1, t2)
+      //
+      // When we desugar a case we need to create abstractions for all of the
+      // arguments in each branch, for example, assume x is a Nat:
+      // case x of
+      //  zero -> true
+      //  succ -> false
+      // we need to desugar the second branch to be
+      //  Abs("x.n", Ref("false"))
       if (ann == undefined) {
         throw "case needs annotation";
       }
       const P = Abs("", shift(1, 0, ann)); // P just returns the expected type
-      const desugared = t.branches.reduce(
-        (acc, curr) => App(acc, desugarTerm(curr.term, undefined, ctx)),
-        App(desugarTerm(t.name, undefined, ctx), P)
-      );
+      const desugared = t.branches.reduce((acc, curr) => {
+        const branchTerm = desugarTerm(curr.term, undefined, adts, ctx);
+        // Make any constructor arguments available using dot notation.
+
+        // FIXME: We need to infer the type of x; this *must* be done as part of
+        // the typechecking phase, rather than here.
+        // This is a horrible hack.
+        var constructor: Constructor | undefined = undefined;
+        for (const adt of adts) {
+          for (const con of adt.constructors) {
+            if (con.name == curr.constructor) {
+              constructor = con;
+            }
+          }
+        }
+        if (constructor == undefined) {
+          throw `constructor not found: ${curr.constructor}`;
+        }
+
+        // FIXME: Ensure all branches are covered.
+
+        const absArgs = constructor.args.reduce(
+          (acc2, curr2) => Abs(`${pretty(t.name)}.${curr2.name}`, acc2),
+          branchTerm
+        );
+
+        return App(acc, absArgs);
+      }, App(desugarTerm(t.name, undefined, adts, ctx), P));
 
       return desugared;
     case "ref":
@@ -238,15 +273,15 @@ const desugarTerm = (t: Term, ann: Term | undefined, ctx: Context): Term => {
     case "var":
       return t;
     case "orig":
-      return Origin(t.start, t.end, desugarTerm(t.child, ann, ctx));
+      return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
   }
 };
 
-export const desugar = (def: Def): Def => {
+export const desugar = (def: Def, adts: ADT[]): Def => {
   return Def(
     def.name,
-    desugarTerm(def.term, undefined, []),
-    desugarTerm(def.typ, undefined, [])
+    desugarTerm(def.term, undefined, adts, []),
+    desugarTerm(def.typ, undefined, adts, [])
   );
 };
 

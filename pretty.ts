@@ -1,12 +1,12 @@
 import { Context, Term } from "./ast";
 import * as Erased from "./erased";
 
-export function printCtx(ctx: Context, indices: boolean = true): string {
-  return ctx.map((v) => `\t${v.name}:${pretty(v.typ, indices)}`).join(",\n");
+export function printCtx(ctx: Context, indices: boolean = false): string {
+  return ctx.map((v) => `${v.name}:${pretty(v.typ, indices)}`).join(",");
 }
 
 // pretty print a term
-export function pretty(term: Term, indices: boolean = true): string {
+export function pretty(term: Term, indices: boolean = false): string {
   switch (term._) {
     case "lam":
       return (
