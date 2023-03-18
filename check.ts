@@ -15,8 +15,11 @@ import {
   Branch,
   Origin,
   Normal,
+  Constructor,
+  ADT,
 } from "./ast";
 import { pretty, printCtx } from "./pretty";
+import { desugarTerm } from "./process";
 
 var _ = require("lodash");
 
@@ -102,6 +105,7 @@ export const Result = (term: Term, type: Term): Result => ({
 // whose type can always be checked.
 export const infer = (
   defs: Def[],
+  adts: ADT[],
   ctx: Context,
   term: Term,
   originStart: number = 0,
@@ -113,12 +117,21 @@ export const infer = (
       // Γ,x:A ⊢ B <= ★
       // ----------------
       // Γ ⊢ Πx:A. B => ★
-      let elA = check(defs, ctx, term.from, Star(), originStart, originEnd);
+      let elA = check(
+        defs,
+        adts,
+        ctx,
+        term.from,
+        Star(),
+        originStart,
+        originEnd
+      );
       if (elA._ == "typecheckerror") {
         return elA;
       }
       let elB = check(
         defs,
+        adts,
         addTermToCtx(ctx, term.name, term.from),
         term.to,
         Star(),
@@ -155,7 +168,7 @@ export const infer = (
 
       let f = term.left;
       let b = term.right;
-      let fType = infer(defs, ctx, f, originStart, originEnd);
+      let fType = infer(defs, adts, ctx, f, originStart, originEnd);
       if (fType._ == "typecheckerror") {
         return fType;
       }
@@ -166,7 +179,7 @@ export const infer = (
       }
       let tyA = nf.from;
       let tyB = nf.to;
-      let arg = typecheck(defs, ctx, b, tyA, originStart, originEnd);
+      let arg = typecheck(defs, adts, ctx, b, tyA, originStart, originEnd);
       if (arg._ == "typecheckerror") {
         return arg;
       }
@@ -185,13 +198,22 @@ export const infer = (
       return Result(App(fTypeElaborated, et2), typ);
     }
     case "ann": {
-      let typ = check(defs, ctx, term.typ, Star(), originStart, originEnd);
+      let typ = check(
+        defs,
+        adts,
+        ctx,
+        term.typ,
+        Star(),
+        originStart,
+        originEnd
+      );
       if (typ._ == "typecheckerror") {
         return typ;
       }
       // check the annotated type matches the computed type.
       let ty = typecheck(
         defs,
+        adts,
         ctx,
         term.term,
         term.typ,
@@ -231,25 +253,22 @@ export const infer = (
 // have been filled in. The type argument must be in whnf in checking mode.
 const check = (
   defs: Def[],
+  adts: ADT[],
   ctx: Context,
   term: Term,
   type: Normal,
   originStart: number,
   originEnd: number
 ): Result | TypecheckError => {
-  if (term._ == "case") {
-    throw "unexpected case";
-  }
-
   if (term._ == "orig") {
-    return check(defs, ctx, term.child, type, term.start, term.end);
+    return check(defs, adts, ctx, term.child, type, term.start, term.end);
   }
 
   if (type._ == "ann") {
-    return typecheck(defs, ctx, term, type.term, originStart, originEnd);
+    return typecheck(defs, adts, ctx, term, type.term, originStart, originEnd);
   }
 
-  console.log(`${" ".repeat(ctx.length)} ctx ${printCtx(ctx)}`);
+  console.log(`${" ".repeat(ctx.length)} ctx=[${printCtx(ctx)}]`);
   console.log(
     `${" ".repeat(ctx.length)} checking ${pretty(term)} has type ${pretty(
       type
@@ -260,6 +279,108 @@ const check = (
   // existing variable.
 
   switch (term._) {
+    case "case": {
+      // the type of an App is
+      // Γ ⊢ f => Πx:A. B
+      // Γ ⊢ b <= A
+      // ------------------- app
+      // Γ ⊢ f(b) => B[b/x]
+      //
+      // We should be able to construct this App node and infer it's type then
+      // check the type is equivalent. But what's P? Can we take the expected
+      // type and use it?
+      //
+      //  case x of
+      //    c1 -> t1
+      //    c2 -> t2
+      // desugars to:
+      //  x(() MotiveType, t1, t2)
+      //
+      // When we desugar a case we need to create abstractions for all of the
+      // arguments in each branch, for example, assume x is a Nat:
+      // case x of
+      //  zero -> true
+      //  succ -> false
+      // we need to desugar the second branch to be
+      //  Abs("x.n", Ref("false"))
+
+      const P = Abs("", shift(1, 0, type)); // P just returns the expected type
+      const branches = term.branches.reduce<Term | TypecheckError>(
+        (acc: Term | TypecheckError, curr) => {
+          const branchTerm = curr.term;
+
+          if (acc._ == "typecheckerror") {
+            return acc;
+          }
+
+          // Make any constructor arguments available using dot notation.
+
+          // We need to infer the type of x; this *must* be done as part of
+          // the typechecking phase.
+          const xTyp = infer(
+            defs,
+            adts,
+            ctx,
+            term.name,
+            originStart,
+            originEnd
+          );
+          if (xTyp._ == "typecheckerror") {
+            return xTyp;
+          }
+          const ref = xTyp.type;
+          if (ref._ != "ref") {
+            return TypecheckError(
+              `type of argument to case should be a reference; got ${ref._}`,
+              originStart,
+              originEnd
+            );
+          }
+
+          // Now look up the constructors for the type.
+          const adtDef = adts.filter((x) => x.name == ref.name);
+          if (adtDef.length != 1) {
+            return TypecheckError(
+              `type not found: ${ref.name}`,
+              originStart,
+              originEnd
+            );
+          }
+
+          var constructor: Constructor | undefined = undefined;
+          for (const con of adtDef[0].constructors) {
+            if (con.name == curr.constructor) {
+              constructor = con;
+            }
+          }
+          if (constructor == undefined) {
+            throw `constructor not found: ${curr.constructor}`;
+          }
+
+          // FIXME: Ensure all branches are covered.
+
+          const absArgs = constructor.args.reduce(
+            (acc2, curr2) => Abs(`${pretty(term.name)}.${curr2.name}`, acc2),
+            shift(constructor.args.length, 0, branchTerm)
+          );
+
+          // desugarTerm ensures any Refs that reference constructor arguments
+          // are converted into Vars.
+          return App(acc, absArgs);
+        },
+        App(term.name, P) as Term
+      );
+
+      if (branches._ == "typecheckerror") {
+        return branches;
+      }
+
+      const desugared = desugarTerm(branches, undefined, adts, ctx);
+
+      console.log(printCtx(ctx) + " " + pretty(desugared, true));
+
+      return check(defs, adts, ctx, desugared, type, originStart, originEnd);
+    }
     case "self": {
       // What's the type of a self-type?
       if (type._ != "star") {
@@ -275,21 +396,19 @@ const check = (
       // Γ,x:A ⊢ a <= B
       // ----------------
       // Γ ⊢ λx.a <= Πx:A. B
-      if (type._ != "pi") {
-        return TypecheckError(
-          `expected pi type; got ${type._}`,
-          originStart,
-          originEnd
-        );
+      const pi = ensurePi(defs, term, type, originStart, originEnd);
+      if (pi._ == "typecheckerror") {
+        return pi;
       }
 
       // we add the bound variable x:A to the context (assuming that x has type
       // A) then using that context we check the body has type B.
       let ebody = typecheck(
         defs,
-        addTermToCtx(ctx, term.name, shift(1, 0, type.from)),
+        adts,
+        addTermToCtx(ctx, term.name, shift(1, 0, pi.from)),
         term.body,
-        type.to,
+        pi.to,
         originStart,
         originEnd
       );
@@ -301,7 +420,7 @@ const check = (
 
   // If there's a type, and one of the other rules doesn't apply, then check
   // the type matches inferred type.
-  let ty1 = infer(defs, ctx, term, originStart, originEnd);
+  let ty1 = infer(defs, adts, ctx, term, originStart, originEnd);
   if (ty1._ == "typecheckerror") {
     return ty1;
   }
@@ -317,12 +436,13 @@ const check = (
     );
   }
 
-  return Result(term, ty1.type);
+  return Result(ty1.term, ty1.type);
 };
 
 // check that the given term has the expected type.
 export const typecheck = (
   defs: Def[],
+  adts: ADT[],
   ctx: Context,
   tm: Term,
   ty: Term,
@@ -330,18 +450,23 @@ export const typecheck = (
   originEnd: number = 0
 ): Result | TypecheckError => {
   if (tm._ == "orig") {
-    return typecheck(defs, ctx, tm.child, ty, tm.start, tm.end);
+    return typecheck(defs, adts, ctx, tm.child, ty, tm.start, tm.end);
   }
 
-  const tmnf = whnf(true, defs, tm, undefined);
-  const tynf = whnf(true, defs, ty, tm);
+  console.log(`${" ".repeat(ctx.length)} ctx=[${printCtx(ctx)}]`);
+  console.log(
+    `${" ".repeat(ctx.length)} typecheck ${pretty(tm)} has type ${pretty(ty)}`
+  );
+
+  const tmnf = tm; //whnf(true, defs, tm, undefined);
+  const tynf = whnf(false, defs, ty, tm);
   if (tynf._ == "typecheckerror") {
     return tynf;
   }
-  if (tmnf._ == "typecheckerror") {
-    return tmnf;
-  }
-  return check(defs, ctx, tmnf, tynf, originStart, originEnd);
+  // if (tmnf._ == "typecheckerror") {
+  //   return tmnf;
+  // }
+  return check(defs, adts, ctx, tmnf, tynf, originStart, originEnd);
 };
 
 // Shifting renumbers the indices of the free variables in a term.
@@ -368,6 +493,10 @@ export function shift(d: number, c: number, t: Term): Term {
     case "orig":
       return shift(d, c, t.child);
     case "case":
+      return Case(
+        shift(d, c, t.name),
+        t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term))) // TODO: Is this correct? Do we need to shift here?
+      );
       throw "shift: unexpected case";
   }
 }
@@ -534,7 +663,8 @@ export const whnf = (
     case "star":
       return t;
     case "case":
-      throw "whnf: unexpected case";
+      return t;
+    //throw "whnf: unexpected case";
     case "orig": // remove origins
       return whnf(unfold, defs, t.child, selfTerm);
   }

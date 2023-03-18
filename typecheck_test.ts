@@ -82,7 +82,7 @@ describe("typechecker", () => {
   const ty = Pi("", Ref("A"), Ref("A"));
 
   test("lambda: A:* must exist in the defs", () => {
-    const result = typecheck([], [], tm, ty);
+    const result = typecheck([], [], [], tm, ty);
     expect(result).toStrictEqual({
       _: "typecheckerror",
       end: 0,
@@ -94,6 +94,7 @@ describe("typechecker", () => {
   test("lambda: λa.a should have type A→A", () => {
     const result = typecheck(
       [Def("A", Abs("x", Var("x", 0)), Star())],
+      [],
       [],
       tm,
       ty
@@ -192,6 +193,7 @@ describe("typechecker", () => {
     expect(
       typecheck(
         [Def("B", id.term, Star())],
+        [],
         ctx,
         program,
         Pi("", Ref("A"), Ref("B"))
@@ -206,6 +208,7 @@ describe("typechecker", () => {
 
     const result = typecheck(
       [Def("A", id.term, Star()), Def("B", id.term, Star())],
+      [],
       [],
       program,
       Pi("", Ref("A"), Pi("", Pi("", Ref("A"), Ref("B")), Ref("B")))
@@ -247,6 +250,7 @@ describe("typechecker", () => {
     const result = typecheck(
       [Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))],
       [],
+      [],
       double,
       ci(
         Pi(
@@ -272,7 +276,7 @@ describe("typechecker", () => {
       { type: "bind", name: "a", typ: Star() },
     ];
     const program = App(Var("a", 0), Var("b", 1));
-    expect(infer([], ctx, program)).toStrictEqual({
+    expect(infer([], [], ctx, program)).toStrictEqual({
       _: "typecheckerror",
       end: 0,
       msg: "expected pi type on the left of app; got star: ★",
@@ -287,6 +291,7 @@ describe("typechecker", () => {
       Pi("", Var("A", 0), Var("A", 1))
     );
     const result = infer(
+      [],
       [],
       [{ type: "bind", name: "A", typ: Star() }],
       program
@@ -321,6 +326,7 @@ describe("typechecker", () => {
     // double has type Nat->Nat which has kind *
     let result = typecheck(
       [],
+      [],
       [{ type: "bind", name: "Nat", typ: Star() }],
       Pi("", Var("Nat", 0), Var("Nat", 1)),
       Star()
@@ -354,7 +360,7 @@ describe("typechecker", () => {
   );
 
   test("type-level and", () => {
-    let result = typecheck([], [], and.term, and.typ);
+    let result = typecheck([], [], [], and.term, and.typ);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -400,6 +406,7 @@ describe("typechecker", () => {
     let result = typecheck(
       [Def("and", and.term, and.typ)],
       [],
+      [],
       conj.term,
       conj.typ
     );
@@ -439,6 +446,7 @@ describe("typechecker", () => {
     let result = typecheck(
       [Def("and", and.term, and.typ)],
       [],
+      [],
       proj1.term,
       proj1.typ
     );
@@ -477,6 +485,7 @@ describe("typechecker", () => {
   test("proj2 checks", () => {
     let result = typecheck(
       [Def("and", and.term, and.typ)],
+      [],
       [],
       proj2.term,
       proj2.typ
@@ -536,6 +545,7 @@ describe("typechecker", () => {
         Def("proj2", proj2.term, proj2.typ),
       ],
       [],
+      [],
       commBody,
       commType
     );
@@ -566,11 +576,11 @@ describe("typechecker", () => {
     const tru = Abs("X", Abs("t", Abs("f", Var("t", 1))));
     const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
 
-    let result = typecheck([], [], tru, Bool);
+    let result = typecheck([], [], [], tru, Bool);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
-    let result2 = typecheck([], [], fls, Bool);
+    let result2 = typecheck([], [], [], fls, Bool);
     if (result2._ == "typecheckerror") {
       throw new Error(result2.msg);
     }
@@ -662,9 +672,13 @@ describe("typechecker", () => {
     ).term;
     expect(builtBool).toStrictEqual(Bool);
 
-    ensure(typecheck([Booltrue, Boolfalse, Booldef], [], Booltrue.term, Bool));
-    ensure(typecheck([Booltrue, Boolfalse, Booldef], [], Boolfalse.term, Bool));
-    ensure(typecheck([Booltrue, Boolfalse, Booldef], [], Bool, Star()));
+    ensure(
+      typecheck([Booltrue, Boolfalse, Booldef], [], [], Booltrue.term, Bool)
+    );
+    ensure(
+      typecheck([Booltrue, Boolfalse, Booldef], [], [], Boolfalse.term, Bool)
+    );
+    ensure(typecheck([Booltrue, Boolfalse, Booldef], [], [], Bool, Star()));
   });
 
   const natConstructors = [
@@ -743,18 +757,18 @@ describe("typechecker", () => {
     const onewhnf = te(whnf(false, defs, one, one));
     console.log(`one is ${pretty(onewhnf)}`);
     // console.log(pretty(te(whnf(false, defs, one, one))));
-    ensure(typecheck(defs, [], onewhnf, Nat));
+    ensure(typecheck(defs, [], [], onewhnf, Nat));
   });
 
   test("eliminate nat", () => {
     const defs = [NatDef, natZeroDef, natSuccDef, Booldef, Booltrue, Boolfalse];
     const n = App(natSuccDef.term, natZeroDef.term); // succ(zero)
-    ensure(typecheck(defs, [], n, Nat));
+    ensure(typecheck(defs, [], [], n, Nat));
 
     console.log(pretty(te(whnf(false, defs, n, Star()))));
     const P = Abs("P", Ref("Bool")); // λP. Bool
     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
-    ensure(typecheck(defs, [], eliminator, Bool));
+    ensure(typecheck(defs, [], [], eliminator, Bool));
 
     console.log(pretty(te(whnf(false, defs, eliminator, Star()))));
 
@@ -916,6 +930,7 @@ describe("typechecker", () => {
     let result = typecheck(
       [maybeTypeDef, maybeNullDef, maybeJustDef],
       [],
+      [],
       maybeNullDef.term,
       maybeNullDef.typ
     );
@@ -925,6 +940,7 @@ describe("typechecker", () => {
 
     let result2 = typecheck(
       [maybeTypeDef, maybeNullDef, maybeJustDef],
+      [],
       [],
       maybeJustDef.term,
       maybeJustDef.typ
@@ -943,6 +959,7 @@ describe("typechecker", () => {
         maybeNullDef,
         maybeJustDef,
       ],
+      [],
       [],
       App(App(Ref("just"), Ref("Bool")), Ref("true")),
       App(Ref("Maybe"), Ref("Bool"))
@@ -1282,7 +1299,7 @@ describe("typechecker", () => {
   const succ = Def("Nat.succ", s, Pi("", Nat, Nat));
 
   test("recursive parameterised types: zero", () => {
-    let result = typecheck([], [], zero.term, Nat);
+    let result = typecheck([], [], [], zero.term, Nat);
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -1291,6 +1308,7 @@ describe("typechecker", () => {
   test("recursive parameterised types: succ", () => {
     let result = typecheck(
       [NatDef],
+      [],
       [],
       s, //succ.term,
       Pi("", Nat, Nat)

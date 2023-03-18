@@ -171,7 +171,7 @@ export const processADTs = (f: File): File => {
 
 // TODO: Re-think this. There's a lot of places where we're doing thing kind of
 // thing.
-const desugarTerm = (
+export const desugarTerm = (
   t: Term,
   ann: Term | undefined,
   adts: ADT[],
@@ -212,53 +212,12 @@ const desugarTerm = (
         desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
       );
     case "case":
-      //  case x of
-      //    c1 -> t1
-      //    c2 -> t2
-      // desugars to:
-      //  x(() MotiveType, t1, t2)
-      //
-      // When we desugar a case we need to create abstractions for all of the
-      // arguments in each branch, for example, assume x is a Nat:
-      // case x of
-      //  zero -> true
-      //  succ -> false
-      // we need to desugar the second branch to be
-      //  Abs("x.n", Ref("false"))
-      if (ann == undefined) {
-        throw "case needs annotation";
-      }
-      const P = Abs("", shift(1, 0, ann)); // P just returns the expected type
-      const desugared = t.branches.reduce((acc, curr) => {
-        const branchTerm = desugarTerm(curr.term, undefined, adts, ctx);
-        // Make any constructor arguments available using dot notation.
-
-        // FIXME: We need to infer the type of x; this *must* be done as part of
-        // the typechecking phase, rather than here.
-        // This is a horrible hack.
-        var constructor: Constructor | undefined = undefined;
-        for (const adt of adts) {
-          for (const con of adt.constructors) {
-            if (con.name == curr.constructor) {
-              constructor = con;
-            }
-          }
-        }
-        if (constructor == undefined) {
-          throw `constructor not found: ${curr.constructor}`;
-        }
-
-        // FIXME: Ensure all branches are covered.
-
-        const absArgs = constructor.args.reduce(
-          (acc2, curr2) => Abs(`${pretty(t.name)}.${curr2.name}`, acc2),
-          branchTerm
-        );
-
-        return App(acc, absArgs);
-      }, App(desugarTerm(t.name, undefined, adts, ctx), P));
-
-      return desugared;
+      return Case(
+        desugarTerm(t.name, undefined, adts, ctx),
+        t.branches.map((b) =>
+          Branch(b.constructor, desugarTerm(b.term, undefined, adts, ctx))
+        )
+      );
     case "ref":
       // At this point we're still unsure whether this node is a Var or a Ref.
       // So look it up first and if a Var exists then use that.
