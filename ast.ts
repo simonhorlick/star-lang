@@ -329,8 +329,13 @@ export const parseLineComment: Parser<Com> = bind(str("//"), (_) =>
 );
 
 // reference parses a "variable" in the programming language.
-export const reference: Parser<Ref> = map(identifier, (result: string) =>
-  Ref(result)
+export const reference: Parser<Term> = block(
+  map(identifier, (result: string) => Ref(result))
+);
+
+// par parses a "variable" in the programming language.
+export const par: Parser<Term> = block(
+  map(identifier, (result: string) => Par(result))
 );
 
 // parenthesis is a parser that requires an opening and closing parenthesis to
@@ -450,10 +455,10 @@ const caseBranch: Parser<Branch> = orFail(
 export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
   orFail(
     "case statment not well formed",
-    bind(spc1(identifier), (id) =>
+    bind(spc1(block(par)), (id) =>
       bind(str("of"), (_) =>
         bind(newline, (_) =>
-          bind(many1(caseBranch), (branches) => pure(Case(Par(id), branches)))
+          bind(many1(caseBranch), (branches) => pure(Case(id, branches)))
         )
       )
     )

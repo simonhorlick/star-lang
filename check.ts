@@ -23,6 +23,8 @@ import { desugarTerm } from "./process";
 
 var _ = require("lodash");
 
+const verbose = false;
+
 export const logFull = (x: any) => {
   const util = require("util");
   console.log(
@@ -188,12 +190,13 @@ export const infer = (
       // the app inside of tyB.
       let typ = substTop(et2, tyB, nf.name);
 
-      console.log(
-        `Γ ⊢ ${pretty(f)} => ${pretty(fType.type)}
+      if (verbose)
+        console.log(
+          `Γ ⊢ ${pretty(f)} => ${pretty(fType.type)}
 Γ ⊢ ${pretty(b)} <= ${pretty(tyA)}
 ------------------- app
 Γ ⊢ ${pretty(term)} => ${pretty(typ)}`
-      );
+        );
 
       return Result(App(fTypeElaborated, et2), typ);
     }
@@ -240,6 +243,12 @@ export const infer = (
       // typecheck because if we use a definition that later fails to check
       // the compilation will fail with a typecheck error.
       return Result(term, match[0].typ);
+    case "orig":
+      const tc = infer(defs, adts, ctx, term.child, term.start, term.end);
+      if (tc._ == "typecheckerror") {
+        return tc;
+      }
+      return Result(Origin(term.start, term.end, tc.term), tc.type);
     default:
       return TypecheckError(
         `cannot infer type of ${term._}`,
@@ -261,19 +270,20 @@ const check = (
   originEnd: number
 ): Result | TypecheckError => {
   if (term._ == "orig") {
-    return check(defs, adts, ctx, term.child, type, term.start, term.end);
+    const tc = check(defs, adts, ctx, term.child, type, term.start, term.end);
+    if (tc._ == "typecheckerror") {
+      return tc;
+    }
+    return Result(Origin(term.start, term.end, tc.term), tc.type);
   }
 
-  if (type._ == "ann") {
-    return typecheck(defs, adts, ctx, term, type.term, originStart, originEnd);
-  }
-
-  console.log(`${" ".repeat(ctx.length)} ctx=[${printCtx(ctx)}]`);
-  console.log(
-    `${" ".repeat(ctx.length)} checking ${pretty(term)} has type ${pretty(
-      type
-    )}`
-  );
+  if (verbose) console.log(`${" ".repeat(ctx.length)} ctx=${printCtx(ctx)}`);
+  if (verbose)
+    console.log(
+      `${" ".repeat(ctx.length)} checking ${pretty(term)} has type ${pretty(
+        type
+      )}`
+    );
 
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
   // existing variable.
@@ -328,7 +338,7 @@ const check = (
           if (xTyp._ == "typecheckerror") {
             return xTyp;
           }
-          const ref = xTyp.type;
+          const ref = stripOrigins(xTyp.type);
           if (ref._ != "ref") {
             return TypecheckError(
               `type of argument to case should be a reference; got ${ref._}`,
@@ -364,8 +374,6 @@ const check = (
             shift(constructor.args.length, 0, branchTerm)
           );
 
-          // desugarTerm ensures any Refs that reference constructor arguments
-          // are converted into Vars.
           return App(acc, absArgs);
         },
         App(term.name, P) as Term
@@ -375,9 +383,11 @@ const check = (
         return branches;
       }
 
+      // desugarTerm ensures any Refs that reference constructor arguments
+      // are converted into Vars.
       const desugared = desugarTerm(branches, undefined, adts, ctx);
 
-      console.log(printCtx(ctx) + " " + pretty(desugared, true));
+      if (verbose) console.log(printCtx(ctx) + " " + pretty(desugared, true));
 
       return check(defs, adts, ctx, desugared, type, originStart, originEnd);
     }
@@ -415,7 +425,17 @@ const check = (
       if (ebody._ == "typecheckerror") {
         return ebody;
       }
-      return Result(Abs(term.name, Ann(ebody.term, ebody.type)), type);
+      // Annotate the body of the abstraction with the checked type.
+      const etype = whnf(false, defs, ebody.type, undefined);
+      if (etype._ == "typecheckerror") {
+        return etype;
+      }
+      const b = Ann(ebody.term, etype);
+
+      return Result(
+        Ann(Abs(term.name, ebody.term), Pi(pi.name, pi.from, etype)),
+        pi
+      );
   }
 
   // If there's a type, and one of the other rules doesn't apply, then check
@@ -450,13 +470,18 @@ export const typecheck = (
   originEnd: number = 0
 ): Result | TypecheckError => {
   if (tm._ == "orig") {
-    return typecheck(defs, adts, ctx, tm.child, ty, tm.start, tm.end);
+    const tc = typecheck(defs, adts, ctx, tm.child, ty, tm.start, tm.end);
+    if (tc._ == "typecheckerror") {
+      return tc;
+    }
+    return Result(Origin(tm.start, tm.end, tc.term), tc.type);
   }
 
-  console.log(`${" ".repeat(ctx.length)} ctx=[${printCtx(ctx)}]`);
-  console.log(
-    `${" ".repeat(ctx.length)} typecheck ${pretty(tm)} has type ${pretty(ty)}`
-  );
+  if (verbose) console.log(`${" ".repeat(ctx.length)} ctx=${printCtx(ctx)}`);
+  if (verbose)
+    console.log(
+      `${" ".repeat(ctx.length)} typecheck ${pretty(tm)} has type ${pretty(ty)}`
+    );
 
   const tmnf = tm; //whnf(true, defs, tm, undefined);
   const tynf = whnf(false, defs, ty, tm);
@@ -491,7 +516,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "par":
       return t;
     case "orig":
-      return shift(d, c, t.child);
+      return Origin(t.start, t.end, shift(d, c, t.child));
     case "case":
       return Case(
         shift(d, c, t.name),
@@ -570,7 +595,8 @@ export const equate = (
   ty2: Term,
   depth: number = 0
 ): boolean => {
-  console.log(`${" ".repeat(depth)}equate ${pretty(ty1)} == ${pretty(ty2)}`);
+  if (verbose)
+    console.log(`${" ".repeat(depth)}equate ${pretty(ty1)} == ${pretty(ty2)}`);
   if (aeq(ty1, ty2)) {
     return true;
   }
@@ -581,7 +607,8 @@ export const equate = (
   let n2 = whnf(!bothref, defs, ty2, term);
   if (n1._ == "typecheckerror" || n2._ == "typecheckerror") return false;
 
-  console.log(`${" ".repeat(depth)}equate ${pretty(n1)} == ${pretty(n2)}`);
+  if (verbose)
+    console.log(`${" ".repeat(depth)}equate ${pretty(n1)} == ${pretty(n2)}`);
 
   if (n1._ == "app" && n2._ == "app") {
     let a1 = n1.left;
@@ -692,11 +719,7 @@ function ensurePi(
   return nf;
 }
 
-export const dbgCheckIndices = <T extends Term>(
-  ctx: Context,
-  depth: number,
-  t: T
-): T => {
+export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
   // check the names of Var terms match what's in the context.
   switch (t._) {
     case "var":
@@ -732,3 +755,12 @@ export const dbgCheckIndices = <T extends Term>(
       return t;
   }
 };
+
+function stripOrigins(t: Term): Term {
+  switch (t._) {
+    case "orig":
+      return t.child;
+    default:
+      return t;
+  }
+}

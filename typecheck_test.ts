@@ -30,7 +30,7 @@ const logFull = (x: any) => {
 // logFull(result.term);
 // console.log(pretty(result.term));
 
-const ci = <T extends Term>(t: T): T => dbgCheckIndices([], 0, t);
+const ci = (t: Term): Term => dbgCheckIndices([], 0, t);
 
 // λs. λz. z
 const zero = Abs("s", Abs("z", Var("z", 0)));
@@ -357,7 +357,7 @@ describe("typechecker", () => {
       ),
       Pi("", Star(), Pi("", Star(), Star()))
     )
-  );
+  ) as Ann;
 
   test("type-level and", () => {
     let result = typecheck([], [], [], and.term, and.typ);
@@ -400,7 +400,7 @@ describe("typechecker", () => {
         )
       )
     )
-  );
+  ) as Ann;
 
   test("conj checks", () => {
     let result = typecheck(
