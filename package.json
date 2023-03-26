@@ -1,13 +1,14 @@
 {
-  "name": "sun",
-  "version": "1.0.0",
+  "name": "star",
+  "version": "0.0.1",
   "description": "",
   "main": "index.ts",
   "scripts": {
-    "test": "./node_modules/.bin/tsc"
+    "test": "./node_modules/.bin/tsc",
+    "postinstall": "./node_modules/.bin/tsc"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Simon Horlick",
+  "license": "MIT",
   "dependencies": {
     "lodash": "^4.17.21",
     "ts-node": "^10.9.1"
