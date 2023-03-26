@@ -10,10 +10,20 @@ import {
   Abs,
   Var,
   Def,
+  ADT,
 } from "./ast";
-import { addTermToCtx, TypecheckError } from "./check";
+import {
+  addTermToCtx,
+  ensurePi,
+  infer,
+  logFull,
+  serialise,
+  shift,
+  strip,
+  TypecheckError,
+} from "./check";
 import { indexToLineCol, printLine } from "./parser";
-import { pretty } from "./pretty";
+import { pretty, printCtx } from "./pretty";
 
 export const typecheckErrorDiagnostic = (src: string, err: TypecheckError) => {
   const startlc = indexToLineCol(src, err.start);
@@ -35,7 +45,7 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
 
   const traverse = (
     t: Term,
-    ty: Type,
+    ty: Type | undefined,
     start: number | undefined,
     end: number | undefined,
     ctx: Context,
@@ -43,7 +53,12 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
   ): Term => {
     if (t._ != "orig") {
       try {
-        console.log(`traverse ${t._} (${pretty(t)}) has type ${pretty(ty)}`);
+        console.log(
+          `traverse ${t._} (${pretty(t)}) has type ${
+            ty ? pretty(ty) : "none"
+          }; ctx=${printCtx(ctx)}`
+        );
+        console.log(serialise(strip(t)));
       } catch (e) {
         console.error(e);
       }
@@ -51,25 +66,28 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
 
     switch (t._) {
       case "ann":
-        return Ann(
-          traverse(t.term, t.typ, undefined, undefined, ctx, defs),
-          traverse(t.typ, Star(), undefined, undefined, ctx, defs)
-        );
+        return traverse(t.term, t.typ, undefined, undefined, ctx, defs);
       case "app":
         // for applications we add a span for the function indicating its
         // function type and a span for the argument so we can inspect the
         // argument type
         return App(
-          traverse(t.left, ty, undefined, undefined, ctx, defs),
-          traverse(t.right, ty, undefined, undefined, ctx, defs)
+          traverse(t.left, undefined, undefined, undefined, ctx, defs),
+          traverse(t.right, undefined, undefined, undefined, ctx, defs)
         );
       case "lam":
         // the type of a lambda abstraction is a pi type.
-        const typ = ty as Pi;
+        if (ty == undefined) {
+          throw "type not present";
+        }
+        const typ = ensurePi(defs, tm, ty, start ?? 0, end ?? 0);
+        if (typ._ == "typecheckerror") {
+          return t;
+        }
         if (start != undefined && end != undefined) {
           spans.set(
             { start: start, end: end },
-            { term: t, type: typ.from, ctx: ctx }
+            { term: t, type: typ, ctx: ctx }
           );
         }
         return Abs(
@@ -79,7 +97,7 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
             typ.to,
             undefined,
             undefined,
-            addTermToCtx(ctx, t.name, typ.from),
+            addTermToCtx(ctx, t.name, shift(1, 0, typ.from)), // This is somehow the wrong argument.
             defs
           )
         );
@@ -88,10 +106,10 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
       case "pi":
         return Pi(
           t.name,
-          traverse(t.from, ty, undefined, undefined, ctx, defs),
+          traverse(t.from, undefined, undefined, undefined, ctx, defs),
           traverse(
             t.to,
-            ty,
+            undefined,
             undefined,
             undefined,
             addTermToCtx(ctx, t.name, t.from),
@@ -103,7 +121,7 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
           t.name,
           traverse(
             t.body,
-            ty,
+            undefined,
             undefined,
             undefined,
             addTermToCtx(ctx, t.name, Star()),
@@ -113,6 +131,12 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
       case "case":
         throw "unexpected case";
       case "ref":
+        // TODO: For defs like true, the type is the expanded version. We
+        // usually want a pi type so we can find the types of the arguments,
+        // however it doesn't make sense to say true has a pi type when it's
+        // obviously a Bool.
+        // The fix is to keep it as a ref - we can always follow refs here in
+        // inspect to get the pi type.
         const ref = defs.find((d) => d.name == t.name)!;
         // TODO: Add reference information.
         if (start != undefined && end != undefined) {

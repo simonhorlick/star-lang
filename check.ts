@@ -198,7 +198,14 @@ export const infer = (
 Γ ⊢ ${pretty(term)} => ${pretty(typ)}`
         );
 
-      return Result(App(fTypeElaborated, et2), typ);
+      // After inferring the type of f we need to return it as an annotation so
+      // that further stages can use it.
+
+      return Result(
+        App(Ann(fTypeElaborated, fType.type), Ann(et2, arg.type)),
+        typ
+      );
+      // return Result(App(fTypeElaborated, et2), typ);
     }
     case "ann": {
       let typ = check(
@@ -258,8 +265,9 @@ export const infer = (
   }
 };
 
-// check a term has the given type, producing an elaborated term where all of the type annotations
-// have been filled in. The type argument must be in whnf in checking mode.
+// check a term has the given type, producing an elaborated term where all of
+// the type annotations have been filled in. The type argument must be in weak
+// head normal form.
 const check = (
   defs: Def[],
   adts: ADT[],
@@ -338,7 +346,7 @@ const check = (
           if (xTyp._ == "typecheckerror") {
             return xTyp;
           }
-          const ref = stripOrigins(xTyp.type);
+          const ref = strip(xTyp.type);
           if (ref._ != "ref") {
             return TypecheckError(
               `type of argument to case should be a reference; got ${ref._}`,
@@ -425,17 +433,21 @@ const check = (
       if (ebody._ == "typecheckerror") {
         return ebody;
       }
-      // Annotate the body of the abstraction with the checked type.
-      const etype = whnf(false, defs, ebody.type, undefined);
-      if (etype._ == "typecheckerror") {
-        return etype;
-      }
-      const b = Ann(ebody.term, etype);
+      // // Annotate the body of the abstraction with the checked type.
+      // const etype = whnf(false, defs, ebody.type, undefined);
+      // if (etype._ == "typecheckerror") {
+      //   return etype;
+      // }
+      // const b = Ann(ebody.term, etype);
 
-      return Result(
-        Ann(Abs(term.name, ebody.term), Pi(pi.name, pi.from, etype)),
-        pi
-      );
+      // We return the elaborated body here - as case statements must be
+      // desugared for any consumers.
+      return Result(Abs(term.name, ebody.term), type);
+
+    // return Result(
+    //   Ann(Abs(term.name, ebody.term), Pi(pi.name, pi.from, etype)),
+    //   pi
+    // );
   }
 
   // If there's a type, and one of the other rules doesn't apply, then check
@@ -698,7 +710,7 @@ export const whnf = (
 };
 
 // Ensure that ty reduces to a Pi type and return it.
-function ensurePi(
+export function ensurePi(
   defs: Def[],
   tm: Term,
   ty: Term,
@@ -756,11 +768,75 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
   }
 };
 
-function stripOrigins(t: Term): Term {
+export function strip(t: Term): Term {
   switch (t._) {
-    case "orig":
-      return t.child;
-    default:
+    case "var":
       return t;
+    case "lam":
+      return Abs(t.name, strip(t.body));
+    case "self":
+      return Self(t.name, strip(t.body));
+    case "app":
+      return App(strip(t.left), strip(t.right));
+    case "ann":
+      return Ann(strip(t.term), strip(t.typ));
+    case "pi":
+      return Pi(t.name, strip(t.from), strip(t.to));
+    case "par":
+    case "star":
+    case "ref":
+      return t;
+    case "orig":
+      return strip(t.child);
+    case "case":
+      return Case(
+        strip(t.name),
+        t.branches.map((b) => Branch(b.constructor, strip(b.term)))
+      );
+  }
+}
+
+export function serialise(t: Term, d: number = 0): string {
+  const pd = "  ".repeat(d);
+  switch (t._) {
+    case "var":
+      return `${pd}Var(${t.name})`;
+    case "lam":
+      return `${pd}Abs("${t.name}", \n${serialise(t.body, d + 1)}\n${pd})`;
+    case "self":
+      return `${pd}Self("${t.name}", \n${serialise(t.body, d + 1)}\n${pd})`;
+    case "app":
+      return `${pd}App(\n${serialise(t.left, d + 1)}, \n${serialise(
+        t.right,
+        d + 1
+      )}\n${pd})`;
+    case "ann":
+      return `${pd}Ann(\n${serialise(t.term, d + 1)}, \n${serialise(
+        t.typ,
+        d + 1
+      )}\n${pd})`;
+    case "pi":
+      return `${pd}Pi("${t.name}", \n${serialise(t.from, d + 1)}, \n${serialise(
+        t.to,
+        d + 1
+      )}\n${pd})`;
+    case "par":
+      return `${pd}Par(${t.name})`;
+    case "star":
+      return `${pd}Star`;
+    case "ref":
+      return `${pd}Ref(${t.name})`;
+    case "orig":
+      return `${pd}Origin(${t.start}, ${t.end}, \n${serialise(
+        t.child,
+        d + 1
+      )}\n${pd})`;
+    case "case":
+      return `${pd}Case(
+        ${serialise(t.name, d + 1)},
+        [${t.branches
+          .map((b) => `Branch(${b.constructor}, ${serialise(b.term, d + 1)})`)
+          .join(",")}]
+      )`;
   }
 }
