@@ -55,9 +55,10 @@ export function pretty(term: Term, indices: boolean = false): string {
         )}`;
       }
     case "ann":
-      return (
-        "(" + pretty(term.term, indices) + "):" + pretty(term.typ, indices)
-      );
+      return pretty(term.term, indices);
+    // return (
+    //   "(" + pretty(term.term, indices) + "):" + pretty(term.typ, indices)
+    // );
     case "star":
       return "★";
     case "case":

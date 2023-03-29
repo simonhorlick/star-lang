@@ -17,6 +17,7 @@ import {
   Normal,
   Constructor,
   ADT,
+  Identifier,
 } from "./ast";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
@@ -106,7 +107,7 @@ export const Result = (term: Term, type: Term): Result => ({
 // infer the type of a term. This produces an annotated version of the term
 // whose type can always be checked.
 export const infer = (
-  defs: Def[],
+  defs: Map<string, Def>,
   adts: ADT[],
   ctx: Context,
   term: Term,
@@ -237,8 +238,8 @@ export const infer = (
       return Result(ty.term, ty.type);
     }
     case "ref":
-      const match = defs.filter((d) => d.name == term.name);
-      if (match.length == 0) {
+      const match = defs.get(term.name);
+      if (match == undefined) {
         return TypecheckError(
           `reference not found: ${term.name}; ctx is ${printCtx(ctx)}`,
           originStart,
@@ -249,7 +250,7 @@ export const infer = (
       // Without loss of generality we can assume that other definitions
       // typecheck because if we use a definition that later fails to check
       // the compilation will fail with a typecheck error.
-      return Result(term, match[0].typ);
+      return Result(term, match.typ);
     case "orig":
       const tc = infer(defs, adts, ctx, term.child, term.start, term.end);
       if (tc._ == "typecheckerror") {
@@ -269,7 +270,7 @@ export const infer = (
 // the type annotations have been filled in. The type argument must be in weak
 // head normal form.
 const check = (
-  defs: Def[],
+  defs: Map<string, Def>,
   adts: ADT[],
   ctx: Context,
   term: Term,
@@ -473,7 +474,7 @@ const check = (
 
 // check that the given term has the expected type.
 export const typecheck = (
-  defs: Def[],
+  defs: Map<string, Def>,
   adts: ADT[],
   ctx: Context,
   tm: Term,
@@ -601,7 +602,7 @@ const aeq = (t1: Term, t2: Term): boolean => {
 };
 
 export const equate = (
-  defs: Def[],
+  defs: Map<string, Def>,
   term: Term,
   ty1: Term,
   ty2: Term,
@@ -654,18 +655,18 @@ export const equate = (
 // Compute the weak head normal form for a term.
 export const whnf = (
   unfold: boolean,
-  defs: Def[],
+  defs: Map<string, Def>,
   t: Term,
   selfTerm: Term | undefined
 ): Normal | TypecheckError => {
   switch (t._) {
     case "ref":
       if (!unfold) return t;
-      const match = defs.filter((d) => d.name == t.name);
-      if (match.length == 0) {
+      const match = defs.get(t.name);
+      if (match == undefined) {
         return TypecheckError(`whnf: reference not found: ${t.name}`, 0, 0);
       }
-      return whnf(false, defs, match[0].term, selfTerm);
+      return whnf(false, defs, match.term, selfTerm);
     case "app": {
       let nf = whnf(unfold, defs, t.left, selfTerm);
       if (nf._ == "typecheckerror") {
@@ -711,7 +712,7 @@ export const whnf = (
 
 // Ensure that ty reduces to a Pi type and return it.
 export function ensurePi(
-  defs: Def[],
+  defs: Map<string, Def>,
   tm: Term,
   ty: Term,
   originStart: number,

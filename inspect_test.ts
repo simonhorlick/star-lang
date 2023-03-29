@@ -2,11 +2,11 @@ import { describe, test } from "@jest/globals";
 
 var util = require("util");
 
-import { ADT, Def, parseFile } from "./ast";
+import { ADT, ASTNode, Context, Def, parseFile, Term, Type } from "./ast";
 import { typecheck, TypecheckError } from "./check";
 import { indexToLineCol, printLine } from "./parser";
 import { desugar, processADTs } from "./process";
-import { inspect, typecheckErrorDiagnostic } from "./inspect";
+import { inspect, inspectASTNodes, typecheckErrorDiagnostic } from "./inspect";
 import { pretty, printCtx } from "./pretty";
 import { build } from "./build";
 
@@ -35,16 +35,29 @@ func main:Nat = add(succ(succ(zero)))(succ(zero)) // 2+1=3
 `;
 
   test("should return type information for main", () => {
-    const checked = build(src);
-    const def = checked.find((def) => def.name == "add")!;
-    const spans = inspect(def.term, def.typ, checked);
-    for (const [k, v] of spans) {
-      const msg = `${k.start}-${k.end} is a ${v.term._} with type ${pretty(
-        v.type
-      )}; ctx at this location is ${printCtx(v.ctx)}`;
-      console.log(
-        typecheckErrorDiagnostic(src, TypecheckError(msg, k.start, k.end))
-      );
+    const [f, defs] = build(src);
+
+    for (const node of f.content) {
+      if (node._ == "def") {
+        const def = node;
+        const spans = inspect(def.term, def.typ, defs);
+        for (const [k, v] of spans) {
+          const msg = `${k.start}-${k.end} is a ${v.term._} with type ${pretty(
+            v.type
+          )}; ctx at this location is ${printCtx(v.ctx)}`;
+          console.log(
+            typecheckErrorDiagnostic(src, TypecheckError(msg, k.start, k.end))
+          );
+        }
+      } else {
+        const spans = inspectASTNodes(node);
+        for (const [k, v] of spans) {
+          const msg = `${k.start}-${k.end} is a ${v.term._}`;
+          console.log(
+            typecheckErrorDiagnostic(src, TypecheckError(msg, k.start, k.end))
+          );
+        }
+      }
     }
   });
 });

@@ -41,6 +41,18 @@ export type Binding = VariableBinding;
 
 export type Context = Binding[];
 
+// Identifier is a syntax node so that we can wrap it in origins and map it
+// back to the original source location.
+export type Identifier = {
+  _: "id";
+  name: string;
+};
+
+export const Identifier = (name: string): Identifier => ({
+  _: "id",
+  name: name,
+});
+
 // Π is the type of functions.
 export type Pi = {
   _: "pi";
@@ -349,7 +361,7 @@ export const block2 =
 export const parsePackage: Parser<ASTNode> = block2(
   bind(str("package"), (_) =>
     bind(many1(whitespace), (_) =>
-      bind(identifier, (a) => pure({ _: "pkg", name: a }))
+      bind(identifier, (a) => pure({ _: "pkg", name: a } as Pkg))
     )
   )
 );
@@ -362,7 +374,7 @@ export const parseLineComment: Parser<ASTNode> = block2(
       pure({
         _: "com",
         text: l,
-      })
+      } as Com)
     )
   )
 );

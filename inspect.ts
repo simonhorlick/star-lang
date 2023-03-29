@@ -11,6 +11,7 @@ import {
   Var,
   Def,
   ADT,
+  ASTNode,
 } from "./ast";
 import {
   addTermToCtx,
@@ -37,7 +38,42 @@ export const typecheckErrorDiagnostic = (src: string, err: TypecheckError) => {
   );
 };
 
-export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
+export const inspectASTNodes = (n: ASTNode) => {
+  const spans = new Map<
+    { start: number; end: number },
+    { term: ASTNode; type: Type | undefined; ctx: Context }
+  >();
+
+  const f = (n: ASTNode, start: number, end: number): void => {
+    switch (n._) {
+      case "adt":
+        return;
+      case "com":
+        spans.set(
+          { start: start, end: end },
+          { term: n, type: undefined, ctx: [] }
+        );
+        return;
+      case "def":
+        return;
+      case "pkg":
+        spans.set(
+          { start: start, end: end },
+          { term: n, type: undefined, ctx: [] }
+        );
+        return;
+      case "nl":
+      case "sp":
+        return;
+      case "orig2":
+        return f(n.child, n.start, n.end);
+    }
+  };
+  f(n, 0, 0);
+  return spans;
+};
+
+export const inspect = (tm: Term, ty: Type, defs: Map<string, Def>) => {
   const spans = new Map<
     { start: number; end: number },
     { term: Term; type: Type; ctx: Context }
@@ -49,20 +85,20 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
     start: number | undefined,
     end: number | undefined,
     ctx: Context,
-    defs: Def[]
+    defs: Map<string, Def>
   ): Term => {
-    if (t._ != "orig") {
-      try {
-        console.log(
-          `traverse ${t._} (${pretty(t)}) has type ${
-            ty ? pretty(ty) : "none"
-          }; ctx=${printCtx(ctx)}`
-        );
-        console.log(serialise(strip(t)));
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    // if (t._ != "orig") {
+    //   try {
+    //     console.log(
+    //       `traverse ${t._} (${pretty(t)}) has type ${
+    //         ty ? pretty(ty) : "none"
+    //       }; ctx=${printCtx(ctx)}`
+    //     );
+    //     console.log(serialise(strip(t)));
+    //   } catch (e) {
+    //     console.error(e);
+    //   }
+    // }
 
     switch (t._) {
       case "ann":
@@ -137,7 +173,7 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
         // obviously a Bool.
         // The fix is to keep it as a ref - we can always follow refs here in
         // inspect to get the pi type.
-        const ref = defs.find((d) => d.name == t.name)!;
+        const ref = defs.get(t.name)!;
         // TODO: Add reference information.
         if (start != undefined && end != undefined) {
           spans.set(
@@ -168,6 +204,5 @@ export const inspect = (tm: Term, ty: Type, defs: Def[]) => {
   };
 
   traverse(tm, ty, undefined, undefined, [], defs);
-  console.log("added spans");
   return spans;
 };
