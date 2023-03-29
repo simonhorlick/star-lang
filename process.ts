@@ -23,15 +23,14 @@ import {
   Case,
   Branch,
   Origin,
+  ASTNode,
 } from "./ast";
 import { addTermToCtx, shift } from "./check";
 import { pretty } from "./pretty";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 
-const processNode = (
-  n: Pkg | Com | Def | ADT | Space | Newline
-): (Pkg | Com | Def | ADT | Space | Newline)[] => {
+const processNode = (n: ASTNode): ASTNode[] => {
   switch (n._) {
     case "adt":
       // Generates type definition and constructors for an ADT.

@@ -180,6 +180,8 @@ export type Term =
   | Origin;
 export type Type = Term;
 
+export type ASTNode = Pkg | Com | Def | ADT | Space | Newline | Origin2;
+
 // Normal is a hint to the user that the term is in weak head normal form.
 export type Normal = Term;
 
@@ -267,7 +269,7 @@ export type Newline = { _: "nl" };
 
 export type File = {
   _: "file";
-  content: (Pkg | Com | Def | ADT | Space | Newline)[];
+  content: ASTNode[];
 };
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
@@ -295,6 +297,24 @@ export const Origin = (start: number, end: number, child: Term): Origin => ({
   child: child,
 });
 
+export type Origin2 = {
+  _: "orig2";
+  start: number;
+  end: number;
+  child: ASTNode;
+};
+
+export const Origin2 = (
+  start: number,
+  end: number,
+  child: ASTNode
+): Origin2 => ({
+  _: "orig2",
+  start: start,
+  end: end,
+  child: child,
+});
+
 // block is a parser that adds origin information into the parse tree. It can be
 // disabled by setting origins to false in the stream.
 export const block =
@@ -310,21 +330,40 @@ export const block =
     return pure(Origin(start, result.stream.idx, result.value))(result.stream);
   };
 
+// block2 is a parser that adds origin information into the parse tree. It can be
+// disabled by setting origins to false in the stream.
+export const block2 =
+  <T extends ASTNode>(parser: Parser<T>): Parser<Origin2> =>
+  (s: Stream): Result<Origin2> => {
+    const start = s.idx;
+    const result = parser(s);
+
+    if (result.type == "parseerror") {
+      return result;
+    }
+
+    return pure(Origin2(start, result.stream.idx, result.value))(result.stream);
+  };
+
 // parsePackage parses a package declaration such as `package abc`.
-export const parsePackage: Parser<Pkg> = bind(str("package"), (_) =>
-  bind(many1(whitespace), (_) =>
-    bind(identifier, (a) => pure({ _: "pkg", name: a }))
+export const parsePackage: Parser<ASTNode> = block2(
+  bind(str("package"), (_) =>
+    bind(many1(whitespace), (_) =>
+      bind(identifier, (a) => pure({ _: "pkg", name: a }))
+    )
   )
 );
 
 // parseLineComment parses an end-of-line comment and stops either at the end of
 // the line or EOF.
-export const parseLineComment: Parser<Com> = bind(str("//"), (_) =>
-  bind(line, (l) =>
-    pure({
-      _: "com",
-      text: l,
-    })
+export const parseLineComment: Parser<ASTNode> = block2(
+  bind(str("//"), (_) =>
+    bind(line, (l) =>
+      pure({
+        _: "com",
+        text: l,
+      })
+    )
   )
 );
 
