@@ -125,10 +125,13 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
           return t;
         }
         if (start != undefined && end != undefined) {
-          spans.set(
-            { start: start, end: end },
-            { term: t, type: typ, ctx: ctx }
-          );
+          if (typ.name != "P") {
+            // Skip generated ADTs.
+            spans.set(
+              { start: start, end: end },
+              { term: t, type: typ, ctx: ctx }
+            );
+          }
         }
         return AbsI(
           traverse(t.name, typ.from, undefined, undefined, ctx, defs) as

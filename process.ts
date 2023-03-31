@@ -48,6 +48,8 @@ const processNode = (n: ASTNode): ASTNode[] => {
       const defs = n.constructors.map((con, i) => {
         return Def(
           identifier(con.name),
+          // This is used for tooling to be able to provide jump-to-definition
+          // for type constructors.
           wrapOrigin(
             GenerateConstructorTerm(n.params, n.constructors, i),
             con.name
@@ -173,6 +175,10 @@ export const buildType = (
 
   return Def(
     identifier(name),
+    // This is used for tooling to be able to provide jump-to-definition for
+    // types. `name` contains the source location where the constructor was
+    // defined, so any refs that mention this constructor can follow this origin
+    // back to the source text.
     wrapOrigin(
       processPars(
         parameters.reduce<Term>((acc, paramN) => Abs(paramN.name, acc), self),
@@ -368,6 +374,9 @@ export const GenerateConstructorTerm = (
 
   // Abstract constructors
   const absConstructors = constructors.reduceRight<Term>(
+    // Passing curr.name to Abs here will expose the source locations of the
+    // type constructors to tooling, i.e. the constructor `true` would have
+    // a span for `true:P(true)`.
     (acc, curr) => AbsI(curr.name, acc),
     apps
   );
