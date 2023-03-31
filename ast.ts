@@ -246,11 +246,14 @@ export const ADT = (
 });
 
 type Branch = {
-  constructor: string;
+  constructor: Identifier | Origin;
   term: Term;
 };
 
-export const Branch = (constructor: string, term: Term): Branch => ({
+export const Branch = (
+  constructor: Identifier | Origin,
+  term: Term
+): Branch => ({
   constructor: constructor,
   term: term,
 });
@@ -506,7 +509,7 @@ export const application = (term: () => Parser<Term>): Parser<App> =>
 const caseBranch: Parser<Branch> = orFail(
   "case branch not well formed",
   bind(spaces, (_) =>
-    bind(identifier, (id) =>
+    bind(block(identifier2), (id) =>
       bind(many(whitespace), (_) =>
         bind(either(str("->"), str("=>")), (_) =>
           bind(many(whitespace), (_) => bind(term, (t) => pure(Branch(id, t))))

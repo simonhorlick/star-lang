@@ -368,13 +368,14 @@ const check = (
           }
 
           var constructor: Constructor | undefined = undefined;
+          const constructorName = identifier(curr.constructor);
           for (const con of adtDef.constructors) {
-            if (identifier(con.name) == curr.constructor) {
+            if (identifier(con.name) == constructorName) {
               constructor = con;
             }
           }
           if (constructor == undefined) {
-            throw `constructor not found: ${curr.constructor}`;
+            throw `constructor not found: ${constructorName}`;
           }
 
           // FIXME: Ensure all branches are covered.
