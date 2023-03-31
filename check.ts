@@ -825,7 +825,10 @@ export function serialise(t: Term, d: number = 0): string {
     case "var":
       return `${pd}Var(${t.name})`;
     case "lam":
-      return `${pd}Abs("${t.name}", \n${serialise(t.body, d + 1)}\n${pd})`;
+      return `${pd}Abs("${identifier(t.name)}", \n${serialise(
+        t.body,
+        d + 1
+      )}\n${pd})`;
     case "self":
       return `${pd}Self("${t.name}", \n${serialise(t.body, d + 1)}\n${pd})`;
     case "app":
