@@ -71,11 +71,17 @@ export const Pi = (name: string, from: Type, to: Type): Pi => ({
 // Abs is a lambda abstraction.
 export type Abs = {
   _: "lam";
-  name: string; // name of the binder
+  name: Origin | Identifier; // name of the binder
   body: Term; // the body of the abstraction
 };
 
 export const Abs = (name: string, body: Term): Abs => ({
+  _: "lam",
+  name: Identifier(name),
+  body: body,
+});
+
+export const AbsI = (name: Origin | Identifier, body: Term): Abs => ({
   _: "lam",
   name: name,
   body: body,
@@ -189,7 +195,8 @@ export type Term =
   | Star
   | Self
   | Case
-  | Origin;
+  | Origin
+  | Identifier;
 export type Type = Term;
 
 export type ASTNode = Pkg | Com | Def | ADT | Space | Newline | Origin2;
@@ -293,6 +300,12 @@ export const identifier: Parser<string> = orFail(
       pure(a + (b?.join("") ?? ""))
     )
   )
+);
+
+// identifier2 parses a letter from the alphabet followed by letters, numbers and
+// other allowed special characters.
+export const identifier2: Parser<Identifier> = bind(identifier, (id) =>
+  pure(Identifier(id))
 );
 
 export type Origin = {
@@ -441,8 +454,8 @@ export const type: Parser<Type> = any4(
 export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
   bind(char("λ"), (_) =>
     bind(optional(spaces), (_) =>
-      bind(identifier, (name) =>
-        bind(spaces, (_) => bind(lazy(term), (body) => pure(Abs(name, body))))
+      bind(block(identifier2), (name) =>
+        bind(spaces, (_) => bind(lazy(term), (body) => pure(AbsI(name, body))))
       )
     )
   );

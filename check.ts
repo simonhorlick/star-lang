@@ -18,6 +18,7 @@ import {
   Constructor,
   ADT,
   Identifier,
+  AbsI,
 } from "./ast";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
@@ -425,7 +426,7 @@ const check = (
       let ebody = typecheck(
         defs,
         adts,
-        addTermToCtx(ctx, term.name, shift(1, 0, pi.from)),
+        addTermToCtx(ctx, identifier(term.name), shift(1, 0, pi.from)),
         term.body,
         pi.to,
         originStart,
@@ -443,7 +444,7 @@ const check = (
 
       // We return the elaborated body here - as case statements must be
       // desugared for any consumers.
-      return Result(Abs(term.name, ebody.term), type);
+      return Result(AbsI(term.name, ebody.term), type);
 
     // return Result(
     //   Ann(Abs(term.name, ebody.term), Pi(pi.name, pi.from, etype)),
@@ -515,7 +516,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "var":
       return t.index >= c ? Var(t.name, t.index + d) : t;
     case "lam":
-      return Abs(t.name, shift(d, c + 1, t.body));
+      return AbsI(t.name, shift(d, c + 1, t.body));
     case "self":
       return Self(t.name, shift(d, c + 1, t.body));
     case "app":
@@ -527,6 +528,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "star":
     case "ref":
     case "par":
+    case "id":
       return t;
     case "orig":
       return Origin(t.start, t.end, shift(d, c, t.child));
@@ -559,7 +561,7 @@ export function subst(
       // }
       return t.index == j + c ? shift(c, 0, s) : t;
     case "lam":
-      return Abs(t.name, subst(j, s, c + 1, t.body, name));
+      return AbsI(t.name, subst(j, s, c + 1, t.body, name));
     case "self":
       return Self(t.name, subst(j, s, c + 1, t.body, name));
     case "app":
@@ -576,6 +578,7 @@ export function subst(
       throw "subst: unexpected par";
     case "star":
     case "ref":
+    case "id":
       return t;
     case "orig":
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
@@ -652,6 +655,17 @@ export const equate = (
   }
 };
 
+export const identifier = (id: Term): string => {
+  switch (id._) {
+    case "id":
+      return id.name;
+    case "orig":
+      return identifier(id.child);
+    default:
+      throw `expected identifier; got ${id._}`;
+  }
+};
+
 // Compute the weak head normal form for a term.
 export const whnf = (
   unfold: boolean,
@@ -676,7 +690,7 @@ export const whnf = (
         return whnf(
           unfold,
           defs,
-          substTop(t.right, nf.body, nf.name),
+          substTop(t.right, nf.body, identifier(nf.name)),
           selfTerm
         );
       }
@@ -701,6 +715,7 @@ export const whnf = (
     case "lam":
     case "pi":
     case "star":
+    case "id":
       return t;
     case "case":
       return t;
@@ -739,7 +754,11 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       lookupType(ctx, t.index, t.name);
       return t;
     case "lam":
-      dbgCheckIndices(addTermToCtx(ctx, t.name, Star()), depth + 1, t.body);
+      dbgCheckIndices(
+        addTermToCtx(ctx, identifier(t.name), Star()),
+        depth + 1,
+        t.body
+      );
       return t;
     case "self":
       dbgCheckIndices(addTermToCtx(ctx, t.name, Star()), depth + 1, t.body);
@@ -758,6 +777,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       return t;
     case "star":
     case "ref":
+    case "id":
     case "par":
       return t;
     case "case":
@@ -774,7 +794,7 @@ export function strip(t: Term): Term {
     case "var":
       return t;
     case "lam":
-      return Abs(t.name, strip(t.body));
+      return AbsI(t.name, strip(t.body));
     case "self":
       return Self(t.name, strip(t.body));
     case "app":
@@ -786,6 +806,7 @@ export function strip(t: Term): Term {
     case "par":
     case "star":
     case "ref":
+    case "id":
       return t;
     case "orig":
       return strip(t.child);
@@ -827,6 +848,8 @@ export function serialise(t: Term, d: number = 0): string {
       return `${pd}Star`;
     case "ref":
       return `${pd}Ref(${t.name})`;
+    case "id":
+      return `${pd}Identifier(${t.name})`;
     case "orig":
       return `${pd}Origin(${t.start}, ${t.end}, \n${serialise(
         t.child,

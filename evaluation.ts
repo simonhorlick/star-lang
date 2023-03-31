@@ -1,4 +1,5 @@
 import { Term } from "./ast";
+import { identifier } from "./check";
 import * as Erased from "./erased";
 
 export function erase(term: Term): Erased.Term {
@@ -7,7 +8,7 @@ export function erase(term: Term): Erased.Term {
     case "var":
       return Erased.Var(term.name, term.index);
     case "lam":
-      return Erased.Abs(term.name, erase(term.body));
+      return Erased.Abs(identifier(term.name), erase(term.body));
     case "app":
       return Erased.App(erase(term.left), erase(term.right));
     case "ann":
@@ -27,6 +28,8 @@ export function erase(term: Term): Erased.Term {
       return erase(term.child);
     case "par":
       throw "unexpected par";
+    case "id":
+      throw "unexpected id";
   }
 }
 

@@ -12,10 +12,14 @@ import {
   Def,
   ADT,
   ASTNode,
+  AbsI,
+  Origin,
+  Identifier,
 } from "./ast";
 import {
   addTermToCtx,
   ensurePi,
+  identifier,
   infer,
   logFull,
   serialise,
@@ -73,7 +77,7 @@ export const inspectASTNodes = (n: ASTNode) => {
   return spans;
 };
 
-export const inspect = (tm: Term, ty: Type, defs: Map<string, Def>) => {
+export const inspect = (def: Def, defs: Map<string, Def>) => {
   const spans = new Map<
     { start: number; end: number },
     { term: Term; type: Type; ctx: Context }
@@ -116,7 +120,7 @@ export const inspect = (tm: Term, ty: Type, defs: Map<string, Def>) => {
         if (ty == undefined) {
           throw "type not present";
         }
-        const typ = ensurePi(defs, tm, ty, start ?? 0, end ?? 0);
+        const typ = ensurePi(defs, t, ty, start ?? 0, end ?? 0);
         if (typ._ == "typecheckerror") {
           return t;
         }
@@ -126,14 +130,16 @@ export const inspect = (tm: Term, ty: Type, defs: Map<string, Def>) => {
             { term: t, type: typ, ctx: ctx }
           );
         }
-        return Abs(
-          t.name,
+        return AbsI(
+          traverse(t.name, typ.from, undefined, undefined, ctx, defs) as
+            | Origin
+            | Identifier,
           traverse(
             t.body,
             typ.to,
             undefined,
             undefined,
-            addTermToCtx(ctx, t.name, shift(1, 0, typ.from)), // This is somehow the wrong argument.
+            addTermToCtx(ctx, identifier(t.name), shift(1, 0, typ.from)),
             defs
           )
         );
@@ -184,6 +190,14 @@ export const inspect = (tm: Term, ty: Type, defs: Map<string, Def>) => {
         return t;
       case "star":
         return t;
+      case "id":
+        if (start != undefined && end != undefined && ty != undefined) {
+          spans.set(
+            { start: start, end: end },
+            { term: t, type: ty, ctx: ctx }
+          );
+        }
+        return t;
       case "var":
         for (let i = 0; i < ctx.length; i++) {
           const binding = ctx[ctx.length - i - 1];
@@ -203,6 +217,7 @@ export const inspect = (tm: Term, ty: Type, defs: Map<string, Def>) => {
     }
   };
 
-  traverse(tm, ty, undefined, undefined, [], defs);
+  traverse(def.term, def.typ, undefined, undefined, [], defs);
+  traverse(def.typ, undefined, undefined, undefined, [], defs);
   return spans;
 };

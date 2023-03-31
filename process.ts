@@ -24,8 +24,9 @@ import {
   Branch,
   Origin,
   ASTNode,
+  AbsI,
 } from "./ast";
-import { addTermToCtx, shift } from "./check";
+import { addTermToCtx, identifier, shift } from "./check";
 import { pretty } from "./pretty";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
@@ -187,9 +188,14 @@ export const desugarTerm = (
       );
     case "lam":
       // The type in this context is not important so just set it as *.
-      return Abs(
+      return AbsI(
         t.name,
-        desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(
+          t.body,
+          undefined,
+          adts,
+          addTermToCtx(ctx, identifier(t.name), Star())
+        )
       );
     case "par":
       for (let i = 0; i < ctx.length; i++) {
@@ -229,6 +235,7 @@ export const desugarTerm = (
       return t;
     case "star":
     case "var":
+    case "id":
       return t;
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
@@ -252,9 +259,9 @@ export const processPars = (t: Term, ctx: Context): Term => {
       return App(processPars(t.left, ctx), processPars(t.right, ctx));
     case "lam":
       // The type in this context is not important so just set it as *.
-      return Abs(
+      return AbsI(
         t.name,
-        processPars(t.body, addTermToCtx(ctx, t.name, Star()))
+        processPars(t.body, addTermToCtx(ctx, identifier(t.name), Star()))
       );
     case "par":
       for (let i = 0; i < ctx.length; i++) {
@@ -287,6 +294,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "ref":
     case "star":
     case "var":
+    case "id":
       return t;
   }
 };

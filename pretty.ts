@@ -14,15 +14,7 @@ export function pretty(term: Term, indices: boolean = false): string {
   }
   switch (term._) {
     case "lam":
-      return (
-        "λ" +
-        term.name +
-        // ":" +
-        // prettyT(term.bindType, indices) +
-        ". " +
-        pretty(term.body, indices) +
-        ""
-      );
+      return "λ" + pretty(term.name) + ". " + pretty(term.body, indices) + "";
     case "self":
       return `ι${term.name}. ${pretty(term.body, indices)}`;
     case "app": {
@@ -36,6 +28,7 @@ export function pretty(term: Term, indices: boolean = false): string {
       return l + r;
     }
     case "ref":
+    case "id":
       return term.name;
     case "var":
       if (indices) {
