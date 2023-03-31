@@ -109,7 +109,7 @@ export const Result = (term: Term, type: Term): Result => ({
 // whose type can always be checked.
 export const infer = (
   defs: Map<string, Def>,
-  adts: ADT[],
+  adts: Map<string, ADT>,
   ctx: Context,
   term: Term,
   originStart: number = 0,
@@ -272,7 +272,7 @@ export const infer = (
 // head normal form.
 const check = (
   defs: Map<string, Def>,
-  adts: ADT[],
+  adts: Map<string, ADT>,
   ctx: Context,
   term: Term,
   type: Normal,
@@ -358,8 +358,8 @@ const check = (
           }
 
           // Now look up the constructors for the type.
-          const adtDef = adts.filter((x) => x.name == ref.name);
-          if (adtDef.length != 1) {
+          const adtDef = adts.get(ref.name);
+          if (adtDef == undefined) {
             return TypecheckError(
               `type not found: ${ref.name}`,
               originStart,
@@ -368,8 +368,8 @@ const check = (
           }
 
           var constructor: Constructor | undefined = undefined;
-          for (const con of adtDef[0].constructors) {
-            if (con.name == curr.constructor) {
+          for (const con of adtDef.constructors) {
+            if (identifier(con.name) == curr.constructor) {
               constructor = con;
             }
           }
@@ -476,7 +476,7 @@ const check = (
 // check that the given term has the expected type.
 export const typecheck = (
   defs: Map<string, Def>,
-  adts: ADT[],
+  adts: Map<string, ADT>,
   ctx: Context,
   tm: Term,
   ty: Term,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { Context, Def, Par, Self, Term, Type } from "./ast";
+import { ADT, Context, Def, Identifier, Par, Self, Term, Type } from "./ast";
 import {
   addTermToCtx,
   typecheck,
@@ -90,7 +90,13 @@ describe("typechecker", () => {
   const ty = Pi("", Ref("A"), Ref("A"));
 
   test("lambda: A:* must exist in the defs", () => {
-    const result = typecheck(new Map<string, Def>(), [], [], tm, ty);
+    const result = typecheck(
+      new Map<string, Def>(),
+      new Map<string, ADT>(),
+      [],
+      tm,
+      ty
+    );
     expect(result).toStrictEqual({
       _: "typecheckerror",
       end: 0,
@@ -102,7 +108,7 @@ describe("typechecker", () => {
   test("lambda: λa.a should have type A→A", () => {
     const result = typecheck(
       defMap([Def("A", Abs("x", Var("x", 0)), Star())]),
-      [],
+      new Map<string, ADT>(),
       [],
       tm,
       ty
@@ -208,7 +214,7 @@ describe("typechecker", () => {
     expect(
       typecheck(
         defMap([Def("B", id.term, Star())]),
-        [],
+        new Map<string, ADT>(),
         ctx,
         program,
         Pi("", Ref("A"), Ref("B"))
@@ -223,7 +229,7 @@ describe("typechecker", () => {
 
     const result = typecheck(
       defMap([Def("A", id.term, Star()), Def("B", id.term, Star())]),
-      [],
+      new Map<string, ADT>(),
       [],
       program,
       Pi("", Ref("A"), Pi("", Pi("", Ref("A"), Ref("B")), Ref("B")))
@@ -264,7 +270,7 @@ describe("typechecker", () => {
   test("polymorphic double function is well-typed", () => {
     const result = typecheck(
       defMap([Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))]),
-      [],
+      new Map<string, ADT>(),
       [],
       double,
       ci(
@@ -291,7 +297,9 @@ describe("typechecker", () => {
       { type: "bind", name: "a", typ: Star() },
     ];
     const program = App(Var("a", 0), Var("b", 1));
-    expect(infer(new Map<string, Def>(), [], ctx, program)).toStrictEqual({
+    expect(
+      infer(new Map<string, Def>(), new Map<string, ADT>(), ctx, program)
+    ).toStrictEqual({
       _: "typecheckerror",
       end: 0,
       msg: "expected pi type on the left of app; got star: ★",
@@ -307,7 +315,7 @@ describe("typechecker", () => {
     );
     const result = infer(
       new Map<string, Def>(),
-      [],
+      new Map<string, ADT>(),
       [{ type: "bind", name: "A", typ: Star() }],
       program
     );
@@ -341,7 +349,7 @@ describe("typechecker", () => {
     // double has type Nat->Nat which has kind *
     let result = typecheck(
       new Map<string, Def>(),
-      [],
+      new Map<string, ADT>(),
       [{ type: "bind", name: "Nat", typ: Star() }],
       Pi("", Var("Nat", 0), Var("Nat", 1)),
       Star()
@@ -375,7 +383,13 @@ describe("typechecker", () => {
   ) as Ann;
 
   test("type-level and", () => {
-    let result = typecheck(new Map<string, Def>(), [], [], and.term, and.typ);
+    let result = typecheck(
+      new Map<string, Def>(),
+      new Map<string, ADT>(),
+      [],
+      and.term,
+      and.typ
+    );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -420,7 +434,7 @@ describe("typechecker", () => {
   test("conj checks", () => {
     let result = typecheck(
       defMap([Def("and", and.term, and.typ)]),
-      [],
+      new Map<string, ADT>(),
       [],
       conj.term,
       conj.typ
@@ -460,7 +474,7 @@ describe("typechecker", () => {
   test("proj1 checks", () => {
     let result = typecheck(
       defMap([Def("and", and.term, and.typ)]),
-      [],
+      new Map<string, ADT>(),
       [],
       proj1.term,
       proj1.typ
@@ -500,7 +514,7 @@ describe("typechecker", () => {
   test("proj2 checks", () => {
     let result = typecheck(
       defMap([Def("and", and.term, and.typ)]),
-      [],
+      new Map<string, ADT>(),
       [],
       proj2.term,
       proj2.typ
@@ -559,7 +573,7 @@ describe("typechecker", () => {
         Def("proj1", proj1.term, proj1.typ),
         Def("proj2", proj2.term, proj2.typ),
       ]),
-      [],
+      new Map<string, ADT>(),
       [],
       commBody,
       commType
@@ -591,11 +605,23 @@ describe("typechecker", () => {
     const tru = Abs("X", Abs("t", Abs("f", Var("t", 1))));
     const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
 
-    let result = typecheck(new Map<string, Def>(), [], [], tru, Bool);
+    let result = typecheck(
+      new Map<string, Def>(),
+      new Map<string, ADT>(),
+      [],
+      tru,
+      Bool
+    );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
-    let result2 = typecheck(new Map<string, Def>(), [], [], fls, Bool);
+    let result2 = typecheck(
+      new Map<string, Def>(),
+      new Map<string, ADT>(),
+      [],
+      fls,
+      Bool
+    );
     if (result2._ == "typecheckerror") {
       throw new Error(result2.msg);
     }
@@ -678,11 +704,11 @@ describe("typechecker", () => {
     expect(bf).toStrictEqual(buildConstructor(["t", "f"], 1));
 
     const builtBool = buildType(
-      "Bool",
+      Identifier("Bool"),
       [],
       [
-        { name: "true", args: [] },
-        { name: "false", args: [] },
+        { name: Identifier("true"), args: [] },
+        { name: Identifier("false"), args: [] },
       ]
     ).term;
     expect(builtBool).toStrictEqual(Bool);
@@ -690,7 +716,7 @@ describe("typechecker", () => {
     ensure(
       typecheck(
         defMap([Booltrue, Boolfalse, Booldef]),
-        [],
+        new Map<string, ADT>(),
         [],
         Booltrue.term,
         Bool
@@ -699,32 +725,38 @@ describe("typechecker", () => {
     ensure(
       typecheck(
         defMap([Booltrue, Boolfalse, Booldef]),
-        [],
+        new Map<string, ADT>(),
         [],
         Boolfalse.term,
         Bool
       )
     );
     ensure(
-      typecheck(defMap([Booltrue, Boolfalse, Booldef]), [], [], Bool, Star())
+      typecheck(
+        defMap([Booltrue, Boolfalse, Booldef]),
+        new Map<string, ADT>(),
+        [],
+        Bool,
+        Star()
+      )
     );
   });
 
   const natConstructors = [
-    { name: "zero", args: [] },
-    { name: "succ", args: [{ name: "n", type: Ref("Nat") }] },
+    { name: Identifier("zero"), args: [] },
+    { name: Identifier("succ"), args: [{ name: "n", type: Ref("Nat") }] },
   ];
 
-  const NatDef = buildType("Nat", [], natConstructors);
+  const NatDef = buildType(Identifier("Nat"), [], natConstructors);
 
   const natZeroDef = Def(
     "zero",
-    GenerateConstructorTerm("Nat", [], natConstructors, 0),
+    GenerateConstructorTerm([], natConstructors, 0),
     GenerateConstructorType("Nat", [], natConstructors[0])
   );
   const natSuccDef = Def(
     "succ",
-    GenerateConstructorTerm("Nat", [], natConstructors, 1),
+    GenerateConstructorTerm([], natConstructors, 1),
     GenerateConstructorType("Nat", [], natConstructors[1])
   );
 
@@ -793,7 +825,7 @@ describe("typechecker", () => {
     const onewhnf = te(whnf(false, defs, one, one));
     console.log(`one is ${pretty(onewhnf)}`);
     // console.log(pretty(te(whnf(false, defs, one, one))));
-    ensure(typecheck(defs, [], [], onewhnf, Nat));
+    ensure(typecheck(defs, new Map<string, ADT>(), [], onewhnf, Nat));
   });
 
   test("eliminate nat", () => {
@@ -806,12 +838,12 @@ describe("typechecker", () => {
       Boolfalse,
     ]);
     const n = App(natSuccDef.term, natZeroDef.term); // succ(zero)
-    ensure(typecheck(defs, [], [], n, Nat));
+    ensure(typecheck(defs, new Map<string, ADT>(), [], n, Nat));
 
     console.log(pretty(te(whnf(false, defs, n, Star()))));
     const P = Abs("P", Ref("Bool")); // λP. Bool
     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
-    ensure(typecheck(defs, [], [], eliminator, Bool));
+    ensure(typecheck(defs, new Map<string, ADT>(), [], eliminator, Bool));
 
     console.log(pretty(te(whnf(false, defs, eliminator, Star()))));
 
@@ -905,9 +937,9 @@ describe("typechecker", () => {
 
     const maybeParams = [{ name: "A", type: Star() }];
     const maybeConstructors = [
-      { name: "null", args: [] },
+      { name: Identifier("null"), args: [] },
       {
-        name: "just",
+        name: Identifier("just"),
         args: [
           {
             name: "value",
@@ -916,7 +948,11 @@ describe("typechecker", () => {
         ],
       },
     ];
-    const builtMaybe = buildType("Maybe", maybeParams, maybeConstructors).term;
+    const builtMaybe = buildType(
+      Identifier("Maybe"),
+      maybeParams,
+      maybeConstructors
+    ).term;
     expect(builtMaybe).toStrictEqual(Maybe);
 
     /*
@@ -957,7 +993,7 @@ describe("typechecker", () => {
     ).toStrictEqual(maybeNullDef.typ);
 
     expect(
-      GenerateConstructorTerm("Maybe", maybeParams, maybeConstructors, 0)
+      GenerateConstructorTerm(maybeParams, maybeConstructors, 0)
     ).toStrictEqual(maybeNullDef.term);
 
     expect(
@@ -965,14 +1001,14 @@ describe("typechecker", () => {
     ).toStrictEqual(maybeJustDef.typ);
 
     expect(
-      GenerateConstructorTerm("Maybe", maybeParams, maybeConstructors, 1)
+      GenerateConstructorTerm(maybeParams, maybeConstructors, 1)
     ).toStrictEqual(maybeJustDef.term);
 
     const maybeTypeDef = Def("Maybe", Maybe, Star());
 
     let result = typecheck(
       defMap([maybeTypeDef, maybeNullDef, maybeJustDef]),
-      [],
+      new Map<string, ADT>(),
       [],
       maybeNullDef.term,
       maybeNullDef.typ
@@ -983,7 +1019,7 @@ describe("typechecker", () => {
 
     let result2 = typecheck(
       defMap([maybeTypeDef, maybeNullDef, maybeJustDef]),
-      [],
+      new Map<string, ADT>(),
       [],
       maybeJustDef.term,
       maybeJustDef.typ
@@ -1002,7 +1038,7 @@ describe("typechecker", () => {
         maybeNullDef,
         maybeJustDef,
       ]),
-      [],
+      new Map<string, ADT>(),
       [],
       App(App(Ref("just"), Ref("Bool")), Ref("true")),
       App(Ref("Maybe"), Ref("Bool"))
@@ -1097,9 +1133,9 @@ describe("typechecker", () => {
 
     const ListParams = [{ name: "A", type: Star() }];
     const ListConstructors = [
-      { name: "nil", args: [] },
+      { name: Identifier("nil"), args: [] },
       {
-        name: "cons",
+        name: Identifier("cons"),
         args: [
           {
             name: "head",
@@ -1113,7 +1149,11 @@ describe("typechecker", () => {
       },
     ];
 
-    const List = buildType("List", ListParams, ListConstructors).term;
+    const List = buildType(
+      Identifier("List"),
+      ListParams,
+      ListConstructors
+    ).term;
 
     /*
     nil: (T *) → List<T>  = 
@@ -1143,7 +1183,6 @@ describe("typechecker", () => {
     expect(Listnil.typ).toStrictEqual(generated);
 
     const generatedBody = GenerateConstructorTerm(
-      "List",
       ListParams,
       ListConstructors,
       0
@@ -1191,7 +1230,6 @@ describe("typechecker", () => {
     );
 
     const generatedBody2 = GenerateConstructorTerm(
-      "List",
       ListParams,
       ListConstructors,
       1
@@ -1342,7 +1380,13 @@ describe("typechecker", () => {
   const succ = Def("Nat.succ", s, Pi("", Nat, Nat));
 
   test("recursive parameterised types: zero", () => {
-    let result = typecheck(new Map<string, Def>(), [], [], zero.term, Nat);
+    let result = typecheck(
+      new Map<string, Def>(),
+      new Map<string, ADT>(),
+      [],
+      zero.term,
+      Nat
+    );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
     }
@@ -1351,7 +1395,7 @@ describe("typechecker", () => {
   test("recursive parameterised types: succ", () => {
     let result = typecheck(
       defMap([NatDef]),
-      [],
+      new Map<string, ADT>(),
       [],
       s, //succ.term,
       Pi("", Nat, Nat)

@@ -215,24 +215,27 @@ export const Argument = (name: string, type: Type): Argument => ({
 });
 
 export type Constructor = {
-  name: string;
+  name: Origin | Identifier;
   args: Argument[];
 };
 
-export const Constructor = (name: string, args: Argument[]): Constructor => ({
+export const Constructor = (
+  name: Origin | Identifier,
+  args: Argument[]
+): Constructor => ({
   name: name,
   args: args,
 });
 
 export type ADT = {
   _: "adt";
-  name: string;
+  name: Origin | Identifier;
   params: Argument[];
   constructors: Constructor[];
 };
 
 export const ADT = (
-  name: string,
+  name: Origin | Identifier,
   params: Argument[],
   constructors: Constructor[]
 ): ADT => ({
@@ -589,10 +592,14 @@ export const argumentList: Parser<Argument[]> = bind(
 );
 
 // name(arg1 ArgType1, ..., ArgN ArgTypeN)
-export const constructor: Parser<Constructor> = bind(identifier, (name) =>
-  bind(many(whitespace), (_) =>
-    bind(optional(argumentList), (args) => pure(Constructor(name, args || [])))
-  )
+export const constructor: Parser<Constructor> = bind(
+  block(identifier2),
+  (name) =>
+    bind(many(whitespace), (_) =>
+      bind(optional(argumentList), (args) =>
+        pure(Constructor(name, args || []))
+      )
+    )
 );
 
 // adt parses an abstract data type, for example

@@ -25,11 +25,20 @@ import {
   Origin,
   ASTNode,
   AbsI,
+  Identifier,
 } from "./ast";
 import { addTermToCtx, identifier, shift } from "./check";
 import { pretty } from "./pretty";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
+
+const wrapOrigin = (term: Term, from: Origin | Identifier): Term => {
+  if (from._ == "orig") {
+    return Origin(from.start, from.end, term);
+  } else {
+    return term;
+  }
+};
 
 const processNode = (n: ASTNode): ASTNode[] => {
   switch (n._) {
@@ -38,9 +47,16 @@ const processNode = (n: ASTNode): ASTNode[] => {
       const td = buildType(n.name, n.params, n.constructors);
       const defs = n.constructors.map((con, i) => {
         return Def(
-          con.name,
-          GenerateConstructorTerm(n.name, n.params, n.constructors, i),
-          GenerateConstructorType(n.name, n.params, n.constructors[i])
+          identifier(con.name),
+          wrapOrigin(
+            GenerateConstructorTerm(n.params, n.constructors, i),
+            con.name
+          ),
+          GenerateConstructorType(
+            identifier(n.name),
+            n.params,
+            n.constructors[i]
+          )
         );
       });
       return [td].concat(defs);
@@ -80,9 +96,9 @@ export const buildConstructor = (
 
 // a1 → a2 → P(constructor1)
 const buildTypeArgSignature = (
-  parameters: { name: string; type: Type }[],
+  parameters: Argument[],
   constructorName: string,
-  args: { name: string; type: Type }[],
+  args: Argument[],
   acc: Term
 ): Term => {
   // Build the syntax tree for the type Πa:A. Πb:B. P(constructorN(a,b)).
@@ -124,14 +140,14 @@ const buildTypeArgSignature = (
     P(t)
   */
 export const buildType = (
-  name: string,
-  parameters: { name: string; type: Type }[],
-  constructors: { name: string; args: { name: string; type: Type }[] }[]
+  name: Origin | Identifier,
+  parameters: Argument[],
+  constructors: Constructor[]
 ): Def => {
   // T(A,B,C)
   const typ = parameters.reduce<Term>(
     (acc, paramN) => App(acc, Par(paramN.name)),
-    Ref(name)
+    Ref(identifier(name))
   );
 
   const self = // ιt.
@@ -146,7 +162,7 @@ export const buildType = (
           (acc, constructorN) =>
             buildTypeArgSignature(
               parameters,
-              constructorN.name,
+              identifier(constructorN.name),
               constructorN.args,
               acc
             ),
@@ -156,10 +172,13 @@ export const buildType = (
     );
 
   return Def(
-    name,
-    processPars(
-      parameters.reduce<Term>((acc, paramN) => Abs(paramN.name, acc), self),
-      []
+    identifier(name),
+    wrapOrigin(
+      processPars(
+        parameters.reduce<Term>((acc, paramN) => Abs(paramN.name, acc), self),
+        []
+      ),
+      name
     ),
     Star()
   );
@@ -174,7 +193,7 @@ export const processADTs = (f: File): File => {
 export const desugarTerm = (
   t: Term,
   ann: Term | undefined,
-  adts: ADT[],
+  adts: Map<string, ADT>,
   ctx: Context
 ): Term => {
   switch (t._) {
@@ -242,7 +261,7 @@ export const desugarTerm = (
   }
 };
 
-export const desugar = (def: Def, adts: ADT[]): Def => {
+export const desugar = (def: Def, adts: Map<string, ADT>): Def => {
   return Def(
     def.name,
     desugarTerm(def.term, undefined, adts, []),
@@ -331,7 +350,6 @@ export const GenerateConstructorType = (
 };
 
 export const GenerateConstructorTerm = (
-  typeName: string,
   params: Argument[],
   constructors: Constructor[],
   i: number
@@ -345,12 +363,12 @@ export const GenerateConstructorTerm = (
   // Apply all arguments to the constructor
   const apps = constructors[i].args.reduce<Term>(
     (acc, curr) => App(acc, Par(curr.name)),
-    Par(constructors[i].name)
+    Par(identifier(constructors[i].name))
   );
 
   // Abstract constructors
   const absConstructors = constructors.reduceRight<Term>(
-    (acc, curr) => Abs(curr.name, acc),
+    (acc, curr) => AbsI(curr.name, acc),
     apps
   );
 

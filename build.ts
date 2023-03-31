@@ -1,7 +1,7 @@
 // build is a library for orchestrating builds of source files for this language.
 
 import { parseFile, ADT, Def, ASTNode, File } from "./ast";
-import { typecheck } from "./check";
+import { identifier, typecheck } from "./check";
 import { typecheckErrorDiagnostic } from "./inspect";
 import { parseErrorDiagnostic } from "./parser";
 import { processADTs, desugar } from "./process";
@@ -30,7 +30,11 @@ export const build = (src: string): [File, Map<string, Def>] => {
   const f = processADTs(t.value);
 
   // desugar definitions
-  const adts = t.value.content.filter((c) => c._ == "adt") as ADT[];
+  const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
+  const adts = new Map<string, ADT>();
+  for (const adt of adtList) {
+    adts.set(identifier(adt.name), adt);
+  }
   const defs = (f.content.filter((c) => c._ == "def") as Def[]).map((def) =>
     desugar(def, adts)
   );
