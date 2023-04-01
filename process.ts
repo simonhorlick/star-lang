@@ -374,10 +374,10 @@ export const GenerateConstructorTerm = (
 
   // Abstract constructors
   const absConstructors = constructors.reduceRight<Term>(
-    // Passing curr.name to Abs here will expose the source locations of the
+    // Passing curr.name to AbsI here will expose the source locations of the
     // type constructors to tooling, i.e. the constructor `true` would have
     // a span for `true:P(true)`.
-    (acc, curr) => AbsI(curr.name, acc),
+    (acc, curr) => Abs(identifier(curr.name), acc),
     apps
   );
 
