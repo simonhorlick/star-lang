@@ -112,8 +112,8 @@ export const infer = (
   adts: Map<string, ADT>,
   ctx: Context,
   term: Term,
-  originStart: number = 0,
-  originEnd: number = 0
+  originStart: number,
+  originEnd: number
 ): Result | TypecheckError => {
   switch (term._) {
     case "pi": {

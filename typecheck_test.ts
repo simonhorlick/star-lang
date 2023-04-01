@@ -298,7 +298,7 @@ describe("typechecker", () => {
     ];
     const program = App(Var("a", 0), Var("b", 1));
     expect(
-      infer(new Map<string, Def>(), new Map<string, ADT>(), ctx, program)
+      infer(new Map<string, Def>(), new Map<string, ADT>(), ctx, program, 0, 0)
     ).toStrictEqual({
       _: "typecheckerror",
       end: 0,
@@ -317,7 +317,9 @@ describe("typechecker", () => {
       new Map<string, Def>(),
       new Map<string, ADT>(),
       [{ type: "bind", name: "A", typ: Star() }],
-      program
+      program,
+      0,
+      0
     );
     if (result._ == "typecheckerror") {
       throw new Error(result.msg);
