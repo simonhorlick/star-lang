@@ -19,6 +19,8 @@ import {
   ADT,
   Identifier,
   AbsI,
+  ASTNode,
+  Argument,
 } from "./ast";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
@@ -790,12 +792,40 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
   }
 };
 
+export function stripAST(t: ASTNode): ASTNode {
+  switch (t._) {
+    case "adt":
+      return ADT(
+        t.name,
+        t.params.map((p) => Argument(p.name, strip(p.type))),
+        t.constructors.map((c) =>
+          Constructor(
+            c.name,
+            c.args.map((p) => Argument(p.name, strip(p.type)))
+          )
+        )
+      );
+    case "com":
+      return t;
+    case "def":
+      return Def(t.name, strip(t.term), strip(t.typ));
+    case "nl":
+      return t;
+    case "orig2":
+      return t.child;
+    case "pkg":
+      return t;
+    case "sp":
+      return t;
+  }
+}
+
 export function strip(t: Term): Term {
   switch (t._) {
     case "var":
       return t;
     case "lam":
-      return AbsI(t.name, strip(t.body));
+      return Abs(identifier(t.name), strip(t.body));
     case "self":
       return Self(t.name, strip(t.body));
     case "app":
