@@ -377,11 +377,9 @@ export const block2 =
   };
 
 // parsePackage parses a package declaration such as `package abc`.
-export const parsePackage: Parser<ASTNode> = block2(
-  bind(str("package"), (_) =>
-    bind(many1(whitespace), (_) =>
-      bind(identifier, (a) => pure({ _: "pkg", name: a } as Pkg))
-    )
+export const parsePackage: Parser<ASTNode> = bind(str("package"), (_) =>
+  bind(many1(whitespace), (_) =>
+    block2(bind(identifier, (a) => pure({ _: "pkg", name: a } as Pkg)))
   )
 );
 
