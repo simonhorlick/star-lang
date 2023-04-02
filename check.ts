@@ -387,8 +387,14 @@ const check = (
         );
       }
 
-      // we add the bound variable x:A to the context (assuming that x has type
-      // A) then using that context we check the body has type B.
+      // The domain of the pi type needs to be a type.
+      const domain = check(defs, adts, ctx, type.from, Star(), os, oe);
+      if (domain._ == "typecheckerror") {
+        return domain;
+      }
+
+      // We add the bound variable x:A to the context then using that context we
+      // check the body has type B.
       let ebody = typecheck(
         defs,
         adts,
