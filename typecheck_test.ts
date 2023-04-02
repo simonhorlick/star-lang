@@ -86,16 +86,18 @@ describe("typechecker", () => {
   // Γ ⊢ A <= *
   // ---------------------- lambda
   // Γ ⊢ λx.a <= (x:A) -> B
-  const tm = Abs("a", Var("a", 0));
-  const ty = Pi("", Ref("A"), Ref("A"));
 
-  test("lambda: A:* must exist in the defs", () => {
-    const result = typecheck(
-      new Map<string, Def>(),
-      new Map<string, ADT>(),
-      [],
-      tm,
-      ty
+  test("should return an error if the domain of a pi isn't a known type", () => {
+    // In this test case, the typechecker should look up the reference A and
+    // ensure it's a type.
+    const result = ensure(
+      typecheck(
+        new Map<string, Def>(),
+        new Map<string, ADT>(),
+        [],
+        Abs("a", Var("a", 0)),
+        Pi("", Ref("A"), Ref("A"))
+      )
     );
     expect(result).toStrictEqual({
       _: "typecheckerror",
@@ -105,20 +107,19 @@ describe("typechecker", () => {
     });
   });
 
-  test("lambda: λa.a should have type A→A", () => {
-    const result = typecheck(
-      defMap([Def("A", Abs("x", Var("x", 0)), Star())]),
-      new Map<string, ADT>(),
-      [],
-      tm,
-      ty
+  test("should check that a lambda has a pi type", () => {
+    const result = ensure(
+      typecheck(
+        defMap([Def("A", Abs("x", Var("x", 0)), Star())]),
+        new Map<string, ADT>(),
+        [],
+        Abs("a", Var("a", 0)),
+        Pi("", Ref("A"), Ref("A"))
+      )
     );
-    if (result._ == "typecheckerror") {
-      throw `type check error: ${result.msg}`;
-    }
     // The typechecker returns an annotation.
     expect(result.term).toStrictEqual(Abs("a", Ann(Var("a", 0), Ref("A"))));
-    expect(result.type).toStrictEqual(ty);
+    expect(result.type).toStrictEqual(Pi("", Ref("A"), Ref("A")));
   });
 
   // Γ ⊢ A <= *
@@ -131,8 +132,18 @@ describe("typechecker", () => {
 
   // ----------------
   // Γ ⊢ ★ => ★
-  test("should infer type of type", () => {
-    throw "not implemented";
+  test("should infer type star for star (type-in-type)", () => {
+    const result = ensure(
+      typecheck(
+        new Map<string, Def>(),
+        new Map<string, ADT>(),
+        [],
+        Star(),
+        Star()
+      )
+    );
+    // The typechecker returns an annotation.
+    expect(result.term).toStrictEqual(Abs("a", Ann(Var("a", 0), Ref("A"))));
   });
 
   // Γ ⊢ f => Πx:A. B

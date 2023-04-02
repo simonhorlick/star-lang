@@ -18,7 +18,6 @@ import {
 } from "./ast";
 import {
   addTermToCtx,
-  ensurePi,
   identifier,
   infer,
   logFull,
@@ -26,6 +25,7 @@ import {
   shift,
   strip,
   TypecheckError,
+  whnf,
 } from "./check";
 import { indexToLineCol, printLine } from "./parser";
 import { pretty, printCtx } from "./pretty";
@@ -120,9 +120,12 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
         if (ty == undefined) {
           throw "type not present";
         }
-        const typ = ensurePi(defs, t, ty, start ?? 0, end ?? 0);
+        const typ = whnf(true, defs, ty, t);
         if (typ._ == "typecheckerror") {
           return t;
+        }
+        if (typ._ != "pi") {
+          throw "expected pi";
         }
         if (start != undefined && end != undefined) {
           spans.set(
