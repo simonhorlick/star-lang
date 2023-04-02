@@ -11,6 +11,7 @@ import {
   whnf,
   TypecheckError,
   Result,
+  identifier,
 } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
@@ -29,8 +30,6 @@ const logFull = (x: any) => {
 };
 // logFull(result.term);
 // console.log(pretty(result.term));
-
-const ci = (t: Term): Term => dbgCheckIndices([], 0, t);
 
 // λs. λz. z
 const zero = Abs("s", Abs("z", Var("z", 0)));
@@ -57,7 +56,7 @@ const ensure = (r: Result | TypecheckError): Result => {
   }
 };
 
-const defMap = (defs: Def[]): Map<string, Def> => {
+const defs = (defs: Def[] = []): Map<string, Def> => {
   const m = new Map<string, Def>();
   for (const d of defs) {
     m.set(d.name, d);
@@ -65,20 +64,33 @@ const defMap = (defs: Def[]): Map<string, Def> => {
   return m;
 };
 
+const adts = (adts: ADT[] = []): Map<string, ADT> => {
+  const m = new Map<string, ADT>();
+  for (const adt of adts) {
+    m.set(identifier(adt.name), adt);
+  }
+  return m;
+};
+
 describe("typechecker", () => {
   // Typing Rules
   //
-  // Γ ⊢ a => A    infer     in context G, infer that a has type A
-  // Γ ⊢ a <= A    check     in context G, check that a has type A
+  // Γ ⊢ a => A    infer     in context Γ, infer that a has type A
+  // Γ ⊢ a <= A    check     in context Γ, check that a has type A
 
-  // For variables, the context tells us what type to infer:
-  //
-  // x : A ∈ Γ
-  // ----------- var
-  // Γ ⊢ x => A
-  // test("should infer type of variable from context", () => {
-  //   throw "not implemented";
-  // });
+  describe("var", () => {
+    // For variables, the context tells us what type to infer:
+    //
+    // x : A ∈ Γ
+    // ----------- var
+    // Γ ⊢ x => A
+    test("should infer type of variable from context", () => {
+      const ctx: Context = [{ type: "bind", name: "x", typ: Ref("A") }];
+      expect(
+        ensure(infer(defs(), adts(), ctx, Var("x", 0), 0, 0)).type
+      ).toStrictEqual(Ref("A"));
+    });
+  });
 
   describe("lambda", () => {
     // Lambdas must be checked against a supplied pi type.
@@ -92,8 +104,8 @@ describe("typechecker", () => {
       // In this test case, the typechecker should look up the reference A and
       // ensure it's a type.
       const result = typecheck(
-        new Map<string, Def>(),
-        new Map<string, ADT>(),
+        defs(),
+        adts(),
         [],
         Abs("a", Var("a", 0)),
         Pi("", Ref("A"), Ref("A"))
@@ -109,8 +121,8 @@ describe("typechecker", () => {
     test("should check that a lambda has a pi type", () => {
       const result = ensure(
         typecheck(
-          defMap([Def("A", Abs("x", Var("x", 0)), Star())]),
-          new Map<string, ADT>(),
+          defs([Def("A", Abs("x", Var("x", 0)), Star())]),
+          adts(),
           [],
           Abs("a", Var("a", 0)),
           Pi("", Ref("A"), Ref("A"))
@@ -121,339 +133,283 @@ describe("typechecker", () => {
     });
   });
 
-  //   // Γ ⊢ A <= *
-  //   // Γ,x:A ⊢ B <= *
-  //   // ------------------- pi
-  //   // Γ ⊢ Πx:A. B => *
-  //   test("should check A is a type then infer B", () => {
-  //     throw "not implemented";
-  //   });
+  describe("pi", () => {
+    // We first check that A has type star, and that B has type star if x is in
+    // the context, if so we're all good and the type of the pi is star.
+    //
+    // Γ ⊢ A <= *
+    // Γ,x:A ⊢ B <= *
+    // ------------------- pi
+    // Γ ⊢ Πx:A. B => *
 
-  //   // ----------------
-  //   // Γ ⊢ ★ => ★
-  //   test("should infer type star for star (type-in-type)", () => {
-  //     const result = ensure(
-  //       typecheck(
-  //         new Map<string, Def>(),
-  //         new Map<string, ADT>(),
-  //         [],
-  //         Star(),
-  //         Star()
-  //       )
-  //     );
-  //     expect(result.term).toStrictEqual(Star());
-  //   });
+    test("should check domain is a type", () => {
+      ensure(
+        typecheck(
+          defs([
+            Def("A", Abs("x", Var("x", 0)), Star()),
+            Def("B", Abs("x", Var("x", 0)), Star()),
+          ]),
+          adts(),
+          [],
+          Pi("", Ref("A"), Ref("B")),
+          Star()
+        )
+      );
+    });
+  });
 
-  //   // Γ ⊢ f => Πx:A. B
-  //   // Γ ⊢ b <= A
-  //   // ------------------- app
-  //   // Γ ⊢ f(b) => B[b/x]
-  //   test("should infer f and use that to check the type of b", () => {
-  //     throw "not implemented";
-  //   });
+  describe("star", () => {
+    // Under the empty set of assumptions, we postulate that star has type star
+    // (i.e. we have type-in-type).
+    //
+    // ----------------
+    // Γ ⊢ ★ => ★
+    test("should infer type star for star (type-in-type)", () => {
+      ensure(typecheck(defs(), adts(), [], Star(), Star()));
+    });
+  });
 
-  //   //    Γ ⊢ a <= A
-  //   // ---------------- annot
-  //   // Γ ⊢ (a : A) => A
-  //   test("should check type of a matches the annotation", () => {
-  //     throw "not implemented";
-  //   });
+  describe("app", () => {
+    //
+    // Γ ⊢ f => Πx:A. B
+    // Γ ⊢ a <= A
+    // ------------------- app
+    // Γ ⊢ f(a) => B[a/x]
 
-  //   // Γ ⊢ t:[t/x]T
-  //   // ------------ selfGen
-  //   //  Γ ⊢ t:ιx.T
-  //   test("selfGen", () => {
-  //     throw "not implemented";
-  //   });
+    test("should infer f and use that to check the type of the argument", () => {
+      const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
+      ensure(
+        typecheck(
+          defs([
+            // A:★
+            Def("A", Abs("x", Var("x", 0)), Star()),
+            // B:★
+            Def("B", Abs("x", Var("x", 0)), Star()),
+            // f:A->B
+            Def(
+              "f",
+              Abs("a", Abs("x", Var("x", 0))),
+              Pi("", Ref("A"), Ref("B"))
+            ),
+          ]),
+          adts(),
+          ctx,
+          App(Ref("f"), Var("a", 0)), // f(a):B
+          Ref("B")
+        )
+      );
+    });
 
-  //   //  Γ ⊢ t:ιx.T
-  //   // ------------ selfInst
-  //   // Γ ⊢ t:[t/x]T
-  //   test("selfInst", () => {
-  //     throw "not implemented";
-  //   });
+    test("should reject applications where the lhs is not an arrow", () => {
+      const ctx: Context = [
+        { type: "bind", name: "b", typ: Star() },
+        { type: "bind", name: "a", typ: Star() },
+      ];
+      const program = App(Var("a", 0), Var("b", 1));
+      expect(infer(defs(), adts(), ctx, program, 0, 0)).toStrictEqual({
+        _: "typecheckerror",
+        end: 0,
+        msg: "expected pi type on the left of app; got star: ★",
+        start: 0,
+      });
+    });
+  });
 
-  //   test("whnf: cannot reduce id", () => {
-  //     expect(
-  //       whnf(false, new Map<string, Def>(), Abs("x", Var("x", 0)), Star())
-  //     ).toStrictEqual(Abs("x", Var("x", 0)));
-  //   });
+  describe("ann", () => {
+    //    Γ ⊢ a <= A
+    // ---------------- annot
+    // Γ ⊢ (a : A) => A
 
-  //   test("whnf: shouldn't reduce refs", () => {
-  //     expect(
-  //       whnf(false, new Map<string, Def>(), Ref("ref"), Star())
-  //     ).toStrictEqual(Ref("ref"));
-  //   });
+    test("should error if the type doesn't matche the annotation", () => {
+      const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
+      const result = typecheck(
+        defs([
+          Def("A", Abs("x", Var("x", 0)), Star()),
+          Def("B", Abs("x", Var("x", 0)), Star()),
+        ]),
+        adts(),
+        ctx,
+        Ann(Var("a", 0), Ref("B")),
+        Ref("B")
+      );
+      expect(result).toStrictEqual({
+        _: "typecheckerror",
+        start: 0,
+        end: 0,
+        msg: `typecheck failed: B is not A`,
+      });
+    });
 
-  //   test("whnf: succ(zero) is a constructor, so can't reduce", () => {
-  //     expect(
-  //       whnf(false, new Map<string, Def>(), App(Ref("succ"), Ref("zero")), Star())
-  //     ).toStrictEqual(App(Ref("succ"), Ref("zero")));
-  //   });
+    test("should check type of a matches the annotation", () => {
+      const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
+      ensure(
+        typecheck(
+          defs([
+            Def("A", Abs("x", Var("x", 0)), Star()),
+            Def("B", Abs("x", Var("x", 0)), Star()),
+          ]),
+          adts(),
+          ctx,
+          Ann(Var("a", 0), Ref("A")),
+          Ref("A")
+        )
+      );
+    });
 
-  //   test("whnf: (λx.x)(λx.x) reduces to (λx.x)", () => {
-  //     expect(
-  //       whnf(
-  //         false,
-  //         new Map<string, Def>(),
-  //         App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0))),
-  //         Star()
-  //       )
-  //     ).toStrictEqual(Abs("x", Var("x", 0)));
-  //   });
+    test("should infer type from annotation", () => {
+      // Γ=[A::*]  (λa:A. a):A->A
+      const program = Ann(
+        Abs("a", Var("a", 0)),
+        Pi("", Var("A", 0), Var("A", 1))
+      );
+      ensure(
+        infer(
+          defs(),
+          adts(),
+          [{ type: "bind", name: "A", typ: Star() }],
+          program,
+          0,
+          0
+        )
+      );
+    });
+  });
 
-  //   test("whnf: should reduce self", () => {
-  //     expect(
-  //       whnf(
-  //         false,
-  //         new Map<string, Def>(),
-  //         Self("t", Pi("", Ref("X"), Ref("X"))),
-  //         Abs("x", Var("x", 0))
-  //       )
-  //     ).toStrictEqual(Pi("", Ref("X"), Ref("X")));
-  //   });
+  describe("whnf", () => {
+    test("should not be able to reduce id", () => {
+      expect(whnf(false, defs(), Abs("x", Var("x", 0)), Star())).toStrictEqual(
+        Abs("x", Var("x", 0))
+      );
+    });
 
-  //   test("should calculate type of lambda body using variable from context", () => {
-  //     // The type of `λa:A. b` is `A->B`.
-  //     const ctx: Context = [
-  //       { type: "bind", name: "A", typ: Star() },
-  //       { type: "bind", name: "b", typ: Ref("B") },
-  //     ];
-  //     const program = Abs("a", Var("b", 1));
-  //     expect(
-  //       typecheck(
-  //         defMap([Def("B", id.term, Star())]),
-  //         new Map<string, ADT>(),
-  //         ctx,
-  //         program,
-  //         Pi("", Ref("A"), Ref("B"))
-  //       )
-  //     ).toBeTruthy();
-  //   });
+    test("should not reduce refs", () => {
+      expect(whnf(false, defs(), Ref("ref"), Star())).toStrictEqual(Ref("ref"));
+    });
 
-  //   test("should accept well-typed application", () => {
-  //     // Γ=[B::*,A::*]  λa:A. λf:A->B. f(a)
-  //     // A -> (A->B) -> B
-  //     const program = Abs("a", Abs("f", App(Var("f", 0), Var("a", 1))));
+    test("should not reduce constructors", () => {
+      expect(
+        whnf(false, defs(), App(Ref("succ"), Ref("zero")), Star())
+      ).toStrictEqual(App(Ref("succ"), Ref("zero")));
+    });
 
-  //     const result = typecheck(
-  //       defMap([Def("A", id.term, Star()), Def("B", id.term, Star())]),
-  //       new Map<string, ADT>(),
-  //       [],
-  //       program,
-  //       Pi("", Ref("A"), Pi("", Pi("", Ref("A"), Ref("B")), Ref("B")))
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //     expect(pretty(result.type)).toBe("A→A→B→B");
-  //   });
+    test("should reduce id(id) to id", () => {
+      expect(
+        whnf(
+          false,
+          defs(),
+          App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0))),
+          Star()
+        )
+      ).toStrictEqual(Abs("x", Var("x", 0)));
+    });
 
-  //   // test("bound variable must exist", () => {
-  //   //   const program = Abs("a", Var("b", 2), Var("A", 1));
-  //   //   const result = check(
-  //   //     [Def("A", id.term, Star())],
-  //   //     [],
-  //   //     program,
-  //   //     Pi("", Var("A", 0), Var("A", 1))
-  //   //   );
-  //   //   expect(result).toStrictEqual({
-  //   //     _: "typecheckerror",
-  //   //     msg: "undefined variable b",
-  //   //   });
-  //   // });
+    test("should reduce self type", () => {
+      expect(
+        whnf(
+          false,
+          defs(),
+          Self("t", Pi("", Ref("X"), Ref("X"))),
+          Abs("x", Var("x", 0))
+        )
+      ).toStrictEqual(Pi("", Ref("X"), Ref("X")));
+    });
+  });
 
-  //   test("type shift increments free variables", () => {
-  //     // Both X and Y are free type variables.
-  //     const type = Pi("", Var("X", 0), Var("Y", 1));
-  //     expect(shift(1, 0, type)).toStrictEqual(Pi("", Var("X", 1), Var("Y", 2)));
-  //   });
+  test("should check polymorphic double function", () => {
+    // λT:*. λf:T→T. λx:T. f(f(x))
+    // * -> T -> T -> T -> T
+    const double = Abs(
+      "T",
+      Abs("f", Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0)))))
+    );
+    ensure(
+      typecheck(
+        defs([Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))]),
+        adts(),
+        [],
+        double,
+        Pi(
+          "T",
+          Star(),
+          Pi(
+            "",
+            Pi("", Var("T", 0), Var("T", 1)),
+            Pi("", Var("T", 1), Var("T", 2))
+          )
+        )
+      )
+    );
+  });
 
-  //   // λT:*. λf:T→T. λx:T. f(f(x))
-  //   // * -> T -> T -> T -> T
-  //   const double = Abs(
-  //     "T",
-  //     Abs("f", Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0)))))
-  //   );
+  // and : * -> * -> *
+  // and = λp. λq. Πc:*. (p -> q -> c) -> c
+  let and = Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Pi(
+          "c",
+          Star(),
+          Pi(
+            "",
+            Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
+            Var("c", 1)
+          )
+        )
+      )
+    ),
+    Pi("", Star(), Pi("", Star(), Star()))
+  );
 
-  //   test("polymorphic double function is well-typed", () => {
-  //     const result = typecheck(
-  //       defMap([Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))]),
-  //       new Map<string, ADT>(),
-  //       [],
-  //       double,
-  //       ci(
-  //         Pi(
-  //           "T",
-  //           Star(),
-  //           Pi(
-  //             "",
-  //             Pi("", Var("T", 0), Var("T", 1)),
-  //             Pi("", Var("T", 1), Var("T", 2))
-  //           )
-  //         )
-  //       )
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //     console.log(pretty(result.type, false));
-  //   });
+  test("should check type-level and function", () => {
+    ensure(typecheck(defs(), adts(), [], and.term, and.typ));
+  });
 
-  //   test("app requires lhs to be an arrow", () => {
-  //     const ctx: Context = [
-  //       { type: "bind", name: "b", typ: Star() },
-  //       { type: "bind", name: "a", typ: Star() },
-  //     ];
-  //     const program = App(Var("a", 0), Var("b", 1));
-  //     expect(
-  //       infer(new Map<string, Def>(), new Map<string, ADT>(), ctx, program, 0, 0)
-  //     ).toStrictEqual({
-  //       _: "typecheckerror",
-  //       end: 0,
-  //       msg: "expected pi type on the left of app; got star: ★",
-  //       start: 0,
-  //     });
-  //   });
-
-  //   test("should ensure annotated type matches calculated type", () => {
-  //     // Γ=[A::*]  (λa:A. a):A->A
-  //     const program = Ann(
-  //       Abs("a", Var("a", 0)),
-  //       Pi("", Var("A", 0), Var("A", 1))
-  //     );
-  //     const result = infer(
-  //       new Map<string, Def>(),
-  //       new Map<string, ADT>(),
-  //       [{ type: "bind", name: "A", typ: Star() }],
-  //       program,
-  //       0,
-  //       0
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
-
-  //   // test("should fail if annotated type doesn't match", () => {
-  //   //   // (λa:A. a):X->X
-  //   //   const program = Ann(
-  //   //     Abs("a", Var("a", 0), Var("A", 1)),
-  //   //     Pi(Var("X", 1), Var("X", 2))
-  //   //   );
-  //   //   expect(
-  //   //     infer(
-  //   //       [
-  //   //         { type: "bind", name: "X", typ: Star() },
-  //   //         { type: "bind", name: "A", typ: Star() },
-  //   //       ],
-  //   //       program
-  //   //     )
-  //   //   ).toStrictEqual({
-  //   //     _: "typecheckerror",
-  //   //     msg: "expected X; got A→A",
-  //   //   });
-  //   // });
-
-  //   test("pi types have kind *", () => {
-  //     // double(x Nat) Nat = 2*x
-  //     // double has type Nat->Nat which has kind *
-  //     let result = typecheck(
-  //       new Map<string, Def>(),
-  //       new Map<string, ADT>(),
-  //       [{ type: "bind", name: "Nat", typ: Star() }],
-  //       Pi("", Var("Nat", 0), Var("Nat", 1)),
-  //       Star()
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
-
-  //   // and : Type -> Type -> Type
-  //   // and = λp. λq. Πc:*. (p -> q -> c) -> c
-  //   let and = ci(
-  //     Ann(
-  //       Abs(
-  //         "p",
-  //         Abs(
-  //           "q",
-  //           Pi(
-  //             "c",
-  //             Star(),
-  //             Pi(
-  //               "",
-  //               Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
-  //               Var("c", 1)
-  //             )
-  //           )
-  //         )
-  //       ),
-  //       Pi("", Star(), Pi("", Star(), Star()))
-  //     )
-  //   ) as Ann;
-
-  //   test("type-level and", () => {
-  //     let result = typecheck(
-  //       new Map<string, Def>(),
-  //       new Map<string, ADT>(),
-  //       [],
-  //       and.term,
-  //       and.typ
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
-
-  //   // conj : Πp:*. Πq:*. p -> q -> and p q
-  //   // conj = λp. λq. λx. λy. λc. λf. f x y
-  //   let conj = ci(
-  //     Ann(
-  //       Abs(
-  //         "p",
-  //         Abs(
-  //           "q",
-  //           Abs(
-  //             "x",
-  //             Abs(
-  //               "y",
-  //               Abs(
-  //                 "c",
-  //                 Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
-  //               )
-  //             )
-  //           )
-  //         )
-  //       ),
-  //       Pi(
-  //         "p",
-  //         Star(),
-  //         Pi(
-  //           "q",
-  //           Star(),
-  //           Pi(
-  //             "",
-  //             Var("p", 1),
-  //             Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
-  //           )
-  //         )
-  //       )
-  //     )
-  //   ) as Ann;
-
-  //   test("conj checks", () => {
-  //     let result = typecheck(
-  //       defMap([Def("and", and.term, and.typ)]),
-  //       new Map<string, ADT>(),
-  //       [],
-  //       conj.term,
-  //       conj.typ
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
+  test("should check type-level conjunction function", () => {
+    // conj : Πp:*. Πq:*. p -> q -> and p q
+    // conj = λp. λq. λx. λy. λc. λf. f x y
+    let conj = Ann(
+      Abs(
+        "p",
+        Abs(
+          "q",
+          Abs(
+            "x",
+            Abs(
+              "y",
+              Abs(
+                "c",
+                Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
+              )
+            )
+          )
+        )
+      ),
+      Pi(
+        "p",
+        Star(),
+        Pi(
+          "q",
+          Star(),
+          Pi(
+            "",
+            Var("p", 1),
+            Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
+          )
+        )
+      )
+    );
+    ensure(
+      typecheck(
+        defs([Def("and", and.term, and.typ)]),
+        adts(),
+        [],
+        conj.term,
+        conj.typ
+      )
+    );
+  });
 
   //   // proj1 : Πp:*. Πq:*. and p q → p
   //   // proj1 : λp. λq. λa. a p (λx. λy. x)
@@ -485,7 +441,7 @@ describe("typechecker", () => {
   //   test("proj1 checks", () => {
   //     let result = typecheck(
   //       defMap([Def("and", and.term, and.typ)]),
-  //       new Map<string, ADT>(),
+  //       adts(),
   //       [],
   //       proj1.term,
   //       proj1.typ
@@ -525,7 +481,7 @@ describe("typechecker", () => {
   //   test("proj2 checks", () => {
   //     let result = typecheck(
   //       defMap([Def("and", and.term, and.typ)]),
-  //       new Map<string, ADT>(),
+  //       adts(),
   //       [],
   //       proj2.term,
   //       proj2.typ
@@ -584,7 +540,7 @@ describe("typechecker", () => {
   //         Def("proj1", proj1.term, proj1.typ),
   //         Def("proj2", proj2.term, proj2.typ),
   //       ]),
-  //       new Map<string, ADT>(),
+  //       adts(),
   //       [],
   //       commBody,
   //       commType
@@ -617,8 +573,8 @@ describe("typechecker", () => {
   //     const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
 
   //     let result = typecheck(
-  //       new Map<string, Def>(),
-  //       new Map<string, ADT>(),
+  //       defs(),
+  //       adts(),
   //       [],
   //       tru,
   //       Bool
@@ -627,8 +583,8 @@ describe("typechecker", () => {
   //       throw new Error(result.msg);
   //     }
   //     let result2 = typecheck(
-  //       new Map<string, Def>(),
-  //       new Map<string, ADT>(),
+  //       defs(),
+  //       adts(),
   //       [],
   //       fls,
   //       Bool
@@ -727,7 +683,7 @@ describe("typechecker", () => {
   //     ensure(
   //       typecheck(
   //         defMap([Booltrue, Boolfalse, Booldef]),
-  //         new Map<string, ADT>(),
+  //         adts(),
   //         [],
   //         Booltrue.term,
   //         Bool
@@ -736,7 +692,7 @@ describe("typechecker", () => {
   //     ensure(
   //       typecheck(
   //         defMap([Booltrue, Boolfalse, Booldef]),
-  //         new Map<string, ADT>(),
+  //         adts(),
   //         [],
   //         Boolfalse.term,
   //         Bool
@@ -745,7 +701,7 @@ describe("typechecker", () => {
   //     ensure(
   //       typecheck(
   //         defMap([Booltrue, Boolfalse, Booldef]),
-  //         new Map<string, ADT>(),
+  //         adts(),
   //         [],
   //         Bool,
   //         Star()
@@ -836,7 +792,7 @@ describe("typechecker", () => {
   //     const onewhnf = te(whnf(false, defs, one, one));
   //     console.log(`one is ${pretty(onewhnf)}`);
   //     // console.log(pretty(te(whnf(false, defs, one, one))));
-  //     ensure(typecheck(defs, new Map<string, ADT>(), [], onewhnf, Nat));
+  //     ensure(typecheck(defs, adts(), [], onewhnf, Nat));
   //   });
 
   //   test("eliminate nat", () => {
@@ -849,12 +805,12 @@ describe("typechecker", () => {
   //       Boolfalse,
   //     ]);
   //     const n = App(natSuccDef.term, natZeroDef.term); // succ(zero)
-  //     ensure(typecheck(defs, new Map<string, ADT>(), [], n, Nat));
+  //     ensure(typecheck(defs, adts(), [], n, Nat));
 
   //     console.log(pretty(te(whnf(false, defs, n, Star()))));
   //     const P = Abs("P", Ref("Bool")); // λP. Bool
   //     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
-  //     ensure(typecheck(defs, new Map<string, ADT>(), [], eliminator, Bool));
+  //     ensure(typecheck(defs, adts(), [], eliminator, Bool));
 
   //     console.log(pretty(te(whnf(false, defs, eliminator, Star()))));
 
@@ -1019,7 +975,7 @@ describe("typechecker", () => {
 
   //     let result = typecheck(
   //       defMap([maybeTypeDef, maybeNullDef, maybeJustDef]),
-  //       new Map<string, ADT>(),
+  //       adts(),
   //       [],
   //       maybeNullDef.term,
   //       maybeNullDef.typ
@@ -1030,7 +986,7 @@ describe("typechecker", () => {
 
   //     let result2 = typecheck(
   //       defMap([maybeTypeDef, maybeNullDef, maybeJustDef]),
-  //       new Map<string, ADT>(),
+  //       adts(),
   //       [],
   //       maybeJustDef.term,
   //       maybeJustDef.typ
@@ -1049,7 +1005,7 @@ describe("typechecker", () => {
   //         maybeNullDef,
   //         maybeJustDef,
   //       ]),
-  //       new Map<string, ADT>(),
+  //       adts(),
   //       [],
   //       App(App(Ref("just"), Ref("Bool")), Ref("true")),
   //       App(Ref("Maybe"), Ref("Bool"))
@@ -1392,8 +1348,8 @@ describe("typechecker", () => {
 
   //   test("recursive parameterised types: zero", () => {
   //     let result = typecheck(
-  //       new Map<string, Def>(),
-  //       new Map<string, ADT>(),
+  //       defs(),
+  //       adts(),
   //       [],
   //       zero.term,
   //       Nat
@@ -1406,7 +1362,7 @@ describe("typechecker", () => {
   //   test("recursive parameterised types: succ", () => {
   //     let result = typecheck(
   //       defMap([NatDef]),
-  //       new Map<string, ADT>(),
+  //       adts(),
   //       [],
   //       s, //succ.term,
   //       Pi("", Nat, Nat)
@@ -1531,6 +1487,12 @@ describe("typechecker", () => {
 // });
 
 // describe("shifting", () => {
+// test("type shift increments free variables", () => {
+//   // Both X and Y are free type variables.
+//   const type = Pi("", Var("X", 0), Var("Y", 1));
+//   expect(shift(1, 0, type)).toStrictEqual(Pi("", Var("X", 1), Var("Y", 2)));
+// });
+
 //   test("ensure we only shift free variables", () => {
 //     // we need to shift the 2, but not the 0 or the 1, as 2 is free in this
 //     // expression.
@@ -1628,7 +1590,7 @@ describe("typechecker", () => {
 //     const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
 //     const expected: Term = Abs("z", Var("z", 0));
 
-//     const actual = whnf(true, new Map<string, Def>(), identity, Star());
+//     const actual = whnf(true, defs(), identity, Star());
 
 //     expect(actual).toStrictEqual(expected);
 //   });
@@ -1697,7 +1659,7 @@ describe("typechecker", () => {
 
 //     let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
 
-//     const actual = whnf(true, new Map<string, Def>(), src, Star());
+//     const actual = whnf(true, defs(), src, Star());
 
 //     expect(actual).toStrictEqual(expected);
 //   });

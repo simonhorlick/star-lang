@@ -429,7 +429,7 @@ const check = (
 
   if (!equate(defs, term, type, ty1.type, ctx.length)) {
     return TypecheckError(
-      `typecheck failed: \n\t${pretty(type, false)}\nis not\n\t${pretty(
+      `typecheck failed: ${pretty(type, false)} is not ${pretty(
         ty1.type,
         false
       )}`,
