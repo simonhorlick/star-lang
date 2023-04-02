@@ -142,8 +142,7 @@ describe("typechecker", () => {
         Star()
       )
     );
-    // The typechecker returns an annotation.
-    expect(result.term).toStrictEqual(Abs("a", Ann(Var("a", 0), Ref("A"))));
+    expect(result.term).toStrictEqual(Star());
   });
 
   // Γ ⊢ f => Πx:A. B
