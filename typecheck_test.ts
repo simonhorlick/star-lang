@@ -1358,71 +1358,72 @@ describe("typechecker", () => {
   //   });
 
   //   // λx. x
-  //   const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
-  //   // The identity type operator λX.X: when applied to any type it gives back
-  //   // the argument.
-  //   const Id: Term = Abs("A", Var("A", 0));
+  describe("type equality", () => {
+    const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
-  //   // const Nat: Term = Ref("Nat");
-  //   //const Bool: Term = Ref("Bool");
+    const Nat: Term = Ref("Nat");
+    const Bool: Term = Ref("Bool");
 
-  //   describe("", () => {
-  //     const defs = defMap([
-  //       Def("Nat", id.term, Star()),
-  //       Def("Bool", id.term, Star()),
-  //     ]);
+    // The identity type operator λX.X: when applied to any type it gives back
+    // the argument.
+    const Id: Term = Abs("A", Var("A", 0));
 
-  //     // The type Nat→Bool.
-  //     const NatToBool: Term = Pi("", Nat, Bool);
+    const ds = defs([
+      Def("Nat", id.term, Star()),
+      Def("Bool", id.term, Star()),
+    ]);
 
-  //     const eq = (a: Term, b: Term) => equate(defs, Star(), a, b);
+    // The type Nat→Bool.
+    const NatToBool: Term = Pi("", Nat, Bool);
 
-  //     test("Nat→Bool === Nat→Bool", () =>
-  //       expect(eq(NatToBool, NatToBool)).toBe(true));
+    const eq = (a: Term, b: Term) => equate(ds, Star(), a, b);
 
-  //     test("Nat→Bool === Nat→Id(Bool)", () => {
-  //       let s = Pi("", Nat, App(Id, Bool));
-  //       expect(eq(NatToBool, s)).toBe(true);
-  //     });
+    test("Nat→Bool === Nat→Bool", () =>
+      expect(eq(NatToBool, NatToBool)).toBe(true));
 
-  //     test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
-  //       expect(eq(NatToBool, Pi("", App(Id, Nat), App(Id, Bool)))).toBe(true));
+    test("Nat→Bool === Nat→Id(Bool)", () => {
+      let s = Pi("", Nat, App(Id, Bool));
+      expect(eq(NatToBool, s)).toBe(true);
+    });
 
-  //     test("Nat→Bool === Id(Nat)→Bool", () =>
-  //       expect(eq(NatToBool, Pi("", App(Id, Nat), Bool))).toBe(true));
+    test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
+      expect(eq(NatToBool, Pi("", App(Id, Nat), App(Id, Bool)))).toBe(true));
 
-  //     test("Nat→Bool === Id(Nat→Bool)", () =>
-  //       expect(eq(NatToBool, App(Id, Pi("", Nat, Bool)))).toBe(true));
+    test("Nat→Bool === Id(Nat)→Bool", () =>
+      expect(eq(NatToBool, Pi("", App(Id, Nat), Bool))).toBe(true));
 
-  //     test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
-  //       const t = App(Id, App(Id, Pi("", App(Id, Nat), Bool)));
-  //       expect(eq(NatToBool, t)).toBe(true);
-  //     });
+    test("Nat→Bool === Id(Nat→Bool)", () =>
+      expect(eq(NatToBool, App(Id, Pi("", Nat, Bool)))).toBe(true));
 
-  //     test("* === Id(*)", () => {
-  //       expect(eq(Star(), App(Id, Star()))).toBe(true);
-  //     });
+    test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
+      const t = App(Id, App(Id, Pi("", App(Id, Nat), Bool)));
+      expect(eq(NatToBool, t)).toBe(true);
+    });
 
-  //     test("id === id(id)", () => {
-  //       expect(
-  //         eq(
-  //           Abs("x", Var("x", 0)),
-  //           App(Abs("y", Var("y", 0)), Abs("z", Var("z", 0)))
-  //         )
-  //       ).toBe(true);
-  //     });
+    test("* === Id(*)", () => {
+      expect(eq(Star(), App(Id, Star()))).toBe(true);
+    });
 
-  //     test("true != false", () => {
-  //       expect(
-  //         eq(Abs("t", Abs("f", Var("t", 1))), Abs("t", Abs("f", Var("f", 0))))
-  //       ).toBe(false);
-  //     });
+    test("id === id(id)", () => {
+      expect(
+        eq(
+          Abs("x", Var("x", 0)),
+          App(Abs("y", Var("y", 0)), Abs("z", Var("z", 0)))
+        )
+      ).toBe(true);
+    });
 
-  //     test("one != two", () => {
-  //       expect(eq(one, two)).toBe(false);
-  //     });
-  //   });
+    test("true != false", () => {
+      expect(
+        eq(Abs("t", Abs("f", Var("t", 1))), Abs("t", Abs("f", Var("f", 0))))
+      ).toBe(false);
+    });
+
+    test("one != two", () => {
+      expect(eq(one, two)).toBe(false);
+    });
+  });
 });
 
 // // tru = λt. λf. t
