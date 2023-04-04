@@ -366,40 +366,38 @@ describe("typechecker", () => {
     ensure(typecheck(defs(), adts(), [], and.term, and.typ));
   });
 
-  test("should check type-level conjunction function", () => {
-    // conj : Πp:*. Πq:*. p -> q -> and p q
-    // conj = λp. λq. λx. λy. λc. λf. f x y
-    let conj = Ann(
+  // conj : Πp:*. Πq:*. p -> q -> and p q
+  // conj = λp. λq. λx. λy. λc. λf. f x y
+  let conj = Ann(
+    Abs(
+      "p",
       Abs(
-        "p",
+        "q",
         Abs(
-          "q",
+          "x",
           Abs(
-            "x",
-            Abs(
-              "y",
-              Abs(
-                "c",
-                Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
-              )
-            )
-          )
-        )
-      ),
-      Pi(
-        "p",
-        Star(),
-        Pi(
-          "q",
-          Star(),
-          Pi(
-            "",
-            Var("p", 1),
-            Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
+            "y",
+            Abs("c", Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2))))
           )
         )
       )
-    );
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi(
+          "",
+          Var("p", 1),
+          Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
+        )
+      )
+    )
+  );
+
+  test("should check type-level conjunction function", () => {
     ensure(
       typecheck(
         defs([Def("and", and.term, and.typ)]),
@@ -411,144 +409,131 @@ describe("typechecker", () => {
     );
   });
 
-  //   // proj1 : Πp:*. Πq:*. and p q → p
-  //   // proj1 : λp. λq. λa. a p (λx. λy. x)
-  //   let proj1Body = ci(
-  //     Abs(
-  //       "p",
-  //       Abs(
-  //         "q",
-  //         Abs(
-  //           "a",
-  //           App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
-  //         )
-  //       )
-  //     )
-  //   );
-  //   let proj1Type = ci(
-  //     Pi(
-  //       "p",
-  //       Star(),
-  //       Pi(
-  //         "q",
-  //         Star(),
-  //         Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
-  //       )
-  //     )
-  //   );
-  //   let proj1 = Ann(proj1Body, proj1Type);
+  // proj1 : Πp:*. Πq:*. and p q → p
+  // proj1 : λp. λq. λa. a p (λx. λy. x)
+  let proj1 = Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "a",
+          App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
+      )
+    )
+  );
 
-  //   test("proj1 checks", () => {
-  //     let result = typecheck(
-  //       defMap([Def("and", and.term, and.typ)]),
-  //       adts(),
-  //       [],
-  //       proj1.term,
-  //       proj1.typ
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
+  test("proj1 checks", () => {
+    ensure(
+      typecheck(
+        defs([Def("and", and.term, and.typ)]),
+        adts(),
+        [],
+        proj1.term,
+        proj1.typ
+      )
+    );
+  });
 
-  //   // proj2 : Πp:*. Πq:*. and p q → q
-  //   // proj2 = λp.   λq. λa. a q (λx. λy. y)
-  //   let proj2Body = ci(
-  //     Abs(
-  //       "p",
-  //       Abs(
-  //         "q",
-  //         Abs(
-  //           "a",
-  //           App(App(Var("a", 0), Var("q", 1)), Abs("x", Abs("y", Var("y", 0))))
-  //         )
-  //       )
-  //     )
-  //   );
-  //   let proj2Type = ci(
-  //     Pi(
-  //       "p",
-  //       Star(),
-  //       Pi(
-  //         "q",
-  //         Star(),
-  //         Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
-  //       )
-  //     )
-  //   );
-  //   let proj2 = Ann(proj2Body, proj2Type);
+  // proj2 : Πp:*. Πq:*. and p q → q
+  // proj2 = λp.   λq. λa. a q (λx. λy. y)
+  let proj2 = Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "a",
+          App(App(Var("a", 0), Var("q", 1)), Abs("x", Abs("y", Var("y", 0))))
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
+      )
+    )
+  );
 
-  //   test("proj2 checks", () => {
-  //     let result = typecheck(
-  //       defMap([Def("and", and.term, and.typ)]),
-  //       adts(),
-  //       [],
-  //       proj2.term,
-  //       proj2.typ
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
+  test("proj2 checks", () => {
+    ensure(
+      typecheck(
+        defs([Def("and", and.term, and.typ)]),
+        adts(),
+        [],
+        proj2.term,
+        proj2.typ
+      )
+    );
+  });
 
-  //   // and_commutes : Πp:*. Πq:*. and p q → and q p
-  //   let commType = ci(
-  //     Pi(
-  //       "p",
-  //       Star(),
-  //       Pi(
-  //         "q",
-  //         Star(),
-  //         Pi(
-  //           "",
-  //           App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
-  //           App(App(Ref("and"), Var("q", 1)), Var("p", 2))
-  //         )
-  //       )
-  //     )
-  //   );
+  // and_commutes : Πp:*. Πq:*. and p q → and q p
+  // and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
+  const andCommutes = Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "a",
+          App(
+            App(
+              App(App(Ref("conj"), Var("q", 1)), Var("p", 2)),
+              App(App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+            ),
+            App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+          )
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi(
+          "",
+          App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
+          App(App(Ref("and"), Var("q", 1)), Var("p", 2))
+        )
+      )
+    )
+  );
 
-  //   // and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
-  //   let commBody = ci(
-  //     Abs(
-  //       "p",
-  //       Abs(
-  //         "q",
-  //         Abs(
-  //           "a",
-  //           App(
-  //             App(
-  //               App(App(Ref("conj"), Var("q", 1)), Var("p", 2)),
-  //               App(App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)), Var("a", 0))
-  //             ),
-  //             App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0))
-  //           )
-  //         )
-  //       )
-  //     )
-  //   );
-
-  //   test("type-level and commutes", () => {
-  //     // and(p,q) => and(q,p)
-  //     // Logically, if we have an and(p,q) we can project out the components p,q
-  //     // and construct an element of and(q,p) as desired.
-
-  //     let result = typecheck(
-  //       defMap([
-  //         Def("and", and.term, and.typ),
-  //         Def("conj", conj.term, conj.typ),
-  //         Def("proj1", proj1.term, proj1.typ),
-  //         Def("proj2", proj2.term, proj2.typ),
-  //       ]),
-  //       adts(),
-  //       [],
-  //       commBody,
-  //       commType
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
+  test("type-level and commutes", () => {
+    // and(p,q) => and(q,p)
+    // Logically, if we have an and(p,q) we can project out the components p,q
+    // and construct an element of and(q,p) as desired.
+    ensure(
+      typecheck(
+        defs([
+          Def("and", and.term, and.typ),
+          Def("conj", conj.term, conj.typ),
+          Def("proj1", proj1.term, proj1.typ),
+          Def("proj2", proj2.term, proj2.typ),
+        ]),
+        adts(),
+        [],
+        andCommutes.term,
+        andCommutes.typ
+      )
+    );
+  });
 
   //   test("can represent bool by its eliminators", () => {
   //     // typeof Bool = ∀X. X→X→X

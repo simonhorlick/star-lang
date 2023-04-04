@@ -378,8 +378,11 @@ const check = (
       return Result(term, type);
     }
     case "lam": {
-      // The type of a lambda is a pi, so check this.
-      if (type._ != "pi") {
+      // The type of a lambda is a pi, so check this. It might also be an
+      // expression that evaluates to a pi type, for example a function
+      // application, or a reference, so make sure to normalise that first.
+      const normalTy = whnf(true, defs, type, term);
+      if (normalTy._ != "pi") {
         return TypecheckError(
           `expected pi type; got ${type._}: ${pretty(type)}`,
           os,
@@ -388,7 +391,7 @@ const check = (
       }
 
       // The domain of the pi type needs to be a type.
-      const domain = check(defs, adts, ctx, type.from, Star(), os, oe);
+      const domain = check(defs, adts, ctx, normalTy.from, Star(), os, oe);
       if (domain._ == "typecheckerror") {
         return domain;
       }
@@ -398,9 +401,9 @@ const check = (
       let ebody = typecheck(
         defs,
         adts,
-        addTermToCtx(ctx, identifier(term.name), shift(1, 0, type.from)),
+        addTermToCtx(ctx, identifier(term.name), shift(1, 0, normalTy.from)),
         term.body,
-        type.to,
+        normalTy.to,
         os,
         oe
       );
