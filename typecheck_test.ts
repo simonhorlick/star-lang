@@ -1014,174 +1014,167 @@ describe("typechecker", () => {
     expect(reduced).toStrictEqual(bt);
   });
 
-  //   test("recursive parameterised types", () => {
-  //     /*
-  //       // List is a singly-linked list with elements of type T.
-  //       type List<T *> =
-  //         // nil constructs an empty list.
-  //         nil |
-  //         // cons constructs a list by passing a head element and an
-  //         // existing (though possibly empty) list.
-  //         cons(
-  //           // head is the first element of the list.
-  //           head T,
-  //           // tail is the remaining elements in the list.
-  //           tail List<T>)
+  test("recursive parameterised types", () => {
+    /*
+      // List is a singly-linked list with elements of type T.
+      type List<T *> =
+        // nil constructs an empty list.
+        nil |
+        // cons constructs a list by passing a head element and an
+        // existing (though possibly empty) list.
+        cons(
+          // head is the first element of the list.
+          head T,
+          // tail is the remaining elements in the list.
+          tail List<T>)
 
-  //       This creates the following functions (in the final language design: T is
-  //       always inferred from the usage, if it's unclear an annotation is
-  //       required). We need to create the definitions with the type parameters
-  //       first (the T) followed by any constructor arguments:
-  //         nil : (T *) → List<T>
-  //         cons : (T *) → (head T) → (tail List<T>) → List<T>
+      This creates the following functions (in the final language design: T is
+      always inferred from the usage, if it's unclear an annotation is
+      required). We need to create the definitions with the type parameters
+      first (the T) followed by any constructor arguments:
+        nil : (T *) → List<T>
+        cons : (T *) → (head T) → (tail List<T>) → List<T>
 
-  //       The parser generates:
-  //         List = (A)
-  //           ιm. ΠP:List<A>→*.
-  //           P(nil<A>) →
-  //           ((head A) → (tail List<A>) → P(cons<A>(head)(tail))) →
-  //           P(m)
-  //         cons =
-  //           <A> (head) (tail)
-  //           <P> (nil) (cons) cons(head)(tail)
-  //         nil =
-  //           <A>
-  //           <P> (nil) (cons) nil
+      The parser generates:
+        List = (A)
+          ιm. ΠP:List<A>→*.
+          P(nil<A>) →
+          ((head A) → (tail List<A>) → P(cons<A>(head)(tail))) →
+          P(m)
+        cons =
+          <A> (head) (tail)
+          <P> (nil) (cons) cons(head)(tail)
+        nil =
+          <A>
+          <P> (nil) (cons) nil
 
-  //       Example values of this type:
-  //         nil(Int) : List<Int> // on it's own it requires an annotation, i.e.
-  //                              // let xs = nil : List<Int>
-  //         cons(Int, 1, nil(Int)) : List<Int>
-  //         cons(Int, 1, cons(Int, 2, cons(Int, 3, nil(Int)))) : List<Int>
+      Example values of this type:
+        nil(Int) : List<Int> // on it's own it requires an annotation, i.e.
+                              // let xs = nil : List<Int>
+        cons(Int, 1, nil(Int)) : List<Int>
+        cons(Int, 1, cons(Int, 2, cons(Int, 3, nil(Int)))) : List<Int>
 
-  //         // In the constructors for List we know that T has type *, but for
-  //         // ordinary functions we need the T somewhere, or else we wouldn't know
-  //         // what it is (and what type it is).
-  //         func append(T *, a T, l List<T>) List<T> = cons(a, l)
-  //         let l = append(Int, 4, [1,2,3])
+        // In the constructors for List we know that T has type *, but for
+        // ordinary functions we need the T somewhere, or else we wouldn't know
+        // what it is (and what type it is).
+        func append(T *, a T, l List<T>) List<T> = cons(a, l)
+        let l = append(Int, 4, [1,2,3])
 
-  //         // In a future version:
-  //         let l = append(4, [1,2,3])
+        // In a future version:
+        let l = append(4, [1,2,3])
 
-  //       You can eliminate a List using a case statement:
-  //         case l of
-  //           nil => "n"
-  //           cons => "c"
-  //           : String
-  //     */
+      You can eliminate a List using a case statement:
+        case l of
+          nil => "n"
+          cons => "c"
+          : String
+      */
 
-  //     const ListParams = [{ name: "A", type: Star() }];
-  //     const ListConstructors = [
-  //       { name: Identifier("nil"), args: [] },
-  //       {
-  //         name: Identifier("cons"),
-  //         args: [
-  //           {
-  //             name: "head",
-  //             type: Par("A"),
-  //           },
-  //           {
-  //             name: "tail",
-  //             type: App(Ref("List"), Par("A")),
-  //           },
-  //         ],
-  //       },
-  //     ];
+    const ListParams = [{ name: "A", type: Star() }];
+    const ListConstructors = [
+      { name: Identifier("nil"), args: [] },
+      {
+        name: Identifier("cons"),
+        args: [
+          {
+            name: "head",
+            type: Par("A"),
+          },
+          {
+            name: "tail",
+            type: App(Ref("List"), Par("A")),
+          },
+        ],
+      },
+    ];
 
-  //     const List = buildType(
-  //       Identifier("List"),
-  //       ListParams,
-  //       ListConstructors
-  //     ).term;
+    const List = buildType(
+      Identifier("List"),
+      ListParams,
+      ListConstructors
+    ).term;
 
-  //     /*
-  //     nil: (T *) → List<T>  =
-  //       <T>
-  //       <P> (nil) (cons) nil
+    /*
+      nil: (T *) → List<T>  =
+        <T>
+        <P> (nil) (cons) nil
 
-  //     cons: (T *) → T → List<T> → List<T> =
-  //       <T> (head) (tail)
-  //       <P> (nil) (cons) cons(head)(tail)
-  //     */
+      cons: (T *) → T → List<T> → List<T> =
+        <T> (head) (tail)
+        <P> (nil) (cons) cons(head)(tail)
+      */
 
-  //     // TODO: Need a generator for types:
-  //     //   params -> args -> X(params)
-  //     // and implementations:
-  //     //   abs for params + abs for args + P + abs for constructors + constructor(args)
-  //     const Listnil = Def(
-  //       "nil",
-  //       Abs("A", Abs("P", Abs("nil", Abs("cons", Var("nil", 1))))),
-  //       Pi("A", Star(), App(Ref("List"), Var("A", 0)))
-  //     );
+    const Listnil = Def(
+      "nil",
+      Abs("A", Abs("P", Abs("nil", Abs("cons", Var("nil", 1))))),
+      Pi("A", Star(), App(Ref("List"), Var("A", 0)))
+    );
 
-  //     const generated = GenerateConstructorType(
-  //       "List",
-  //       ListParams,
-  //       ListConstructors[0]
-  //     );
-  //     expect(Listnil.typ).toStrictEqual(generated);
+    const generated = GenerateConstructorType(
+      "List",
+      ListParams,
+      ListConstructors[0]
+    );
+    expect(Listnil.typ).toStrictEqual(generated);
 
-  //     const generatedBody = GenerateConstructorTerm(
-  //       ListParams,
-  //       ListConstructors,
-  //       0
-  //     );
-  //     expect(Listnil.term).toStrictEqual(generatedBody);
+    const generatedBody = GenerateConstructorTerm(
+      ListParams,
+      ListConstructors,
+      0
+    );
+    expect(Listnil.term).toStrictEqual(generatedBody);
 
-  //     const Listcons = Def(
-  //       "cons",
-  //       ci(
-  //         Abs(
-  //           "A",
-  //           Abs(
-  //             "head",
-  //             Abs(
-  //               "tail",
-  //               Abs(
-  //                 "P",
-  //                 Abs(
-  //                   "nil",
-  //                   Abs(
-  //                     "cons",
-  //                     App(App(Var("cons", 0), Var("head", 4)), Var("tail", 3))
-  //                   )
-  //                 )
-  //               )
-  //             )
-  //           )
-  //         )
-  //       ),
-  //       ci(
-  //         Pi(
-  //           "A",
-  //           Star(),
-  //           Pi(
-  //             "head",
-  //             Var("A", 0),
-  //             Pi(
-  //               "tail",
-  //               App(Ref("List"), Var("A", 1)),
-  //               App(Ref("List"), Var("A", 2))
-  //             )
-  //           )
-  //         )
-  //       )
-  //     );
+    const Listcons = Def(
+      "cons",
 
-  //     const generatedBody2 = GenerateConstructorTerm(
-  //       ListParams,
-  //       ListConstructors,
-  //       1
-  //     );
-  //     expect(Listcons.term).toStrictEqual(generatedBody2);
+      Abs(
+        "A",
+        Abs(
+          "head",
+          Abs(
+            "tail",
+            Abs(
+              "P",
+              Abs(
+                "nil",
+                Abs(
+                  "cons",
+                  App(App(Var("cons", 0), Var("head", 4)), Var("tail", 3))
+                )
+              )
+            )
+          )
+        )
+      ),
+      Pi(
+        "A",
+        Star(),
+        Pi(
+          "head",
+          Var("A", 0),
+          Pi(
+            "tail",
+            App(Ref("List"), Var("A", 1)),
+            App(Ref("List"), Var("A", 2))
+          )
+        )
+      )
+    );
 
-  //     const generated2 = GenerateConstructorType(
-  //       "List",
-  //       ListParams,
-  //       ListConstructors[1]
-  //     );
-  //     expect(Listcons.typ).toStrictEqual(generated2);
-  //   });
+    const generatedBody2 = GenerateConstructorTerm(
+      ListParams,
+      ListConstructors,
+      1
+    );
+    expect(Listcons.term).toStrictEqual(generatedBody2);
+
+    const generated2 = GenerateConstructorType(
+      "List",
+      ListParams,
+      ListConstructors[1]
+    );
+    expect(Listcons.typ).toStrictEqual(generated2);
+  });
 
   //   test("indexed types", () => {
   //     // Vector
