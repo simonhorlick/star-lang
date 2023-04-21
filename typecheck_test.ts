@@ -880,7 +880,6 @@ describe("typechecker", () => {
         )
       )
     );
-    console.log(pretty(Maybe));
 
     const maybeParams = [{ name: "A", type: Star() }];
     const maybeConstructors = [
@@ -933,12 +932,6 @@ describe("typechecker", () => {
       Pi("A", Star(), App(Ref("Maybe"), Var("A", 0)))
     );
 
-    console.log(
-      pretty(
-        GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
-      )
-    );
-    console.log(pretty(maybeNullDef.typ));
     expect(
       GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
     ).toStrictEqual(maybeNullDef.typ);
@@ -955,7 +948,6 @@ describe("typechecker", () => {
       GenerateConstructorTerm(maybeParams, maybeConstructors, 1)
     ).toStrictEqual(maybeJustDef.term);
 
-    // FIXME:
     ensure(
       typecheck(
         defs([builtMaybe, maybeNullDef, maybeJustDef]),

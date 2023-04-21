@@ -3,7 +3,7 @@ import * as Erased from "./erased";
 
 export function printCtx(ctx: Context, indices: boolean = false): string {
   return (
-    "[" + ctx.map((v) => `${v.name}:${pretty(v.typ, indices)}`).join(",") + "]"
+    "[" + ctx.map((v) => `${v.name}:${pretty(v.typ, indices)}`).join(", ") + "]"
   );
 }
 
@@ -32,7 +32,7 @@ export function pretty(term: Term, indices: boolean = false): string {
       return term.name;
     case "var":
       if (indices) {
-        return `${term.name}#${term.index}`;
+        return `${term.name}@${term.index}`;
       } else {
         return `${term.name}`;
       }

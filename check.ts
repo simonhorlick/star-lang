@@ -53,6 +53,7 @@ export const addTermToCtx = (
       )}`
     );
   }
+  dbgCheckIndices(ctx, 0, type);
   return [...ctx, { type: "bind", name: name, typ: type }];
 };
 
@@ -268,13 +269,11 @@ const check = (
     return Result(Origin(term.start, term.end, tc.term), tc.type);
   }
 
-  if (verbose) console.log(`${" ".repeat(ctx.length)} ctx=${printCtx(ctx)}`);
-  if (verbose)
+  if (verbose) {
     console.log(
-      `${" ".repeat(ctx.length)} checking ${pretty(term)} has type ${pretty(
-        type
-      )}`
+      `check ${pretty(term)} has type ${pretty(type)} in ${printCtx(ctx)}`
     );
+  }
 
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
   // existing variable.
