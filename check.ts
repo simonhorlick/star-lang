@@ -74,7 +74,9 @@ export const lookupType = (
   // context length. When this type was added to the context all variables are
   // offset from 0, but when looking up the entry in position i, the absolute
   // offsets of all variables in this entry are offset by i.
-  return shift(index, 0, x.typ);
+  // For example, if the context is [(A *), (a A@0)] then the returned type
+  // for a@0 is A@1, not A@0.
+  return shift(index + 1, 0, x.typ);
 };
 
 export type TypecheckError = {
@@ -401,7 +403,7 @@ const check = (
       let ebody = typecheck(
         defs,
         adts,
-        addTermToCtx(ctx, identifier(term.name), shift(1, 0, normalTy.from)),
+        addTermToCtx(ctx, identifier(term.name), normalTy.from),
         term.body,
         normalTy.to,
         os,

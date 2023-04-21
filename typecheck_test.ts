@@ -90,6 +90,19 @@ describe("typechecker", () => {
         ensure(infer(defs(), adts(), ctx, Var("x", 0), 0, 0)).type
       ).toStrictEqual(Ref("A"));
     });
+
+    test("ensure var lookup indices are correct", () => {
+      const ctx: Context = [
+        { type: "bind", name: "A", typ: Star() },
+        { type: "bind", name: "a", typ: Var("A", 0) },
+      ];
+
+      expect(infer(defs(), adts(), ctx, Var("a", 0), 0, 0)).toStrictEqual({
+        _: "result",
+        term: { _: "var", index: 0, name: "a" },
+        type: { _: "var", index: 1, name: "A" },
+      });
+    });
   });
 
   describe("lambda", () => {
