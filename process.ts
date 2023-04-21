@@ -186,7 +186,12 @@ export const buildType = (
       ),
       name
     ),
-    Star()
+    // Ensure that type-constructors such as Maybe have type arguments here.
+    // Maybe does not have type * - instead it has type A->*.
+    parameters.reduce<Term>(
+      (acc, curr) => Pi(curr.name, curr.type, acc),
+      Star()
+    )
   );
 };
 

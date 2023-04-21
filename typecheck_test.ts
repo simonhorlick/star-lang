@@ -535,497 +535,479 @@ describe("typechecker", () => {
     );
   });
 
-  //   test("can represent bool by its eliminators", () => {
-  //     // typeof Bool = ∀X. X→X→X
-  //     //
-  //     // untyped:
-  //     // tru = λt. λf. t
-  //     // fls = λt. λf. f
-  //     // if = λl. λm. λn. (l(m))(n)
-  //     //
-  //     // typed:
-  //     // tru: Bool = λX. λt:X. λf:X. t
-  //     // fls: Bool = λX. λt:X. λf:X. f
-  //     // if = λX. λb:Bool. λt:X. λf:X. (b(t))(f)
+  test("can represent bool by its eliminators", () => {
+    // typeof Bool = ∀X. X→X→X
+    //
+    // untyped:
+    // tru = λt. λf. t
+    // fls = λt. λf. f
+    // if = λl. λm. λn. (l(m))(n)
+    //
+    // typed:
+    // tru: Bool = λX. λt:X. λf:X. t
+    // fls: Bool = λX. λt:X. λf:X. f
+    // if = λX. λb:Bool. λt:X. λf:X. (b(t))(f)
 
-  //     const Bool = Pi(
-  //       "X",
-  //       Star(),
-  //       Pi("", Var("X", 0), Pi("", Var("X", 1), Var("X", 2)))
-  //     );
+    const Bool = Pi(
+      "X",
+      Star(),
+      Pi("", Var("X", 0), Pi("", Var("X", 1), Var("X", 2)))
+    );
 
-  //     const tru = Abs("X", Abs("t", Abs("f", Var("t", 1))));
-  //     const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
+    const tru = Abs("X", Abs("t", Abs("f", Var("t", 1))));
+    const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
 
-  //     let result = typecheck(
-  //       defs(),
-  //       adts(),
-  //       [],
-  //       tru,
-  //       Bool
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //     let result2 = typecheck(
-  //       defs(),
-  //       adts(),
-  //       [],
-  //       fls,
-  //       Bool
-  //     );
-  //     if (result2._ == "typecheckerror") {
-  //       throw new Error(result2.msg);
-  //     }
-  //   });
+    let result = typecheck(defs(), adts(), [], tru, Bool);
+    if (result._ == "typecheckerror") {
+      throw new Error(result.msg);
+    }
+    let result2 = typecheck(defs(), adts(), [], fls, Bool);
+    if (result2._ == "typecheckerror") {
+      throw new Error(result2.msg);
+    }
+  });
 
-  //   // ιt. ΠP:Bool→*. P(Bool.true) → P(Bool.false) → P(t)
-  //   const Bool = Self(
-  //     "t",
-  //     Pi(
-  //       "P",
-  //       Pi("", Ref("Bool"), Star()),
-  //       Pi(
-  //         "",
-  //         App(Var("P", 0), Ref("true")),
-  //         Pi("", App(Var("P", 1), Ref("false")), App(Var("P", 2), Var("t", 3)))
-  //       )
-  //     )
-  //   );
+  // ιt. ΠP:Bool→*. P(Bool.true) → P(Bool.false) → P(t)
+  const Bool = Self(
+    "t",
+    Pi(
+      "P",
+      Pi("", Ref("Bool"), Star()),
+      Pi(
+        "",
+        App(Var("P", 0), Ref("true")),
+        Pi("", App(Var("P", 1), Ref("false")), App(Var("P", 2), Var("t", 3)))
+      )
+    )
+  );
 
-  //   const bt = Abs("P", Abs("t", Abs("f", Var("t", 1))));
-  //   const bf = Abs("P", Abs("t", Abs("f", Var("f", 0))));
+  const bt = Abs("P", Abs("t", Abs("f", Var("t", 1))));
+  const bf = Abs("P", Abs("t", Abs("f", Var("f", 0))));
 
-  //   const Booltrue = Def("true", bt, Bool);
-  //   const Boolfalse = Def("false", bf, Bool);
-  //   const Booldef = Def("Bool", Bool, Star());
+  const Booltrue = Def("true", bt, Bool);
+  const Boolfalse = Def("false", bf, Bool);
+  const Booldef = Def("Bool", Bool, Star());
 
-  //   test("can typecheck bool with self types", () => {
-  //     /*
-  //       type Bool = true | false
+  test("can typecheck bool with self types", () => {
+    /*
+        type Bool = true | false
 
-  //       This creates the following functions:
-  //         true : Bool
-  //         false : Bool
+        This creates the following functions:
+          true : Bool
+          false : Bool
 
-  //       The parser should build the following:
-  //         Bool = ιb. ΠP:Bool→*.
-  //           P(Bool.true) →
-  //           P(Bool.false) →
-  //           P(b)
-  //         true = (P) (t) (f) t
-  //         false = (P) (t) (f) f
+        The parser should build the following:
+          Bool = ιb. ΠP:Bool→*.
+            P(Bool.true) →
+            P(Bool.false) →
+            P(b)
+          true = (P) (t) (f) t
+          false = (P) (t) (f) f
 
-  //       To generalise a little:
-  //         T : Type = ιt. ΠP:T→*.
-  //           P(constructor1) →
-  //           P(constructor2) →
-  //           ...
-  //           P(constructorN) →
-  //           P(t)
-  //         constructor1 : T = (P) (c1) (c2) ... (cN) c1
-  //         constructor2 : T = (P) (c1) (c2) ... (cN) c2
-  //         ...
-  //         constructorN : T = (P) (c1) (c2) ... (cN) cN
+        To generalise a little:
+          T : Type = ιt. ΠP:T→*.
+            P(constructor1) →
+            P(constructor2) →
+            ...
+            P(constructorN) →
+            P(t)
+          constructor1 : T = (P) (c1) (c2) ... (cN) c1
+          constructor2 : T = (P) (c1) (c2) ... (cN) c2
+          ...
+          constructorN : T = (P) (c1) (c2) ... (cN) cN
 
-  //         i.e.
-  //         define a top-level def T:Type = as above
-  //         define n constructors; constructor1 through constructorN.
-  //         Def()
+          i.e.
+          define a top-level def T:Type = as above
+          define n constructors; constructor1 through constructorN.
+          Def()
 
-  //       Example values of this type:
-  //         true : Bool
-  //         false : Bool
+        Example values of this type:
+          true : Bool
+          false : Bool
 
-  //       You can eliminate a Bool using a case statement:
-  //         case b of
-  //           true => "t"
-  //           false => "f"
-  //           : String
-  //       desugars
-  //         case x as t : m
-  //       becomes
-  //         x<(t) m>
-  //       i.e.
-  //         b((t) => String, "t", "f")
-  //       In the case that b == true:
-  //         true((t) => String, "t", "f") // def true = (P) (t) (f) t
-  //         "t"
-  //     */
-  //     expect(bt).toStrictEqual(buildConstructor(["t", "f"], 0));
-  //     expect(bf).toStrictEqual(buildConstructor(["t", "f"], 1));
+        You can eliminate a Bool using a case statement:
+          case b of
+            true => "t"
+            false => "f"
+            : String
+        desugars
+          case x as t : m
+        becomes
+          x<(t) m>
+        i.e.
+          b((t) => String, "t", "f")
+        In the case that b == true:
+          true((t) => String, "t", "f") // def true = (P) (t) (f) t
+          "t"
+      */
+    expect(bt).toStrictEqual(buildConstructor(["t", "f"], 0));
+    expect(bf).toStrictEqual(buildConstructor(["t", "f"], 1));
 
-  //     const builtBool = buildType(
-  //       Identifier("Bool"),
-  //       [],
-  //       [
-  //         { name: Identifier("true"), args: [] },
-  //         { name: Identifier("false"), args: [] },
-  //       ]
-  //     ).term;
-  //     expect(builtBool).toStrictEqual(Bool);
+    const builtBool = buildType(
+      Identifier("Bool"),
+      [],
+      [
+        { name: Identifier("true"), args: [] },
+        { name: Identifier("false"), args: [] },
+      ]
+    ).term;
+    expect(builtBool).toStrictEqual(Bool);
 
-  //     ensure(
-  //       typecheck(
-  //         defMap([Booltrue, Boolfalse, Booldef]),
-  //         adts(),
-  //         [],
-  //         Booltrue.term,
-  //         Bool
-  //       )
-  //     );
-  //     ensure(
-  //       typecheck(
-  //         defMap([Booltrue, Boolfalse, Booldef]),
-  //         adts(),
-  //         [],
-  //         Boolfalse.term,
-  //         Bool
-  //       )
-  //     );
-  //     ensure(
-  //       typecheck(
-  //         defMap([Booltrue, Boolfalse, Booldef]),
-  //         adts(),
-  //         [],
-  //         Bool,
-  //         Star()
-  //       )
-  //     );
-  //   });
+    ensure(
+      typecheck(
+        defs([Booltrue, Boolfalse, Booldef]),
+        adts(),
+        [],
+        Booltrue.term,
+        Bool
+      )
+    );
+    ensure(
+      typecheck(
+        defs([Booltrue, Boolfalse, Booldef]),
+        adts(),
+        [],
+        Boolfalse.term,
+        Bool
+      )
+    );
+    ensure(
+      typecheck(defs([Booltrue, Boolfalse, Booldef]), adts(), [], Bool, Star())
+    );
+  });
 
-  //   const natConstructors = [
-  //     { name: Identifier("zero"), args: [] },
-  //     { name: Identifier("succ"), args: [{ name: "n", type: Ref("Nat") }] },
-  //   ];
+  const natConstructors = [
+    { name: Identifier("zero"), args: [] },
+    { name: Identifier("succ"), args: [{ name: "n", type: Ref("Nat") }] },
+  ];
 
-  //   const NatDef = buildType(Identifier("Nat"), [], natConstructors);
+  const NatDef = buildType(Identifier("Nat"), [], natConstructors);
+  const Nat = NatDef.term;
 
-  //   const natZeroDef = Def(
-  //     "zero",
-  //     GenerateConstructorTerm([], natConstructors, 0),
-  //     GenerateConstructorType("Nat", [], natConstructors[0])
-  //   );
-  //   const natSuccDef = Def(
-  //     "succ",
-  //     GenerateConstructorTerm([], natConstructors, 1),
-  //     GenerateConstructorType("Nat", [], natConstructors[1])
-  //   );
+  const natZeroDef = Def(
+    "zero",
+    GenerateConstructorTerm([], natConstructors, 0),
+    GenerateConstructorType("Nat", [], natConstructors[0])
+  );
+  const natSuccDef = Def(
+    "succ",
+    GenerateConstructorTerm([], natConstructors, 1),
+    GenerateConstructorType("Nat", [], natConstructors[1])
+  );
 
-  //   test("recursive types", () => {
-  //     /*
-  //       type Nat = zero | succ(x Nat)
+  test("recursive types", () => {
+    /*
+        type Nat = zero | succ(x Nat)
 
-  //       This creates the following functions:
-  //         zero : Nat
-  //         succ : Nat → Nat
+        This creates the following functions:
+          zero : Nat
+          succ : Nat → Nat
 
-  //       The parser should build the following:
-  //         Nat = ιm. ΠP:Nat→*.
-  //           P(zero) →
-  //           ((x Nat) → P(succ(x))) →
-  //           P(m)
-  //         zero = <P> (z) (s) z
-  //         succ = (n) <P> (z) (s) s(n)
+        The parser should build the following:
+          Nat = ιm. ΠP:Nat→*.
+            P(zero) →
+            ((x Nat) → P(succ(x))) →
+            P(m)
+          zero = <P> (z) (s) z
+          succ = (n) <P> (z) (s) s(n)
 
-  //       Example values of this type:
-  //         zero : Nat
-  //         succ(succ(zero)) : Nat
+        Example values of this type:
+          zero : Nat
+          succ(succ(zero)) : Nat
 
-  //       You can eliminate a Nat using a case statement:
-  //         case n of
-  //           zero => true
-  //           succ => false
-  //           : Bool
-  //     */
+        You can eliminate a Nat using a case statement:
+          case n of
+            zero => true
+            succ => false
+            : Bool
+      */
 
-  //     // ιt. ΠP:Nat→*. P(Nat.zero) → (Πn:Nat. P(Nat.succ(n))) → P(t)
-  //     const Nat = Self(
-  //       "t",
-  //       Pi(
-  //         "P",
-  //         Pi("", Ref("Nat"), Star()),
-  //         Pi(
-  //           "",
-  //           App(Var("P", 0), Ref("zero")),
-  //           Pi(
-  //             "",
-  //             Pi(
-  //               "n",
-  //               Ref("Nat"),
-  //               App(Var("P", 2), App(Ref("succ"), Var("n", 0)))
-  //             ),
-  //             App(Var("P", 2), Var("t", 3))
-  //           )
-  //         )
-  //       )
-  //     );
+    // ιt. ΠP:Nat→*. P(Nat.zero) → (Πn:Nat. P(Nat.succ(n))) → P(t)
+    const Nat = Self(
+      "t",
+      Pi(
+        "P",
+        Pi("", Ref("Nat"), Star()),
+        Pi(
+          "",
+          App(Var("P", 0), Ref("zero")),
+          Pi(
+            "",
+            Pi(
+              "n",
+              Ref("Nat"),
+              App(Var("P", 2), App(Ref("succ"), Var("n", 0)))
+            ),
+            App(Var("P", 2), Var("t", 3))
+          )
+        )
+      )
+    );
 
-  //     expect(NatDef.term).toStrictEqual(Nat);
-  //   });
+    expect(NatDef.term).toStrictEqual(Nat);
+  });
 
-  //   test("one is a Nat", () => {
-  //     const defs = defMap([
-  //       NatDef,
-  //       natZeroDef,
-  //       natSuccDef,
-  //       Booldef,
-  //       Booltrue,
-  //       Boolfalse,
-  //     ]);
-  //     const one = App(natSuccDef.term, natZeroDef.term); // succ(zero)
-  //     const onewhnf = te(whnf(false, defs, one, one));
-  //     console.log(`one is ${pretty(onewhnf)}`);
-  //     // console.log(pretty(te(whnf(false, defs, one, one))));
-  //     ensure(typecheck(defs, adts(), [], onewhnf, Nat));
-  //   });
+  test("one is a Nat", () => {
+    const defns = defs([
+      NatDef,
+      natZeroDef,
+      natSuccDef,
+      Booldef,
+      Booltrue,
+      Boolfalse,
+    ]);
+    const one = App(natSuccDef.term, natZeroDef.term); // succ(zero)
+    const onewhnf = te(whnf(false, defns, one, one));
+    console.log(`one is ${pretty(onewhnf)}`);
+    // console.log(pretty(te(whnf(false, defs, one, one))));
+    ensure(typecheck(defns, adts(), [], onewhnf, Nat));
+  });
 
-  //   test("eliminate nat", () => {
-  //     const defs = defMap([
-  //       NatDef,
-  //       natZeroDef,
-  //       natSuccDef,
-  //       Booldef,
-  //       Booltrue,
-  //       Boolfalse,
-  //     ]);
-  //     const n = App(natSuccDef.term, natZeroDef.term); // succ(zero)
-  //     ensure(typecheck(defs, adts(), [], n, Nat));
+  test("succ(zero) should have type Nat", () => {
+    const defns = defs([
+      NatDef,
+      natZeroDef,
+      natSuccDef,
+      Booldef,
+      Booltrue,
+      Boolfalse,
+    ]);
+    const n = App(Ref("succ"), Ref("zero")); // succ(zero)
+    ensure(typecheck(defns, adts(), [], n, Nat));
+  });
 
-  //     console.log(pretty(te(whnf(false, defs, n, Star()))));
-  //     const P = Abs("P", Ref("Bool")); // λP. Bool
-  //     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
-  //     ensure(typecheck(defs, adts(), [], eliminator, Bool));
+  test("eliminate nat", () => {
+    const defns = defs([
+      NatDef,
+      natZeroDef,
+      natSuccDef,
+      Booldef,
+      Booltrue,
+      Boolfalse,
+    ]);
+    const n = App(Ref("succ"), Ref("zero")); // succ(zero)
+    const P = Abs("P", Ref("Bool")); // λP. Bool
+    const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
+    ensure(typecheck(defns, adts(), [], eliminator, Bool));
 
-  //     console.log(pretty(te(whnf(false, defs, eliminator, Star()))));
+    const reduced = whnf(true, defns, eliminator, Star());
+    if (reduced._ == "typecheckerror") {
+      throw reduced.msg;
+    }
+    expect(pretty(reduced)).toBe("λP. λt. λf. f");
+  });
 
-  //     const reduced = whnf(true, defs, eliminator, Star());
-  //     if (reduced._ == "typecheckerror") {
-  //       throw reduced.msg;
-  //     }
-  //     expect(pretty(reduced)).toBe("λP. λt. λf. f");
-  //   });
+  test("simple parameterised types", () => {
+    // Maybe
+    /*
+        type Maybe<T *> = null | just(value T)
 
-  //   // test("equate loop", () => {
-  //   //   const defs = [NatDef, natZeroDef, natSuccDef, Booldef, Booltrue, Boolfalse];
-  //   //   expect(
-  //   //     equate(defs, Ref("false"), Ref("Nat"), Pi("", Ref("Bool"), Star()))
-  //   //   ).toBeFalsy();
-  //   // });
+        This creates the following functions (in the final language design: T is
+        always inferred from the usage, if it's unclear an annotation is
+        required). We need to create the definitions with the type parameters
+        first (the T) followed by any constructor arguments:
+          null : (T *) → Maybe<T>
+          just : (T *) → T → Maybe<T>
 
-  //   test("simple parameterised types", () => {
-  //     // Maybe
-  //     /*
-  //       type Maybe<T *> = null | just(value T)
+        The parser generates:
+          Maybe: (A *) → * =
+            (A)
+              ιt. ΠP:Maybe(A)→*.
+              P(null(A)) →
+              ((value A) → P(just(A)(value))) →
+              P(t)
+          just: (A *) → (value A) → Maybe(A) =
+            (A) (value)
+            (P) (null) (just) just(value)
+          null: (A *) → Maybe(A) =
+            (A)
+            (P) (null) (just) null
 
-  //       This creates the following functions (in the final language design: T is
-  //       always inferred from the usage, if it's unclear an annotation is
-  //       required). We need to create the definitions with the type parameters
-  //       first (the T) followed by any constructor arguments:
-  //         null : (T *) → Maybe<T>
-  //         just : (T *) → T → Maybe<T>
+        Example values of this type:
+          null(Int) : Maybe<Int>
+          just(Int, 6) : Maybe<Int>
 
-  //       The parser generates:
-  //         Maybe: (A *) → * =
-  //           (A)
-  //             ιt. ΠP:Maybe(A)→*.
-  //             P(null(A)) →
-  //             ((value A) → P(just(A)(value))) →
-  //             P(t)
-  //         just: (A *) → (value A) → Maybe(A) =
-  //           (A) (value)
-  //           (P) (null) (just) just(value)
-  //         null: (A *) → Maybe(A) =
-  //           (A)
-  //           (P) (null) (just) null
+          func hello(name Maybe<String>) = case name of
+            null => "world"
+            just => fmt.Sprintf("hello %s", name.value)
+          hello(null(String)) // TODO: the type Maybe<String> is inferred from the usage
+          hello(just(String, "世界")) // TODO: the type Maybe<String> can also be inferred from the argument
 
-  //       Example values of this type:
-  //         null(Int) : Maybe<Int>
-  //         just(Int, 6) : Maybe<Int>
+        You can eliminate a Maybe using a case statement:
+          case m of
+            null => "n"
+            just => "j"
+            : String
+      */
 
-  //         func hello(name Maybe<String>) = case name of
-  //           null => "world"
-  //           just => fmt.Sprintf("hello %s", name.value)
-  //         hello(null(String)) // TODO: the type Maybe<String> is inferred from the usage
-  //         hello(just(String, "世界")) // TODO: the type Maybe<String> can also be inferred from the argument
+    // λA. ιt. ΠP:Maybe(A)→*. P(null(A)) → ((value A) → P(just(A)(value))) → P(t)
+    const Maybe = Abs(
+      "A",
+      Self(
+        "t",
+        Pi(
+          "P",
+          Pi("", App(Ref("Maybe"), Var("A", 1)), Star()),
+          Pi(
+            "",
+            App(Var("P", 0), App(Ref("null"), Var("A", 2))),
+            Pi(
+              "",
+              Pi(
+                "value",
+                Var("A", 3),
+                App(
+                  Var("P", 2),
+                  App(App(Ref("just"), Var("A", 4)), Var("value", 0))
+                )
+              ),
+              App(Var("P", 2), Var("t", 3))
+            )
+          )
+        )
+      )
+    );
+    console.log(pretty(Maybe));
 
-  //       You can eliminate a Maybe using a case statement:
-  //         case m of
-  //           null => "n"
-  //           just => "j"
-  //           : String
-  //     */
+    const maybeParams = [{ name: "A", type: Star() }];
+    const maybeConstructors = [
+      { name: Identifier("null"), args: [] },
+      {
+        name: Identifier("just"),
+        args: [
+          {
+            name: "value",
+            type: Par("A"),
+          },
+        ],
+      },
+    ];
+    const builtMaybe = buildType(
+      Identifier("Maybe"),
+      maybeParams,
+      maybeConstructors
+    );
+    expect(builtMaybe.term).toStrictEqual(Maybe);
 
-  //     // λA. ιt. ΠP:Maybe(A)→*. P(null(A)) → ((value A) → P(just(A)(value))) → P(t)
-  //     const Maybe = ci(
-  //       Abs(
-  //         "A",
-  //         Self(
-  //           "t",
-  //           Pi(
-  //             "P",
-  //             Pi("", App(Ref("Maybe"), Var("A", 1)), Star()),
-  //             Pi(
-  //               "",
-  //               App(Var("P", 0), App(Ref("null"), Var("A", 2))),
-  //               Pi(
-  //                 "",
-  //                 Pi(
-  //                   "value",
-  //                   Var("A", 3),
-  //                   App(
-  //                     Var("P", 2),
-  //                     App(App(Ref("just"), Var("A", 4)), Var("value", 0))
-  //                   )
-  //                 ),
-  //                 App(Var("P", 2), Var("t", 3))
-  //               )
-  //             )
-  //           )
-  //         )
-  //       )
-  //     );
-  //     console.log(pretty(Maybe));
+    /*
+      just: (A *) → (value A) → Maybe(A) =
+        (A) (value)
+        (P) (null) (just) just(value)
+      */
+    const maybeJustDef = Def(
+      "just",
+      Abs(
+        "A",
+        Abs(
+          "value",
+          Abs(
+            "P",
+            Abs("null", Abs("just", App(Var("just", 0), Var("value", 3))))
+          )
+        )
+      ),
+      Pi("A", Star(), Pi("value", Var("A", 0), App(Ref("Maybe"), Var("A", 1))))
+    );
 
-  //     const maybeParams = [{ name: "A", type: Star() }];
-  //     const maybeConstructors = [
-  //       { name: Identifier("null"), args: [] },
-  //       {
-  //         name: Identifier("just"),
-  //         args: [
-  //           {
-  //             name: "value",
-  //             type: Par("A"),
-  //           },
-  //         ],
-  //       },
-  //     ];
-  //     const builtMaybe = buildType(
-  //       Identifier("Maybe"),
-  //       maybeParams,
-  //       maybeConstructors
-  //     ).term;
-  //     expect(builtMaybe).toStrictEqual(Maybe);
+    /*
+      null: (A *) → Maybe(A) =
+        (A)
+        (P) (null) (just) null
+    */
+    const maybeNullDef = Def(
+      "null",
+      Abs("A", Abs("P", Abs("null", Abs("just", Var("null", 1))))),
+      Pi("A", Star(), App(Ref("Maybe"), Var("A", 0)))
+    );
 
-  //     /*
-  //         just: (A *) → (value A) → Maybe(A) =
-  //           (A) (value)
-  //           (P) (null) (just) just(value)
-  //         null: (A *) → Maybe(A) =
-  //           (A)
-  //           (P) (null) (just) null
-  //     */
-  //     const fjust = Abs(
-  //       "A",
-  //       Abs(
-  //         "value",
-  //         Abs("P", Abs("null", Abs("just", App(Var("just", 0), Var("value", 3)))))
-  //       )
-  //     );
-  //     const fnull = Abs("A", Abs("P", Abs("null", Abs("just", Var("null", 1)))));
-  //     const maybeJustDef = Def(
-  //       "just",
-  //       fjust,
-  //       Pi("A", Star(), Pi("value", Var("A", 0), App(Ref("Maybe"), Var("A", 1))))
-  //     );
-  //     const maybeNullDef = Def(
-  //       "null",
-  //       fnull,
-  //       Pi("A", Star(), App(Ref("Maybe"), Var("A", 0)))
-  //     );
+    console.log(
+      pretty(
+        GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
+      )
+    );
+    console.log(pretty(maybeNullDef.typ));
+    expect(
+      GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
+    ).toStrictEqual(maybeNullDef.typ);
 
-  //     console.log(
-  //       pretty(
-  //         GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
-  //       )
-  //     );
-  //     console.log(pretty(maybeNullDef.typ));
-  //     expect(
-  //       GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
-  //     ).toStrictEqual(maybeNullDef.typ);
+    expect(
+      GenerateConstructorTerm(maybeParams, maybeConstructors, 0)
+    ).toStrictEqual(maybeNullDef.term);
 
-  //     expect(
-  //       GenerateConstructorTerm(maybeParams, maybeConstructors, 0)
-  //     ).toStrictEqual(maybeNullDef.term);
+    expect(
+      GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
+    ).toStrictEqual(maybeJustDef.typ);
 
-  //     expect(
-  //       GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
-  //     ).toStrictEqual(maybeJustDef.typ);
+    expect(
+      GenerateConstructorTerm(maybeParams, maybeConstructors, 1)
+    ).toStrictEqual(maybeJustDef.term);
 
-  //     expect(
-  //       GenerateConstructorTerm(maybeParams, maybeConstructors, 1)
-  //     ).toStrictEqual(maybeJustDef.term);
+    // FIXME:
+    ensure(
+      typecheck(
+        defs([builtMaybe, maybeNullDef, maybeJustDef]),
+        adts(),
+        [],
+        maybeNullDef.term,
+        maybeNullDef.typ
+      )
+    );
 
-  //     const maybeTypeDef = Def("Maybe", Maybe, Star());
+    ensure(
+      typecheck(
+        defs([builtMaybe, maybeNullDef, maybeJustDef]),
+        adts(),
+        [],
+        maybeJustDef.term,
+        maybeJustDef.typ
+      )
+    );
 
-  //     let result = typecheck(
-  //       defMap([maybeTypeDef, maybeNullDef, maybeJustDef]),
-  //       adts(),
-  //       [],
-  //       maybeNullDef.term,
-  //       maybeNullDef.typ
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
+    // Check an instantiation: just(Bool, true)
+    let result3 = ensure(
+      typecheck(
+        defs([
+          Def("Bool", Bool, Star()),
+          Booltrue,
+          Boolfalse,
+          builtMaybe,
+          maybeNullDef,
+          maybeJustDef,
+        ]),
+        adts(),
+        [],
+        App(App(Ref("just"), Ref("Bool")), Ref("true")),
+        App(Ref("Maybe"), Ref("Bool"))
+      )
+    );
 
-  //     let result2 = typecheck(
-  //       defMap([maybeTypeDef, maybeNullDef, maybeJustDef]),
-  //       adts(),
-  //       [],
-  //       maybeJustDef.term,
-  //       maybeJustDef.typ
-  //     );
-  //     if (result2._ == "typecheckerror") {
-  //       throw new Error(result2.msg);
-  //     }
+    // x = just(Bool)(true)
+    // case x of
+    //  null -> false
+    //  just -> x.value
+    // => evaluates to true
+    // is:
+    // x((m) Bool, false, (value) value)
+    const caseExp = App(
+      App(App(result3.term, Abs("m", Ref("Bool"))), Ref("false")),
+      Abs("value", Var("value", 0))
+    );
 
-  //     // Check an instantiation: just(Bool, true)
-  //     let result3 = typecheck(
-  //       defMap([
-  //         Def("Bool", Bool, Star()),
-  //         Booltrue,
-  //         Boolfalse,
-  //         maybeTypeDef,
-  //         maybeNullDef,
-  //         maybeJustDef,
-  //       ]),
-  //       adts(),
-  //       [],
-  //       App(App(Ref("just"), Ref("Bool")), Ref("true")),
-  //       App(Ref("Maybe"), Ref("Bool"))
-  //     );
-  //     if (result3._ == "typecheckerror") {
-  //       throw new Error(result3.msg);
-  //     }
-
-  //     // x = just(Bool)(true)
-  //     // case x of
-  //     //  null -> false
-  //     //  just -> x.value
-  //     // => evaluates to true
-  //     // is:
-  //     // x((m) Bool, false, (value) value)
-  //     const caseExp = App(
-  //       App(App(result3.term, Abs("m", Ref("Bool"))), Ref("false")),
-  //       Abs("value", Var("value", 0))
-  //     );
-
-  //     const reduced = whnf(
-  //       true,
-  //       defMap([
-  //         Def("Bool", Bool, Star()),
-  //         Booltrue,
-  //         Boolfalse,
-  //         Def("Maybe", Maybe, Star()),
-  //         maybeNullDef,
-  //         maybeJustDef,
-  //       ]),
-  //       caseExp,
-  //       caseExp
-  //     );
-  //     expect(reduced).toStrictEqual(bt);
-  //   });
+    const reduced = whnf(
+      true,
+      defs([
+        Def("Bool", Bool, Star()),
+        Booltrue,
+        Boolfalse,
+        builtMaybe,
+        maybeNullDef,
+        maybeJustDef,
+      ]),
+      caseExp,
+      caseExp
+    );
+    expect(reduced).toStrictEqual(bt);
+  });
 
   //   test("recursive parameterised types", () => {
   //     /*
