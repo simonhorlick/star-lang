@@ -1282,63 +1282,6 @@ describe("typechecker", () => {
   //     */
   //   });
 
-  //   // zero = λP. λz. λs. z
-  //   const z = Abs("P", Abs("z", Abs("s", Var("z", 1))));
-  //   // succ: Nat -> Nat = λn. λP. λz. λs. s(n)
-  //   const s = Abs(
-  //     "n",
-  //     Abs("P", Abs("z", Abs("s", App(Var("s", 0), Var("n", 3)))))
-  //   );
-
-  //   // ιt. ΠP:Nat→*. P(Nat.zero) → (Πn:Nat. P(Nat.succ(n))) → P(t)
-  //   const Nat = Self(
-  //     "t",
-  //     Pi(
-  //       "P",
-  //       Pi("", Ref("Nat"), Star()),
-  //       Pi(
-  //         "",
-  //         App(Var("P", 0), z),
-  //         Pi(
-  //           "",
-  //           Pi("n", Ref("Nat"), App(Var("P", 2), App(s, Var("n", 0)))),
-  //           App(Var("P", 2), Var("t", 3))
-  //         )
-  //       )
-  //     )
-  //   );
-
-  //   const zero = Def("Nat.zero", z, Nat);
-  //   const succ = Def("Nat.succ", s, Pi("", Nat, Nat));
-
-  //   test("recursive parameterised types: zero", () => {
-  //     let result = typecheck(
-  //       defs(),
-  //       adts(),
-  //       [],
-  //       zero.term,
-  //       Nat
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
-
-  //   test("recursive parameterised types: succ", () => {
-  //     let result = typecheck(
-  //       defMap([NatDef]),
-  //       adts(),
-  //       [],
-  //       s, //succ.term,
-  //       Pi("", Nat, Nat)
-  //     );
-  //     if (result._ == "typecheckerror") {
-  //       throw new Error(result.msg);
-  //     }
-  //   });
-
-  //   // λx. x
-
   describe("type equality", () => {
     const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
@@ -1406,227 +1349,149 @@ describe("typechecker", () => {
   });
 });
 
-// // tru = λt. λf. t
-// const tru = Def("tru", Abs("t", Abs("f", Var("t", 1))), Ref("unknown"));
+describe("shifting", () => {
+  test("type shift increments free variables", () => {
+    // Both X and Y are free type variables.
+    const type = Pi("", Var("X", 0), Var("Y", 1));
+    expect(shift(1, 0, type)).toStrictEqual(Pi("", Var("X", 1), Var("Y", 2)));
+  });
 
-// // fls = λt. λf. f
-// const fls = Def("fls", Abs("t", Abs("f", Var("f", 0))), Ref("unknown"));
+  test("ensure we only shift free variables", () => {
+    // we need to shift the 2, but not the 0 or the 1, as 2 is free in this
+    // expression.
 
-// // test = λl. λm. λn. (l(m))(n)
-// // test = λ2. λ1. λ0. (2(1))(0)
-// const testfn = Def(
-//   "test",
-//   Abs("l", Abs("m", Abs("n", App(App(Var("l", 2), Var("m", 1)), Var("n", 0))))),
-//   Ref("unknown")
-// );
+    // λ.λ.1(0(2)) shifted up by 2 is:
+    // λ.λ.1(0(4))
+    let term = Abs(
+      "x",
+      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 2))))
+    );
+    let actual = shift(2, 0, term);
+    let expected = Abs(
+      "x",
+      Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 4))))
+    );
+    expect(actual).toStrictEqual(expected);
+  });
 
-//
-// Evaluation Rules
-//
+  test("ensure we only shift free variables", () => {
+    // note left association of app in the following syntax:
+    // λ.01(λ.012) shifted up by 2 is:
+    // λ.03(λ.014)
+    let term = Abs(
+      "",
+      App(
+        App(Var("", 0), Var("", 1)),
+        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 2)))
+      )
+    );
+    let actual = shift(2, 0, term);
+    let expected = Abs(
+      "",
+      App(
+        App(Var("", 0), Var("", 3)),
+        Abs("", App(App(Var("", 0), Var("", 1)), Var("", 4)))
+      )
+    );
+    expect(actual).toStrictEqual(expected);
+  });
+});
 
-//     t1 → t1'
-// ---------------- E-App1
-// t1(t2) → t1'(t2)
+describe("substitution", () => {
+  // Examples:
+  // [x/s]x = s
+  // [x/s]y = y                       (if y ≠ x)
+  // [x/s](λy.t1) = λy.[x/s]t1        (if y ≠ x and y ∉ FV(s))
+  // in the term `t1 t2` substitute all `x` with `s`
+  // [x/s](t1 t2) = [x/s]t1 [x/s]t2
 
-//     t2 → t2'
-// ---------------- E-App2
-// v1(t2) → v1(t2')
+  // in the term `x` substitute all `x` with `s`
+  test("[x/s]x = s", () => {
+    let term = Var("x", 1);
+    let actual = subst(1, Var("s", 2), 0, term, "x");
+    let expected = Var("s", 2);
+    expect(actual).toStrictEqual(expected);
+  });
 
-// (λx:T11.t12)(v2) → [x/v2]t12     E-AppAbs
+  // in the term `y` substitute all `x` with `s`
+  test("[x/s]y = y", () => {
+    let term = Var("y", 0);
+    let actual = subst(1, Var("s", 2), 0, term, "y");
+    let expected = Var("y", 0);
+    expect(actual).toStrictEqual(expected);
+  });
 
-//     t1 → t1'
-// ---------------- E-TApp
-// t1(T2) → t1'(T2)
+  // in the term `λb. b a` substitute all `b` with `a`
+  test("[b/a](λb. b a)", () => {
+    // [b/a](λb. b a)
+    // [0/1](λ. 0 2)
+    // λ. 0 2 i.e.
+    // λb. b a, this is the same, nothing has been substituted.
+    let term = Abs("b", App(Var("b", 0), Var("a", 2)));
+    let actual = subst(0, Var("s", 1), 0, term, "");
+    let expected = Abs("b", App(Var("b", 0), Var("a", 2)));
+    expect(actual).toStrictEqual(expected);
+  });
 
-// (ΛX.t12)(T2) → [X/T2]t12    E-TappTabs
+  test("[b/a](b (λx.λy.b))", () => {
+    // replace occurances of b with a:
+    // [b/a](b (λx.λy.b))
+    // (a (λx.λy.a))
+    // in debruijin form b=0,a=1:
+    // [0/1](0 (λ.λ.2))
+    // 1 (λ.λ.3)
+    let term = App(Var("", 0), Abs("", Abs("", Var("", 2))));
+    let actual = subst(0, Var("", 1), 0, term, "");
+    let expected = App(Var("", 1), Abs("", Abs("", Var("", 3))));
+    expect(actual).toStrictEqual(expected);
+  });
+});
 
-// describe("erasure", () => {
-//   // test("polymorphic identity function erases to untyped identity", () => {
-//   //   const program = TApp(
-//   //     TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
-//   //     Ref("Y")
-//   //   );
-//   //   const actual = erase(program);
-//   //   const expected = Abs("x", Var("x", 0));
-//   //   expect(actual).toStrictEqual(expected);
-//   // });
-// });
+describe("evaluation", () => {
+  // (λx. x)(λz. z) -> (λz. z)
+  test("TestReduceIdentity", () => {
+    const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
+    const expected: Term = Abs("z", Var("z", 0));
 
-// describe("shifting", () => {
-// test("type shift increments free variables", () => {
-//   // Both X and Y are free type variables.
-//   const type = Pi("", Var("X", 0), Var("Y", 1));
-//   expect(shift(1, 0, type)).toStrictEqual(Pi("", Var("X", 1), Var("Y", 2)));
-// });
+    const actual = whnf(true, defs(), identity, Star());
 
-//   test("ensure we only shift free variables", () => {
-//     // we need to shift the 2, but not the 0 or the 1, as 2 is free in this
-//     // expression.
+    expect(actual).toStrictEqual(expected);
+  });
 
-//     // λ.λ.1(0(2)) shifted up by 2 is:
-//     // λ.λ.1(0(4))
-//     let term = Abs(
-//       "x",
-//       Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 2))))
-//     );
-//     let actual = shift(2, 0, term);
-//     let expected = Abs(
-//       "x",
-//       Abs("y", App(Var("x", 1), App(Var("y", 0), Var("z", 4))))
-//     );
-//     expect(actual).toStrictEqual(expected);
-//   });
+  // λx. x
+  const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 
-//   test("ensure we only shift free variables", () => {
-//     // note left association of app in the following syntax:
-//     // λ.01(λ.012) shifted up by 2 is:
-//     // λ.03(λ.014)
-//     let term = Abs(
-//       "",
-//       App(
-//         App(Var("", 0), Var("", 1)),
-//         Abs("", App(App(Var("", 0), Var("", 1)), Var("", 2)))
-//       )
-//     );
-//     let actual = shift(2, 0, term);
-//     let expected = Abs(
-//       "",
-//       App(
-//         App(Var("", 0), Var("", 3)),
-//         Abs("", App(App(Var("", 0), Var("", 1)), Var("", 4)))
-//       )
-//     );
-//     expect(actual).toStrictEqual(expected);
-//   });
-// });
+  // Test that substituting top level functions works properly.
+  test("TestSubstituteDef", () => {
+    const expected = Abs("z", Var("z", 0));
+    const actual = whnf(
+      true,
+      defs([id]),
+      App(Ref("id"), Abs("z", Var("z", 0))),
+      Star()
+    );
+    expect(actual).toStrictEqual(expected);
+  });
 
-// describe("substitution", () => {
-//   // Examples:
-//   // [x/s]x = s
-//   // [x/s]y = y                       (if y ≠ x)
-//   // [x/s](λy.t1) = λy.[x/s]t1        (if y ≠ x and y ∉ FV(s))
-//   // in the term `t1 t2` substitute all `x` with `s`
-//   // [x/s](t1 t2) = [x/s]t1 [x/s]t2
+  test("should ensure redex uses up bound variable", () => {
+    // Γ = [z→2, y→1]
+    // (λx. y(x)(z))(λx. x)
+    // y(λx. x)(z)
+    // This corresponds to the nameless representation:
+    // (λx. 1(0)(2))(λx. 0)
+    // After one step of evaluation, then indices for y and z are evaluated by 1
+    // as the x binder has now been used up.
+    // 0(λx. 0)(1)
 
-//   // in the term `x` substitute all `x` with `s`
-//   test("[x/s]x = s", () => {
-//     let term = Var("x", 1);
-//     let actual = subst(1, Var("s", 2), 0, term, "x");
-//     let expected = Var("s", 2);
-//     expect(actual).toStrictEqual(expected);
-//   });
+    let src = App(
+      Abs("x", App(App(Var("y", 1), Var("x", 0)), Var("z", 2))),
+      Abs("x", Var("x", 0))
+    );
 
-//   // in the term `y` substitute all `x` with `s`
-//   test("[x/s]y = y", () => {
-//     let term = Var("y", 0);
-//     let actual = subst(1, Var("s", 2), 0, term, "y");
-//     let expected = Var("y", 0);
-//     expect(actual).toStrictEqual(expected);
-//   });
+    let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
 
-//   // in the term `λb. b a` substitute all `b` with `a`
-//   test("[b/a](λb. b a)", () => {
-//     // [b/a](λb. b a)
-//     // [0/1](λ. 0 2)
-//     // λ. 0 2 i.e.
-//     // λb. b a, this is the same, nothing has been substituted.
-//     let term = Abs("b", App(Var("b", 0), Var("a", 2)));
-//     let actual = subst(0, Var("s", 1), 0, term, "");
-//     let expected = Abs("b", App(Var("b", 0), Var("a", 2)));
-//     expect(actual).toStrictEqual(expected);
-//   });
+    const actual = whnf(true, defs(), src, Star());
 
-//   test("[b/a](b (λx.λy.b))", () => {
-//     // replace occurances of b with a:
-//     // [b/a](b (λx.λy.b))
-//     // (a (λx.λy.a))
-//     // in debruijin form b=0,a=1:
-//     // [0/1](0 (λ.λ.2))
-//     // 1 (λ.λ.3)
-//     let term = App(Var("", 0), Abs("", Abs("", Var("", 2))));
-//     let actual = subst(0, Var("", 1), 0, term, "");
-//     let expected = App(Var("", 1), Abs("", Abs("", Var("", 3))));
-//     expect(actual).toStrictEqual(expected);
-//   });
-// });
-
-// describe("evaluation", () => {
-//   // (λx. x)(λz. z) -> (λz. z)
-//   test("TestReduceIdentity", () => {
-//     const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
-//     const expected: Term = Abs("z", Var("z", 0));
-
-//     const actual = whnf(true, defs(), identity, Star());
-
-//     expect(actual).toStrictEqual(expected);
-//   });
-
-//   // λx. x
-//   const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
-
-//   // Test that substituting top level functions works properly.
-//   test("TestSubstituteDef", () => {
-//     const expected = Abs("z", Var("z", 0));
-//     const actual = whnf(
-//       true,
-//       defMap([id]),
-//       App(Ref("id"), Abs("z", Var("z", 0))),
-//       Star()
-//     );
-//     expect(actual).toStrictEqual(expected);
-//   });
-
-//   // // "if" reduction
-//   // //
-//   // // top level defs (after typecheck has passed):
-//   // //
-//   // // tru = λt. λf. t
-//   // // fls = λt. λf. f
-//   // // test = λl. λm. λn. (l(m))(n)
-//   // //
-//   // // ((test(tru))(v))(w)
-//   // // ------------------- def "test"
-//   // // (((λl. λm. λn. (l(m))(n))(tru))(v))(w)
-//   // // -------------------------------------- E-AppAbs
-//   // // ((λm. λn. (tru(m))(n))(v))(w)
-//   // // ----------------------------- E-AppAbs
-//   // // (λn. (tru(v))(n))(w)
-//   // // -------------------- E-AppAbs
-//   // // (tru(v))(w)
-//   // // ----------- def "tru"
-//   // // ((λt. λf. t)(v))(w)
-//   // // ------------------- E-AppAbs
-//   // // (λf. v)(w)
-//   // // ---------- E-AppAbs
-//   // // v
-//   // test("TestReduceIfElse", () => {
-//   //   // ((test(tru))(1))(2)
-//   //   const ifElse: Term = App(App(App(Ref("test"), Ref("tru")), one), two);
-//   //   const expected = one;
-//   //   const actual = evaluate([tru, fls, testfn], ifElse);
-
-//   //   expect(actual).toStrictEqual(expected);
-//   // });
-
-//   test("should ensure redex uses up bound variable", () => {
-//     // Γ = [z→2, y→1]
-//     // (λx. y(x)(z))(λx. x)
-//     // y(λx. x)(z)
-//     // This corresponds to the nameless representation:
-//     // (λx. 1(0)(2))(λx. 0)
-//     // After one step of evaluation, then indices for y and z are evaluated by 1
-//     // as the x binder has now been used up.
-//     // 0(λx. 0)(1)
-
-//     let src = App(
-//       Abs("x", App(App(Var("y", 1), Var("x", 0)), Var("z", 2))),
-//       Abs("x", Var("x", 0))
-//     );
-
-//     let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
-
-//     const actual = whnf(true, defs(), src, Star());
-
-//     expect(actual).toStrictEqual(expected);
-//   });
-// });
+    expect(actual).toStrictEqual(expected);
+  });
+});
