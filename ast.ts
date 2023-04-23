@@ -373,7 +373,7 @@ export const block =
     const start = s.idx;
     const result = parser(s);
 
-    if (result.type == "parseerror") {
+    if (result._ == "parseerror") {
       return result;
     }
 
@@ -388,7 +388,7 @@ export const block2 =
     const start = s.idx;
     const result = parser(s);
 
-    if (result.type == "parseerror") {
+    if (result._ == "parseerror") {
       return result;
     }
 

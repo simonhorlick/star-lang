@@ -31,7 +31,10 @@ describe("inspect", () => {
 `;
 
   test("should return type information for main", () => {
-    const [f, defs] = build(src);
+    const result = build(src);
+    if (result._ != "buildresult") throw "build failed";
+    const defs = result.defs;
+    const f = result.file;
 
     for (const node of f.content) {
       if (node._ == "def") {

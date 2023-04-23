@@ -21,10 +21,10 @@ import { strip, stripAST } from "./check";
 import { char, many, parseErrorDiagnostic, Result } from "./parser";
 import { result, ts } from "./parser_test";
 
-const success = <T>(x: Result<T>) => x.type == "outputvalue";
+const success = <T>(x: Result<T>) => x._ == "outputvalue";
 
 const resultC = <T>(x: Result<T>) => {
-  if (x.type == "parseerror") {
+  if (x._ == "parseerror") {
     throw x.error;
   } else {
     if (x.stream.idx != x.stream.src.length) {
@@ -38,7 +38,7 @@ describe("ast", () => {
   test("should parse lambda body greedily", () => {
     const src = `λn n(λp Nat)`;
     const t = term({ src, idx: 0 });
-    if (t.type == "parseerror") {
+    if (t._ == "parseerror") {
       throw parseErrorDiagnostic(t);
     }
     // Expect the parser to consume the input.

@@ -35,14 +35,14 @@ export const s = (s: string): Stream => ({ src: s, idx: 0 });
 
 // A successful parse result.
 export interface OutputValue<T> {
-  type: "outputvalue";
+  _: "outputvalue";
   stream: Stream;
   value: T;
 }
 
 // Parse error with its location.
 export interface ParseError {
-  type: "parseerror";
+  _: "parseerror";
   stream: Stream;
   error: string;
 }
@@ -56,7 +56,7 @@ export type Parser<T> = (s: Stream) => Result<T>;
 export const pure =
   <A>(x: A): Parser<A> =>
   (s: Stream): Result<A> => ({
-    type: "outputvalue",
+    _: "outputvalue",
     stream: s,
     value: x,
   });
@@ -72,7 +72,7 @@ export const bind =
   <A, B>(p: Parser<A>, f: (v: A) => Parser<B>): Parser<B> =>
   (input: Stream) => {
     const parsed = p(input);
-    if (parsed.type == "outputvalue") {
+    if (parsed._ == "outputvalue") {
       return f(parsed.value)(parsed.stream);
     } else {
       return parsed;
@@ -96,7 +96,7 @@ export const seq3 = <P, Q, R>(
 export const zero =
   <T>(err: string): Parser<T> =>
   (s: Stream) => ({
-    type: "parseerror",
+    _: "parseerror",
     stream: s,
     error: err,
     idx: s.idx,
@@ -107,7 +107,7 @@ export const zero =
 export const error =
   <T>(expected: string): Parser<T> =>
   (s: Stream) => ({
-    type: "parseerror",
+    _: "parseerror",
     stream: s,
     error: `expected "${expected}"; got "${s.src[s.idx]}"`,
     idx: s.idx,
@@ -130,12 +130,12 @@ export const pos = (n: number, s: Stream): Stream => ({
 export const item: Parser<string> = (cs) =>
   cs.idx < cs.src.length
     ? {
-        type: "outputvalue",
+        _: "outputvalue",
         stream: advance(1, cs),
         value: cs.src[cs.idx],
       }
     : {
-        type: "parseerror",
+        _: "parseerror",
         stream: cs,
         error: "EOF",
         idx: cs.idx,
@@ -175,7 +175,7 @@ export const either =
   <A, B>(p1: Parser<A>, p2: Parser<B>): Parser<A | B> =>
   (input): Result<A | B> => {
     const left = p1(input);
-    if (left.type == "outputvalue") {
+    if (left._ == "outputvalue") {
       return left;
     }
     return p2(input);
@@ -314,7 +314,7 @@ export const consumeAll = <T>(parser: Parser<T>): Parser<T> => {
     const result = parser(input);
 
     if (
-      result.type == "outputvalue" &&
+      result._ == "outputvalue" &&
       result.stream.idx < result.stream.src.length
     ) {
       return zero<T>("unexpected input")(result.stream);

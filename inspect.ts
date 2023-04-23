@@ -142,7 +142,7 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
             typ.to,
             undefined,
             undefined,
-            addTermToCtx(ctx, identifier(t.name), shift(1, 0, typ.from)),
+            addTermToCtx(ctx, identifier(t.name), typ.from),
             defs
           )
         );

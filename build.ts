@@ -1,9 +1,9 @@
 // build is a library for orchestrating builds of source files for this language.
 
 import { parseFile, ADT, Def, ASTNode, File } from "./ast";
-import { identifier, typecheck } from "./check";
+import { TypecheckError, identifier, typecheck } from "./check";
 import { typecheckErrorDiagnostic } from "./inspect";
-import { parseErrorDiagnostic } from "./parser";
+import { ParseError, parseErrorDiagnostic } from "./parser";
 import { processADTs, desugar } from "./process";
 
 // What's the MVP for this?
@@ -19,11 +19,19 @@ import { processADTs, desugar } from "./process";
 
 // TODO: Fetch dependencies (from github)
 
-export const build = (src: string): [File, Map<string, Def>] => {
+export type BuildResult = {
+  _: "buildresult";
+  file: File;
+  defs: Map<string, Def>;
+};
+
+export const build = (
+  src: string
+): BuildResult | ParseError | TypecheckError => {
   const t = parseFile({ src, idx: 0 });
 
-  if (t.type != "outputvalue") {
-    throw `build failed: ${parseErrorDiagnostic(t)}`;
+  if (t._ != "outputvalue") {
+    return t;
   }
 
   // generate syntax nodes for ADTs, etc
@@ -40,14 +48,13 @@ export const build = (src: string): [File, Map<string, Def>] => {
   );
   const nondefs = f.content.filter((c) => c._ != "def") as Def[];
 
-  let checks = true;
-
   let defsMap: Map<string, Def> = new Map();
   let checkedMap: Map<string, Def> = new Map();
   for (const def of defs) {
     defsMap.set(def.name, def);
   }
 
+  let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
     console.log(`\n# checking definition ${def.name}`);
     const result = typecheck(
@@ -61,18 +68,19 @@ export const build = (src: string): [File, Map<string, Def>] => {
     );
     if (result._ == "typecheckerror") {
       console.error(typecheckErrorDiagnostic(src, result));
-      checks = false;
+      checkerErrors.push(result);
     } else {
       checkedMap.set(def.name, Def(def.name, result.term, result.type));
     }
   }
 
-  if (!checks) {
-    throw "failed check";
+  if (checkerErrors.length > 0) {
+    return checkerErrors[0];
   }
 
-  return [
-    { _: "file", content: [...nondefs, ...checkedMap.values()] },
-    checkedMap,
-  ];
+  return {
+    _: "buildresult",
+    file: { _: "file", content: [...nondefs, ...checkedMap.values()] },
+    defs: checkedMap,
+  };
 };
