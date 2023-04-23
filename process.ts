@@ -262,6 +262,8 @@ export const desugarTerm = (
         //   i:(b Bool)->F(b) = λb (case b of false -> 2 ; true -> false):F(b)
       */
       // FIXME: let b = t.condition; case b ...
+      // FIXME: This is going to give horrible error messages in the situation
+      //  that b is not a Bool.
       return Case(desugarTerm(t.condition, undefined, adts, ctx), [
         Branch(
           Identifier("false"),
