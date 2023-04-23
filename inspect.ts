@@ -175,6 +175,8 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
         );
       case "case":
         throw "unexpected case";
+      case "if":
+        throw "unexpected if";
       case "ref":
         // TODO: For defs like true, the type is the expanded version. We
         // usually want a pi type so we can find the types of the arguments,

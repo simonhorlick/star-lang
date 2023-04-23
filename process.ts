@@ -26,6 +26,7 @@ import {
   ASTNode,
   AbsI,
   Identifier,
+  If,
 } from "./ast";
 import { addTermToCtx, identifier, shift } from "./check";
 import { pretty } from "./pretty";
@@ -253,6 +254,24 @@ export const desugarTerm = (
           Branch(b.constructor, desugarTerm(b.term, undefined, adts, ctx))
         )
       );
+    case "if":
+      /*
+        func F:Bool->* = λb if b then Bool else Nat
+        func i:(b Bool)->F(b) = λb if b then false else 2
+        // desugars to
+        //   i:(b Bool)->F(b) = λb (case b of false -> 2 ; true -> false):F(b)
+      */
+      // FIXME: let b = t.condition; case b ...
+      return Case(desugarTerm(t.condition, undefined, adts, ctx), [
+        Branch(
+          Identifier("false"),
+          desugarTerm(t.falseBranch, undefined, adts, ctx)
+        ),
+        Branch(
+          Identifier("true"),
+          desugarTerm(t.trueBranch, undefined, adts, ctx)
+        ),
+      ]);
     case "ref":
       // At this point we're still unsure whether this node is a Var or a Ref.
       // So look it up first and if a Var exists then use that.
@@ -320,6 +339,12 @@ export const processPars = (t: Term, ctx: Context): Term => {
         t.branches.map((branch) =>
           Branch(branch.constructor, processPars(branch.term, ctx))
         )
+      );
+    case "if":
+      return If(
+        processPars(t.condition, ctx),
+        processPars(t.trueBranch, ctx),
+        processPars(t.falseBranch, ctx)
       );
     case "ref":
     case "star":

@@ -21,6 +21,7 @@ import {
   AbsI,
   ASTNode,
   Argument,
+  If,
 } from "./ast";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
@@ -506,6 +507,12 @@ export function shift(d: number, c: number, t: Term): Term {
         t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term))) // TODO: Is this correct? Do we need to shift here?
       );
       throw "shift: unexpected case";
+    case "if":
+      return If(
+        shift(d, c, t.condition),
+        shift(d, c, t.trueBranch),
+        shift(d, c, t.falseBranch)
+      );
   }
 }
 
@@ -552,6 +559,8 @@ export function subst(
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
     case "case":
       throw "subst: unexpected case";
+    case "if":
+      throw "subst: unexpected if";
   }
 }
 
@@ -688,6 +697,8 @@ export const whnf = (
     case "case":
       return t;
     //throw "whnf: unexpected case";
+    case "if":
+      return t;
     case "orig": // remove origins
       return whnf(unfold, defs, t.child, selfTerm);
   }
@@ -729,6 +740,8 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "case":
       // FIXME: Improve the types here.
       throw "unexpected case at typecheck";
+    case "if":
+      throw "unexpected if at typecheck";
     case "orig":
       dbgCheckIndices(ctx, depth, t.child);
       return t;
@@ -789,6 +802,8 @@ export function strip(t: Term): Term {
         strip(t.name),
         t.branches.map((b) => Branch(b.constructor, strip(b.term)))
       );
+    case "if":
+      return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
   }
 }
 
@@ -839,5 +854,7 @@ export function serialise(t: Term, d: number = 0): string {
           .map((b) => `Branch(${b.constructor}, ${serialise(b.term, d + 1)})`)
           .join(",")}]
       )`;
+    case "if":
+      throw "not implemented";
   }
 }

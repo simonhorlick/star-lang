@@ -60,6 +60,10 @@ export function pretty(term: Term, indices: boolean = false): string {
         .join(" | ")}`;
     case "orig":
       return pretty(term.child);
+    case "if":
+      return `if ${pretty(term.condition)} then ${pretty(
+        term.trueBranch
+      )} else ${pretty(term.falseBranch)}`;
   }
 }
 

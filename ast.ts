@@ -195,6 +195,7 @@ export type Term =
   | Star
   | Self
   | Case
+  | If
   | Origin
   | Identifier;
 export type Type = Term;
@@ -268,6 +269,24 @@ export const Case = (name: Term, branches: Branch[]): Case => ({
   _: "case",
   name: name,
   branches: branches,
+});
+
+export type If = {
+  _: "if";
+  condition: Term;
+  trueBranch: Term;
+  falseBranch: Term;
+};
+
+export const If = (
+  condition: Term,
+  trueBranch: Term,
+  falseBranch: Term
+): If => ({
+  _: "if",
+  condition: condition,
+  trueBranch: trueBranch,
+  falseBranch: falseBranch,
 });
 
 // A top-level definition.
@@ -533,6 +552,25 @@ export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
   )
 );
 
+// ifStatement parses an in-then-else statement of the form
+// if <condition> then <true branch> else <false branch>.
+export const ifStatement: Parser<If> = bind(str("if"), (_) =>
+  orFail(
+    "if statment not well formed",
+    bind(spc(par), (condition) =>
+      bind(str("then"), (_) =>
+        bind(spc(term), (trueBranch) =>
+          bind(str("else"), (_) =>
+            bind(spc(term), (falseBranch) =>
+              pure(If(condition, trueBranch, falseBranch))
+            )
+          )
+        )
+      )
+    )
+  )
+);
+
 export const annotation = (term: () => Parser<Term>): Parser<Ann> =>
   bind(parenthesis(lazy(term)), (body) =>
     bind(str(":"), (_) => bind(lazy(term), (typ) => pure(Ann(body, typ))))
@@ -540,12 +578,13 @@ export const annotation = (term: () => Parser<Term>): Parser<Ann> =>
 
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
-export const term: Parser<Term> = any5(
+export const term: Parser<Term> = any6(
   // abstraction `λx.t`
   block(abstraction(() => term)),
   // application `f(x)`
   block(application(() => term)),
   block(caseStatement),
+  block(ifStatement),
   // a reference for example `t`
   block(reference),
   // an annotation for example `(f(x)):Y`
