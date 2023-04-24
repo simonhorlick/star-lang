@@ -1014,6 +1014,24 @@ describe("typechecker", () => {
     expect(reduced).toStrictEqual(bt);
   });
 
+  const listParams = [{ name: "A", type: Star() }];
+  const listConstructors = [
+    { name: Identifier("nil"), args: [] },
+    {
+      name: Identifier("cons"),
+      args: [
+        {
+          name: "head",
+          type: Par("A"),
+        },
+        {
+          name: "tail",
+          type: App(Ref("List"), Par("A")),
+        },
+      ],
+    },
+  ];
+
   test("recursive parameterised types", () => {
     /*
       // List is a singly-linked list with elements of type T.
@@ -1070,28 +1088,10 @@ describe("typechecker", () => {
           : String
       */
 
-    const ListParams = [{ name: "A", type: Star() }];
-    const ListConstructors = [
-      { name: Identifier("nil"), args: [] },
-      {
-        name: Identifier("cons"),
-        args: [
-          {
-            name: "head",
-            type: Par("A"),
-          },
-          {
-            name: "tail",
-            type: App(Ref("List"), Par("A")),
-          },
-        ],
-      },
-    ];
-
     const List = buildType(
       Identifier("List"),
-      ListParams,
-      ListConstructors
+      listParams,
+      listConstructors
     ).term;
 
     /*
@@ -1112,21 +1112,20 @@ describe("typechecker", () => {
 
     const generated = GenerateConstructorType(
       "List",
-      ListParams,
-      ListConstructors[0]
+      listParams,
+      listConstructors[0]
     );
     expect(Listnil.typ).toStrictEqual(generated);
 
     const generatedBody = GenerateConstructorTerm(
-      ListParams,
-      ListConstructors,
+      listParams,
+      listConstructors,
       0
     );
     expect(Listnil.term).toStrictEqual(generatedBody);
 
     const Listcons = Def(
       "cons",
-
       Abs(
         "A",
         Abs(
@@ -1162,18 +1161,53 @@ describe("typechecker", () => {
     );
 
     const generatedBody2 = GenerateConstructorTerm(
-      ListParams,
-      ListConstructors,
+      listParams,
+      listConstructors,
       1
     );
     expect(Listcons.term).toStrictEqual(generatedBody2);
 
     const generated2 = GenerateConstructorType(
       "List",
-      ListParams,
-      ListConstructors[1]
+      listParams,
+      listConstructors[1]
     );
     expect(Listcons.typ).toStrictEqual(generated2);
+  });
+
+  test("list checks", () => {
+    const listType = buildType(
+      Identifier("List"),
+      listParams,
+      listConstructors
+    );
+
+    const nilTerm = GenerateConstructorTerm(listParams, listConstructors, 0);
+    const nilType = GenerateConstructorType(
+      "List",
+      listParams,
+      listConstructors[0]
+    );
+
+    const consTerm = GenerateConstructorTerm(listParams, listConstructors, 1);
+    const consType = GenerateConstructorType(
+      "List",
+      listParams,
+      listConstructors[1]
+    );
+    ensure(
+      typecheck(
+        defs([
+          listType,
+          Def("nil", nilTerm, nilType),
+          Def("cons", consTerm, consType),
+        ]),
+        adts([]),
+        [],
+        consTerm,
+        consType
+      )
+    );
   });
 
   //   test("indexed types", () => {

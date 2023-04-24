@@ -28,7 +28,7 @@ import { desugarTerm } from "./process";
 
 var _ = require("lodash");
 
-const verbose = false;
+const verbose = true;
 
 export const logFull = (x: any) => {
   const util = require("util");

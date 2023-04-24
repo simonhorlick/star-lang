@@ -33,6 +33,7 @@ import {
   spc,
   spc1,
   any6,
+  any8,
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
@@ -465,12 +466,12 @@ export const arrow: (type: () => Parser<Type>) => (s: Stream) => Result<Pi> = (
 
 const star: Parser<Star> = bind(char("*"), () => pure(Star()));
 
-export const type: Parser<Type> = any4(
+/*export const type: Parser<Type> = any4(
   block(arrow(() => type)),
   block(parenthesis(lazy(() => type))),
   block(star),
   block(reference)
-);
+);*/
 
 // abstraction parses a lambda abstraction `λx t`. The binder x is separated
 // from the body by spaces.
@@ -578,18 +579,26 @@ export const annotation = (term: () => Parser<Term>): Parser<Ann> =>
 
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
-export const term: Parser<Term> = any6(
+export const term: Parser<Term> = any8(
   // abstraction `λx.t`
   block(abstraction(() => term)),
   // application `f(x)`
   block(application(() => term)),
+  // a case destructuring `case x of ...`
   block(caseStatement),
+  // an if-then-else block
   block(ifStatement),
+  // a pi type `X->X`
+  block(arrow(() => type)),
+  // the type of types `*`
+  block(star),
   // a reference for example `t`
   block(reference),
   // an annotation for example `(f(x)):Y`
   block(annotation(() => term))
 );
+
+export const type: Parser<Type> = term;
 
 // definition parses a top-level function definition, for example
 // `func id: A->A = λx.x`.
