@@ -904,7 +904,7 @@ describe("typechecker", () => {
     /*
       just: (A *) → (value A) → Maybe(A) =
         (A) (value)
-        (P) (null) (just) just(value)
+        (P) (null) (just) just(A)(value)
       */
     const maybeJustDef = Def(
       "just",
@@ -924,7 +924,7 @@ describe("typechecker", () => {
     /*
       null: (A *) → Maybe(A) =
         (A)
-        (P) (null) (just) null
+        (P) (null) (just) null(A)
     */
     const maybeNullDef = Def(
       "null",
@@ -1106,7 +1106,10 @@ describe("typechecker", () => {
 
     const Listnil = Def(
       "nil",
-      Abs("A", Abs("P", Abs("nil", Abs("cons", Var("nil", 1))))),
+      Abs(
+        "A",
+        Abs("P", Abs("nil", Abs("cons", App(Var("nil", 1), Var("A", 3)))))
+      ),
       Pi("A", Star(), App(Ref("List"), Var("A", 0)))
     );
 
@@ -1138,7 +1141,10 @@ describe("typechecker", () => {
                 "nil",
                 Abs(
                   "cons",
-                  App(App(Var("cons", 0), Var("head", 4)), Var("tail", 3))
+                  App(
+                    App(App(Var("cons", 0), Var("A", 5)), Var("head", 4)),
+                    Var("tail", 3)
+                  )
                 )
               )
             )
@@ -1175,7 +1181,7 @@ describe("typechecker", () => {
     expect(Listcons.typ).toStrictEqual(generated2);
   });
 
-  test("list checks", () => {
+  test("nil checks", () => {
     const listType = buildType(
       Identifier("List"),
       listParams,
@@ -1195,6 +1201,46 @@ describe("typechecker", () => {
       listParams,
       listConstructors[1]
     );
+
+    ensure(
+      typecheck(
+        defs([
+          listType,
+          Def("nil", nilTerm, nilType),
+          Def("cons", consTerm, consType),
+        ]),
+        adts([]),
+        [],
+        nilTerm,
+        nilType
+      )
+    );
+  });
+
+  test("cons checks", () => {
+    const listType = buildType(
+      Identifier("List"),
+      listParams,
+      listConstructors
+    );
+
+    const nilTerm = GenerateConstructorTerm(listParams, listConstructors, 0);
+    const nilType = GenerateConstructorType(
+      "List",
+      listParams,
+      listConstructors[0]
+    );
+
+    const consTerm = GenerateConstructorTerm(listParams, listConstructors, 1);
+    const consType = GenerateConstructorType(
+      "List",
+      listParams,
+      listConstructors[1]
+    );
+
+    console.log(pretty(consTerm));
+    console.log(pretty(consType));
+
     ensure(
       typecheck(
         defs([
