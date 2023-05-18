@@ -159,7 +159,18 @@ export const Ref = (name: string): Ref => ({
   name: name,
 });
 
-// ★ is the kind of proper types.
+// A hole.
+export type Hole = {
+  _: "hole";
+  id: number;
+};
+
+export const Hole = (id: number): Hole => ({
+  _: "hole",
+  id: id,
+});
+
+// ★ is the type of types.
 export type Star = {
   _: "star";
 };
@@ -198,7 +209,8 @@ export type Term =
   | Case
   | If
   | Origin
-  | Identifier;
+  | Identifier
+  | Hole;
 export type Type = Term;
 
 export type ASTNode = Pkg | Com | Def | ADT | Space | Newline | Origin2;

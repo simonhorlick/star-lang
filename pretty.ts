@@ -64,6 +64,8 @@ export function pretty(term: Term, indices: boolean = false): string {
       return `if ${pretty(term.condition)} then ${pretty(
         term.trueBranch
       )} else ${pretty(term.falseBranch)}`;
+    case "hole":
+      return `▨${term.id}`;
   }
 }
 

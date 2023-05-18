@@ -120,7 +120,7 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
         if (ty == undefined) {
           throw "type not present";
         }
-        const typ = whnf(true, defs, ty, t);
+        const typ = whnf(true, [], defs, ty, t);
         if (typ._ == "typecheckerror") {
           return t;
         }

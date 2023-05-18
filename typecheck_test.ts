@@ -56,7 +56,7 @@ const ensure = (r: Result | TypecheckError): Result => {
   }
 };
 
-const defs = (defs: Def[] = []): Map<string, Def> => {
+export const defs = (defs: Def[] = []): Map<string, Def> => {
   const m = new Map<string, Def>();
   for (const d of defs) {
     m.set(d.name, d);
@@ -64,7 +64,7 @@ const defs = (defs: Def[] = []): Map<string, Def> => {
   return m;
 };
 
-const adts = (adts: ADT[] = []): Map<string, ADT> => {
+export const adts = (adts: ADT[] = []): Map<string, ADT> => {
   const m = new Map<string, ADT>();
   for (const adt of adts) {
     m.set(identifier(adt.name), adt);
@@ -290,18 +290,20 @@ describe("typechecker", () => {
 
   describe("whnf", () => {
     test("should not be able to reduce id", () => {
-      expect(whnf(false, defs(), Abs("x", Var("x", 0)), Star())).toStrictEqual(
-        Abs("x", Var("x", 0))
-      );
+      expect(
+        whnf(false, [], defs(), Abs("x", Var("x", 0)), Star())
+      ).toStrictEqual(Abs("x", Var("x", 0)));
     });
 
     test("should not reduce refs", () => {
-      expect(whnf(false, defs(), Ref("ref"), Star())).toStrictEqual(Ref("ref"));
+      expect(whnf(false, [], defs(), Ref("ref"), Star())).toStrictEqual(
+        Ref("ref")
+      );
     });
 
     test("should not reduce constructors", () => {
       expect(
-        whnf(false, defs(), App(Ref("succ"), Ref("zero")), Star())
+        whnf(false, [], defs(), App(Ref("succ"), Ref("zero")), Star())
       ).toStrictEqual(App(Ref("succ"), Ref("zero")));
     });
 
@@ -309,6 +311,7 @@ describe("typechecker", () => {
       expect(
         whnf(
           false,
+          [],
           defs(),
           App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0))),
           Star()
@@ -320,6 +323,7 @@ describe("typechecker", () => {
       expect(
         whnf(
           false,
+          [],
           defs(),
           Self("t", Pi("", Ref("X"), Ref("X"))),
           Abs("x", Var("x", 0))
@@ -770,7 +774,7 @@ describe("typechecker", () => {
       Boolfalse,
     ]);
     const one = App(natSuccDef.term, natZeroDef.term); // succ(zero)
-    const onewhnf = te(whnf(false, defns, one, one));
+    const onewhnf = te(whnf(false, [], defns, one, one));
     console.log(`one is ${pretty(onewhnf)}`);
     // console.log(pretty(te(whnf(false, defs, one, one))));
     ensure(typecheck(defns, adts(), [], onewhnf, Nat));
@@ -803,7 +807,7 @@ describe("typechecker", () => {
     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
     ensure(typecheck(defns, adts(), [], eliminator, Bool));
 
-    const reduced = whnf(true, defns, eliminator, Star());
+    const reduced = whnf(true, [], defns, eliminator, Star());
     if (reduced._ == "typecheckerror") {
       throw reduced.msg;
     }
@@ -914,7 +918,13 @@ describe("typechecker", () => {
           "value",
           Abs(
             "P",
-            Abs("null", Abs("just", App(Var("just", 0), Var("value", 3))))
+            Abs(
+              "null",
+              Abs(
+                "just",
+                App(App(Var("just", 0), Var("A", 4)), Var("value", 3))
+              )
+            )
           )
         )
       ),
@@ -928,7 +938,10 @@ describe("typechecker", () => {
     */
     const maybeNullDef = Def(
       "null",
-      Abs("A", Abs("P", Abs("null", Abs("just", Var("null", 1))))),
+      Abs(
+        "A",
+        Abs("P", Abs("null", Abs("just", App(Var("null", 1), Var("A", 3)))))
+      ),
       Pi("A", Star(), App(Ref("Maybe"), Var("A", 0)))
     );
 
@@ -948,6 +961,8 @@ describe("typechecker", () => {
       GenerateConstructorTerm(maybeParams, maybeConstructors, 1)
     ).toStrictEqual(maybeJustDef.term);
 
+    console.log(pretty(maybeNullDef.term));
+    console.log(pretty(maybeNullDef.typ));
     ensure(
       typecheck(
         defs([builtMaybe, maybeNullDef, maybeJustDef]),
@@ -1000,6 +1015,7 @@ describe("typechecker", () => {
 
     const reduced = whnf(
       true,
+      [],
       defs([
         Def("Bool", Bool, Star()),
         Booltrue,
@@ -1380,7 +1396,7 @@ describe("typechecker", () => {
     // The type Nat→Bool.
     const NatToBool: Term = Pi("", Nat, Bool);
 
-    const eq = (a: Term, b: Term) => equate(ds, Star(), a, b);
+    const eq = (a: Term, b: Term) => equate([], ds, Star(), a, b);
 
     test("Nat→Bool === Nat→Bool", () =>
       expect(eq(NatToBool, NatToBool)).toBe(true));
@@ -1426,6 +1442,29 @@ describe("typechecker", () => {
     test("one != two", () => {
       expect(eq(one, two)).toBe(false);
     });
+  });
+});
+
+describe("hole filling", () => {
+  test("should infer type of List.nil", () => {
+    // example: let x = [5]
+    // parse:   cons(Nat, 5, nil(?))
+    // filled:  cons(Nat, 5, nil(Nat))
+
+    // example: let x = [5,"five"]
+    // parse:   cons(Nat, 5, cons(String, "five", nil(?))
+    // filled:  error: String and Nat are not the same
+
+    const nil = Ann(
+      Abs("A", App(Ref("List"), Var("A", 0))),
+      Pi("A", Star(), App(Ref("List"), Var("A", 0)))
+    );
+  });
+
+  test("should fail to infer if the types aren't the same", () => {
+    // example: let x = [5,"five"]
+    // parse:   cons(Nat, 5, cons(String, "five", nil(?))
+    // filled:  error: String and Nat are not the same
   });
 });
 
@@ -1533,7 +1572,7 @@ describe("evaluation", () => {
     const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
     const expected: Term = Abs("z", Var("z", 0));
 
-    const actual = whnf(true, defs(), identity, Star());
+    const actual = whnf(true, [], defs(), identity, Star());
 
     expect(actual).toStrictEqual(expected);
   });
@@ -1546,6 +1585,7 @@ describe("evaluation", () => {
     const expected = Abs("z", Var("z", 0));
     const actual = whnf(
       true,
+      [],
       defs([id]),
       App(Ref("id"), Abs("z", Var("z", 0))),
       Star()
@@ -1570,7 +1610,7 @@ describe("evaluation", () => {
 
     let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
 
-    const actual = whnf(true, defs(), src, Star());
+    const actual = whnf(true, [], defs(), src, Star());
 
     expect(actual).toStrictEqual(expected);
   });

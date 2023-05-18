@@ -287,6 +287,7 @@ export const desugarTerm = (
     case "star":
     case "var":
     case "id":
+    case "hole":
       return t;
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
@@ -352,6 +353,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "star":
     case "var":
     case "id":
+    case "hole":
       return t;
   }
 };
@@ -361,8 +363,8 @@ export const GenerateConstructorType = (
   params: Argument[],
   constructor: Constructor
 ) => {
-  // nil : (T *) → List<T>
-  // cons : (T *) → (head T) → (tail List<T>) → List<T>
+  // nil : (T *) → List(T)
+  // cons : (T *) → (head T) → (tail List(T)) → List(T)
 
   // The type and all params. i.e. List(T), or Pair(A,B)
   const apps = params.reduce<Term>(
@@ -371,14 +373,14 @@ export const GenerateConstructorType = (
   );
 
   // For example
-  // (head T) → (tail List<T>) → List<T>
+  // (head T) → (tail List(T)) → List(T)
   const prependConstructorArgs = constructor.args.reduceRight<Term>(
     (acc, curr) => Pi(curr.name, curr.type, acc),
     apps
   );
 
   // Prepend type parameters, for example
-  // (T *) → (head T) → (tail List<T>) → List<T>
+  // (T *) → (head T) → (tail List(T)) → List(T)
   const typeParams = params.reduce<Term>(
     (acc, curr) => Pi(curr.name, curr.type, acc),
     prependConstructorArgs

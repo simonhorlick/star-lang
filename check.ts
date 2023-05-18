@@ -22,6 +22,7 @@ import {
   ASTNode,
   Argument,
   If,
+  Hole,
 } from "./ast";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
@@ -103,12 +104,18 @@ export interface Result {
   _: "result";
   term: Term;
   type: Type;
+  holes: Array<{ id: number; term: Term }>;
 }
 
-export const Result = (term: Term, type: Term): Result => ({
+export const Result = (
+  term: Term,
+  type: Term,
+  holes: Array<{ id: number; term: Term }>
+): Result => ({
   _: "result",
   term: term,
   type: type,
+  holes: holes,
 });
 
 // infer the type of a term. This produces an annotated version of the term
@@ -143,18 +150,22 @@ export const infer = (
       if (elB._ == "typecheckerror") {
         return elB;
       }
-      return Result(Pi(term.name, elA.term, elB.term), Star());
+      return Result(
+        Pi(term.name, elA.term, elB.term),
+        Star(),
+        elB.holes.concat(elA.holes)
+      );
     }
     case "star":
       // ----------------
       // Γ ⊢ ★ => ★
-      return Result(term, Star());
+      return Result(term, Star(), []);
     case "var":
       // Look up its type in the context.
       if (term.index >= ctx.length) {
         return TypecheckError("undefined variable " + term.name, os, oe);
       }
-      return Result(term, lookupType(ctx, term.index, term.name));
+      return Result(term, lookupType(ctx, term.index, term.name), []);
     case "app": {
       // We must infer the type of the function f, but once we have that type, we may
       // to use it to check the type of the argument:
@@ -172,7 +183,7 @@ export const infer = (
       }
       let fTypeElaborated = fType.term;
       // TODO: Is this necessary?
-      let nf = whnf(true, defs, fType.type, term);
+      let nf = whnf(true, ctx, defs, fType.type, term);
       if (nf._ == "typecheckerror") {
         return nf;
       }
@@ -208,7 +219,8 @@ export const infer = (
 
       return Result(
         App(Ann(fTypeElaborated, fType.type), Ann(et2, arg.type)),
-        typ
+        typ,
+        arg.holes.concat(fType.holes)
       );
       // return Result(App(fTypeElaborated, et2), typ);
     }
@@ -223,7 +235,7 @@ export const infer = (
         return ty;
       }
 
-      return Result(ty.term, ty.type);
+      return Result(ty.term, ty.type, typ.holes.concat(ty.holes));
     }
     case "ref":
       const match = defs.get(term.name);
@@ -238,13 +250,13 @@ export const infer = (
       // Without loss of generality we can assume that other definitions
       // typecheck because if we use a definition that later fails to check
       // the compilation will fail with a typecheck error.
-      return Result(term, match.typ);
+      return Result(term, match.typ, []);
     case "orig":
       const tc = infer(defs, adts, ctx, term.child, term.start, term.end);
       if (tc._ == "typecheckerror") {
         return tc;
       }
-      return Result(Origin(term.start, term.end, tc.term), tc.type);
+      return Result(Origin(term.start, term.end, tc.term), tc.type, tc.holes);
     default:
       return TypecheckError(`cannot infer type of ${term._}`, os, oe);
   }
@@ -267,7 +279,7 @@ const check = (
     if (tc._ == "typecheckerror") {
       return tc;
     }
-    return Result(Origin(term.start, term.end, tc.term), tc.type);
+    return Result(Origin(term.start, term.end, tc.term), tc.type, tc.holes);
   }
 
   if (verbose) {
@@ -377,13 +389,16 @@ const check = (
       if (type._ != "star") {
         return TypecheckError(`expected star type; got ${type._}`, os, oe);
       }
-      return Result(term, type);
+      return Result(term, type, []);
+    }
+    case "hole": {
+      return Result(term, type, []);
     }
     case "lam": {
       // The type of a lambda is a pi, so check this. It might also be an
       // expression that evaluates to a pi type, for example a function
       // application, or a reference, so make sure to normalise that first.
-      const normalTy = whnf(true, defs, type, term);
+      const normalTy = whnf(true, ctx, defs, type, term);
       if (normalTy._ != "pi") {
         return TypecheckError(
           `expected pi type; got ${type._}: ${pretty(type)}`,
@@ -421,7 +436,11 @@ const check = (
 
       // We return the elaborated body here - as case statements must be
       // desugared for any consumers.
-      return Result(AbsI(term.name, ebody.term), type);
+      return Result(
+        AbsI(term.name, ebody.term),
+        type,
+        domain.holes.concat(ebody.holes)
+      );
     }
   }
 
@@ -431,8 +450,20 @@ const check = (
   if (ty1._ == "typecheckerror") {
     return ty1;
   }
+  console.log(pretty(ty1.term));
+  console.log(pretty(ty1.type));
 
-  if (!equate(defs, term, type, ty1.type, ctx.length)) {
+  // TODO: Fill hole from type. Say type=Maybe(Bool) and ty1.type=Maybe(▨0) then
+  // we can substitute all ▨0 in ty1 with Bool.
+  // let type2 = type;
+
+  const holes: Array<{ id: number; term: Term }> = [];
+  // match up a hole with a constraint
+  if (type._ == "hole" && ty1.type._ != "hole") {
+    holes.push({ id: type.id, term: ty1.type });
+  }
+
+  if (!equate(ctx, defs, term, type, ty1.type, ctx.length)) {
     return TypecheckError(
       `typecheck failed: ${pretty(type, false)} is not ${pretty(
         ty1.type,
@@ -443,7 +474,7 @@ const check = (
     );
   }
 
-  return Result(ty1.term, ty1.type);
+  return Result(ty1.term, ty1.type, holes);
 };
 
 // check that the given term has the expected type.
@@ -461,16 +492,10 @@ export const typecheck = (
     if (tc._ == "typecheckerror") {
       return tc;
     }
-    return Result(Origin(tm.start, tm.end, tc.term), tc.type);
+    return Result(Origin(tm.start, tm.end, tc.term), tc.type, tc.holes);
   }
 
-  if (verbose) console.log(`${" ".repeat(ctx.length)} ctx=${printCtx(ctx)}`);
-  if (verbose)
-    console.log(
-      `${" ".repeat(ctx.length)} typecheck ${pretty(tm)} has type ${pretty(ty)}`
-    );
-
-  const tynf = whnf(false, defs, ty, tm);
+  const tynf = whnf(false, ctx, defs, ty, tm);
   if (tynf._ == "typecheckerror") {
     return tynf;
   }
@@ -498,6 +523,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "ref":
     case "par":
     case "id":
+    case "hole":
       return t;
     case "orig":
       return Origin(t.start, t.end, shift(d, c, t.child));
@@ -554,6 +580,7 @@ export function subst(
     case "star":
     case "ref":
     case "id":
+    case "hole":
       return t;
     case "orig":
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
@@ -573,6 +600,41 @@ export function substTop(s: Term, t: Term, name: string): Term {
   return shift(-1, 0, subst(0, shift(1, 0, s), 0, t, name));
 }
 
+// Given a term t, find all Holes with index j and replace them with the term s.
+export function substHole(j: number, s: Term, t: Term): Term {
+  switch (t._) {
+    case "var":
+      return t;
+    case "lam":
+      return AbsI(t.name, substHole(j, s, t.body));
+    case "self":
+      return Self(t.name, substHole(j, s, t.body));
+    case "app":
+      return App(substHole(j, s, t.left), substHole(j, s, t.right));
+    case "ann":
+      return Ann(substHole(j, s, t.term), t.typ);
+    case "pi":
+      return Pi(t.name, substHole(j, s, t.from), substHole(j, s, t.to));
+    case "par":
+      throw "substHole: unexpected par";
+    case "star":
+    case "ref":
+    case "id":
+      return t;
+    case "hole":
+      if (t.id == j) {
+        return s;
+      }
+      return t;
+    case "orig":
+      return Origin(t.start, t.end, substHole(j, s, t.child));
+    case "case":
+      throw "substHole: unexpected case";
+    case "if":
+      throw "substHole: unexpected if";
+  }
+}
+
 // aeq returns true if the two terms are alpha-equivalent, i.e. they are the
 // same up to renaming of bound variables.
 const aeq = (t1: Term, t2: Term): boolean => {
@@ -582,22 +644,23 @@ const aeq = (t1: Term, t2: Term): boolean => {
 };
 
 export const equate = (
+  ctx: Context,
   defs: Map<string, Def>,
   term: Term,
   ty1: Term,
   ty2: Term,
   depth: number = 0
 ): boolean => {
-  if (verbose)
-    console.log(`${" ".repeat(depth)}equate ${pretty(ty1)} == ${pretty(ty2)}`);
+  // if (verbose)
+  //   console.log(`${" ".repeat(depth)}equate ${pretty(ty1)} == ${pretty(ty2)}`);
   if (aeq(ty1, ty2)) {
     return true;
   }
 
   const bothref = ty1._ == "ref" && ty2._ == "ref";
 
-  let n1 = whnf(!bothref, defs, ty1, term);
-  let n2 = whnf(!bothref, defs, ty2, term);
+  let n1 = whnf(!bothref, ctx, defs, ty1, term);
+  let n2 = whnf(!bothref, ctx, defs, ty2, term);
   if (n1._ == "typecheckerror" || n2._ == "typecheckerror") return false;
 
   if (verbose)
@@ -609,17 +672,17 @@ export const equate = (
     let b1 = n2.left;
     let b2 = n2.right;
     return (
-      equate(defs, term, a1, b1, depth + 1) &&
-      equate(defs, term, a2, b2, depth + 1)
+      equate([], defs, term, a1, b1, depth + 1) &&
+      equate([], defs, term, a2, b2, depth + 1)
     );
   } else if (n1._ == "lam" && n2._ == "lam") {
-    return equate(defs, term, n1.body, n2.body, depth + 1);
+    return equate([], defs, term, n1.body, n2.body, depth + 1);
   } else if (n1._ == "self" && n2._ == "self") {
-    return equate(defs, term, n1.body, n2.body, depth + 1);
+    return equate([], defs, term, n1.body, n2.body, depth + 1);
   } else if (n1._ == "pi" && n2._ == "pi") {
     return (
-      equate(defs, term, n1.from, n2.from, depth + 1) &&
-      equate(defs, term, n1.to, n2.to, depth + 1)
+      equate([], defs, term, n1.from, n2.from, depth + 1) &&
+      equate([], defs, term, n1.to, n2.to, depth + 1)
     );
   } else if (n1._ == "ref" && n2._ == "ref") {
     return n1.name == n2.name;
@@ -627,6 +690,10 @@ export const equate = (
     return true;
   } else if (n1._ == "var" && n2._ == "var") {
     return n1.index == n2.index;
+  } else if (n1._ == "hole" || n2._ == "hole") {
+    // Assume the hole is valid, if it's not the typecheck will fail after the
+    // hole substitution.
+    return true;
   } else {
     return false;
   }
@@ -646,6 +713,7 @@ export const identifier = (id: Term): string => {
 // Compute the weak head normal form for a term.
 export const whnf = (
   unfold: boolean,
+  ctx: Context,
   defs: Map<string, Def>,
   t: Term,
   selfTerm: Term | undefined
@@ -657,15 +725,16 @@ export const whnf = (
       if (match == undefined) {
         return TypecheckError(`whnf: reference not found: ${t.name}`, 0, 0);
       }
-      return whnf(false, defs, match.term, selfTerm);
+      return whnf(false, ctx, defs, match.term, selfTerm);
     case "app": {
-      let nf = whnf(unfold, defs, t.left, selfTerm);
+      let nf = whnf(unfold, ctx, defs, t.left, selfTerm);
       if (nf._ == "typecheckerror") {
         return nf;
       }
       if (nf._ == "lam") {
         return whnf(
           unfold,
+          ctx,
           defs,
           substTop(t.right, nf.body, identifier(nf.name)),
           selfTerm
@@ -674,25 +743,33 @@ export const whnf = (
       return App(nf, t.right);
     }
     case "ann":
-      return whnf(unfold, defs, t.term, selfTerm);
+      return whnf(unfold, ctx, defs, t.term, selfTerm);
     case "par":
       throw "whnf: unexpected Par";
     case "self":
       // eliminate self
       if (selfTerm == undefined) {
         // This can happen if we're checking a type definition, i.e. Nat:*.
-        const nf = whnf(unfold, defs, t.body, selfTerm);
+        const nf = whnf(unfold, ctx, defs, t.body, selfTerm);
         if (nf._ == "typecheckerror") {
           return nf;
         }
         return Self(t.name, nf);
       }
-      return whnf(unfold, defs, substTop(selfTerm, t.body, t.name), selfTerm);
+      return whnf(
+        unfold,
+        ctx,
+        defs,
+        substTop(selfTerm, t.body, t.name),
+        selfTerm
+      );
     case "var":
+      return lookupType(ctx, t.index, t.name);
     case "lam":
     case "pi":
     case "star":
     case "id":
+    case "hole":
       return t;
     case "case":
       return t;
@@ -700,7 +777,7 @@ export const whnf = (
     case "if":
       return t;
     case "orig": // remove origins
-      return whnf(unfold, defs, t.child, selfTerm);
+      return whnf(unfold, ctx, defs, t.child, selfTerm);
   }
 };
 
@@ -736,6 +813,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "ref":
     case "id":
     case "par":
+    case "hole":
       return t;
     case "case":
       // FIXME: Improve the types here.
@@ -794,6 +872,7 @@ export function strip(t: Term): Term {
     case "star":
     case "ref":
     case "id":
+    case "hole":
       return t;
     case "orig":
       return strip(t.child);
@@ -856,5 +935,7 @@ export function serialise(t: Term, d: number = 0): string {
       )`;
     case "if":
       throw "not implemented";
+    case "hole":
+      return "Hole()";
   }
 }
