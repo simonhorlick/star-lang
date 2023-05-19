@@ -188,6 +188,8 @@ export const infer = (
         return nf;
       }
       if (nf._ != "pi") {
+        console.error(pretty(fType.type));
+        console.error(pretty(nf));
         return TypecheckError(
           `expected pi type on the left of app; got ${nf._}: ${pretty(nf)}`,
           os,
@@ -450,20 +452,20 @@ const check = (
   if (ty1._ == "typecheckerror") {
     return ty1;
   }
-  console.log(pretty(ty1.term));
-  console.log(pretty(ty1.type));
+  console.log(pretty(ty1.term) + ":" + pretty(ty1.type));
 
   // TODO: Fill hole from type. Say type=Maybe(Bool) and ty1.type=Maybe(▨0) then
   // we can substitute all ▨0 in ty1 with Bool.
   // let type2 = type;
 
-  const holes: Array<{ id: number; term: Term }> = [];
-  // match up a hole with a constraint
-  if (type._ == "hole" && ty1.type._ != "hole") {
-    holes.push({ id: type.id, term: ty1.type });
-  }
+  // const holes: Array<{ id: number; term: Term }> = [];
+  // // match up a hole with a constraint
+  // if (type._ == "hole" && ty1.type._ != "hole") {
+  //   holes.push({ id: type.id, term: ty1.type });
+  // }
 
-  if (!equate(ctx, defs, term, type, ty1.type, ctx.length)) {
+  const eq = equate(ctx, defs, term, type, ty1.type, ctx.length);
+  if (!eq.eq) {
     return TypecheckError(
       `typecheck failed: ${pretty(type, false)} is not ${pretty(
         ty1.type,
@@ -474,7 +476,39 @@ const check = (
     );
   }
 
-  return Result(ty1.term, ty1.type, holes);
+  return Result(ty1.term, ty1.type, eq.holes);
+};
+
+export const fill = (chk: Result): Result => {
+  // TODO: Do any hole filling now and return the filled subtree.
+  let updtm = chk.term;
+  let updty = chk.type;
+
+  for (let i = 0; i < chk.holes.length; i++) {
+    // If we have a mapping to another hole, i.e. the holes are the same, then
+    // give them a consistent id.
+    const holetm = chk.holes[i].term;
+    if (holetm._ == "hole") {
+      for (let j = i + 1; j < chk.holes.length; j++) {
+        if (chk.holes[j].id == chk.holes[i].id) {
+          chk.holes[j].id = holetm.id;
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < chk.holes.length; i++) {
+    const hole = chk.holes[i];
+    updtm = substHole(hole.id, hole.term, updtm);
+    updty = substHole(hole.id, hole.term, updty);
+
+    // Update any subsequent holes in this list.
+    for (let j = i + 1; j < chk.holes.length; j++) {
+      chk.holes[j].term = substHole(hole.id, hole.term, chk.holes[j].term);
+    }
+  }
+
+  return Result(updtm, updty, chk.holes);
 };
 
 // check that the given term has the expected type.
@@ -499,7 +533,13 @@ export const typecheck = (
   if (tynf._ == "typecheckerror") {
     return tynf;
   }
-  return check(defs, adts, ctx, tm, tynf, os, oe);
+
+  const chk = check(defs, adts, ctx, tm, tynf, os, oe);
+  if (chk._ == "typecheckerror") {
+    return chk;
+  }
+
+  return fill(chk);
 };
 
 // Shifting renumbers the indices of the free variables in a term.
@@ -612,7 +652,7 @@ export function substHole(j: number, s: Term, t: Term): Term {
     case "app":
       return App(substHole(j, s, t.left), substHole(j, s, t.right));
     case "ann":
-      return Ann(substHole(j, s, t.term), t.typ);
+      return Ann(substHole(j, s, t.term), substHole(j, s, t.typ));
     case "pi":
       return Pi(t.name, substHole(j, s, t.from), substHole(j, s, t.to));
     case "par":
@@ -650,52 +690,59 @@ export const equate = (
   ty1: Term,
   ty2: Term,
   depth: number = 0
-): boolean => {
+): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
   // if (verbose)
   //   console.log(`${" ".repeat(depth)}equate ${pretty(ty1)} == ${pretty(ty2)}`);
   if (aeq(ty1, ty2)) {
-    return true;
+    return { eq: true, holes: [] };
   }
 
   const bothref = ty1._ == "ref" && ty2._ == "ref";
 
+  if (bothref) {
+    return { eq: ty1.name == ty2.name, holes: [] };
+  }
+
+  if (ty1._ == "app" && ty2._ == "app") {
+    let a1 = ty1.left;
+    let a2 = ty1.right;
+    let b1 = ty2.left;
+    let b2 = ty2.right;
+
+    const l = equate(ctx, defs, term, a1, b1, depth + 1);
+    const r = equate(ctx, defs, term, a2, b2, depth + 1);
+    return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
+  }
+
   let n1 = whnf(!bothref, ctx, defs, ty1, term);
   let n2 = whnf(!bothref, ctx, defs, ty2, term);
-  if (n1._ == "typecheckerror" || n2._ == "typecheckerror") return false;
+  if (n1._ == "typecheckerror" || n2._ == "typecheckerror") {
+    return { eq: false, holes: [] };
+  }
 
   if (verbose)
     console.log(`${" ".repeat(depth)}equate ${pretty(n1)} == ${pretty(n2)}`);
 
-  if (n1._ == "app" && n2._ == "app") {
-    let a1 = n1.left;
-    let a2 = n1.right;
-    let b1 = n2.left;
-    let b2 = n2.right;
-    return (
-      equate([], defs, term, a1, b1, depth + 1) &&
-      equate([], defs, term, a2, b2, depth + 1)
-    );
-  } else if (n1._ == "lam" && n2._ == "lam") {
-    return equate([], defs, term, n1.body, n2.body, depth + 1);
+  if (n1._ == "lam" && n2._ == "lam") {
+    return equate(ctx, defs, term, n1.body, n2.body, depth + 1);
   } else if (n1._ == "self" && n2._ == "self") {
-    return equate([], defs, term, n1.body, n2.body, depth + 1);
+    return equate(ctx, defs, term, n1.body, n2.body, depth + 1);
   } else if (n1._ == "pi" && n2._ == "pi") {
-    return (
-      equate([], defs, term, n1.from, n2.from, depth + 1) &&
-      equate([], defs, term, n1.to, n2.to, depth + 1)
-    );
-  } else if (n1._ == "ref" && n2._ == "ref") {
-    return n1.name == n2.name;
+    const l = equate(ctx, defs, term, n1.from, n2.from, depth + 1);
+    const r = equate(ctx, defs, term, n1.to, n2.to, depth + 1);
+    return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
   } else if (n1._ == "star" && n2._ == "star") {
-    return true;
+    return { eq: true, holes: [] };
   } else if (n1._ == "var" && n2._ == "var") {
-    return n1.index == n2.index;
-  } else if (n1._ == "hole" || n2._ == "hole") {
+    return { eq: n1.index == n2.index, holes: [] };
+  } else if (n1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
     // hole substitution.
-    return true;
+    return { eq: true, holes: [{ id: n1.id, term: ty2 }] };
+  } else if (n2._ == "hole") {
+    return { eq: true, holes: [{ id: n2.id, term: ty1 }] };
   } else {
-    return false;
+    return { eq: false, holes: [] };
   }
 };
 

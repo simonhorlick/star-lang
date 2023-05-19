@@ -21,6 +21,7 @@ import {
   GenerateConstructorTerm,
   GenerateConstructorType,
 } from "./process";
+import { just, maybe, mnull } from "./test_defs";
 
 const logFull = (x: any) => {
   const util = require("util");
@@ -961,28 +962,6 @@ describe("typechecker", () => {
       GenerateConstructorTerm(maybeParams, maybeConstructors, 1)
     ).toStrictEqual(maybeJustDef.term);
 
-    console.log(pretty(maybeNullDef.term));
-    console.log(pretty(maybeNullDef.typ));
-    ensure(
-      typecheck(
-        defs([builtMaybe, maybeNullDef, maybeJustDef]),
-        adts(),
-        [],
-        maybeNullDef.term,
-        maybeNullDef.typ
-      )
-    );
-
-    ensure(
-      typecheck(
-        defs([builtMaybe, maybeNullDef, maybeJustDef]),
-        adts(),
-        [],
-        maybeJustDef.term,
-        maybeJustDef.typ
-      )
-    );
-
     // Check an instantiation: just(Bool, true)
     let result3 = ensure(
       typecheck(
@@ -1028,6 +1007,18 @@ describe("typechecker", () => {
       caseExp
     );
     expect(reduced).toStrictEqual(bt);
+  });
+
+  test("null checks", () => {
+    ensure(
+      typecheck(defs([maybe, mnull, just]), adts(), [], mnull.term, mnull.typ)
+    );
+  });
+
+  test("just checks", () => {
+    ensure(
+      typecheck(defs([maybe, mnull, just]), adts(), [], just.term, just.typ)
+    );
   });
 
   const listParams = [{ name: "A", type: Star() }];

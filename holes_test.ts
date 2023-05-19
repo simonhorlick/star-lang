@@ -1,96 +1,21 @@
-import { describe, expect, test } from "@jest/globals";
-import { Ann, App, Def, Hole, Identifier, Par, Ref, Star } from "./ast";
-import { infer } from "./check";
-import {
-  GenerateConstructorTerm,
-  GenerateConstructorType,
-  buildConstructor,
-  buildType,
-} from "./process";
+import { describe, test } from "@jest/globals";
+import { Ann, App, Hole, Ref } from "./ast";
+import { fill, infer } from "./check";
 import { adts, defs } from "./typecheck_test";
+import { pretty } from "./pretty";
+import {
+  bool,
+  cons,
+  fls,
+  just,
+  list,
+  maybe,
+  mnull,
+  nil,
+  tru,
+} from "./test_defs";
 
 describe("holes", () => {
-  const boolConstructors = [
-    { name: Identifier("false"), args: [] },
-    { name: Identifier("true"), args: [] },
-  ];
-
-  const bool = buildType(Identifier("Bool"), [], boolConstructors);
-
-  const fls = Def(
-    "false",
-    GenerateConstructorTerm([], boolConstructors, 0),
-    GenerateConstructorType("Bool", [], boolConstructors[0])
-  );
-
-  const tru = Def(
-    "true",
-    GenerateConstructorTerm([], boolConstructors, 1),
-    GenerateConstructorType("Bool", [], boolConstructors[1])
-  );
-
-  const listParams = [{ name: "A", type: Star() }];
-
-  const listConstructors = [
-    { name: Identifier("nil"), args: [] },
-    {
-      name: Identifier("cons"),
-      args: [
-        {
-          name: "head",
-          type: Par("A"),
-        },
-        {
-          name: "tail",
-          type: App(Ref("List"), Par("A")),
-        },
-      ],
-    },
-  ];
-
-  const list = buildType(Identifier("List"), listParams, listConstructors);
-
-  const nil = Def(
-    "nil",
-    GenerateConstructorTerm(listParams, listConstructors, 0),
-    GenerateConstructorType("List", listParams, listConstructors[0])
-  );
-
-  const cons = Def(
-    "cons",
-    GenerateConstructorTerm(listParams, listConstructors, 1),
-    GenerateConstructorType("List", listParams, listConstructors[1])
-  );
-
-  const maybeParams = [{ name: "A", type: Star() }];
-
-  const maybeConstructors = [
-    { name: Identifier("null"), args: [] },
-    {
-      name: Identifier("just"),
-      args: [
-        {
-          name: "value",
-          type: Par("A"),
-        },
-      ],
-    },
-  ];
-
-  const maybe = buildType(Identifier("Maybe"), maybeParams, maybeConstructors);
-
-  const mnull = Def(
-    "null",
-    GenerateConstructorTerm(maybeParams, maybeConstructors, 0),
-    GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
-  );
-
-  const just = Def(
-    "just",
-    GenerateConstructorTerm(maybeParams, maybeConstructors, 1),
-    GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
-  );
-
   /*
   
   A hole is a place in the AST that's left blank for the compiler to figure
@@ -162,7 +87,32 @@ describe("holes", () => {
       0,
       0
     );
-    console.log(result);
+
+    if (result._ == "result") {
+      const filled = fill(result);
+      console.log(pretty(filled.term) + ":" + pretty(filled.type));
+    }
+  });
+
+  test("cons(▨, true, nil(Bool))", () => {
+    const expr = App(
+      App(App(Ref("cons"), Hole(0)), Ref("true")),
+      App(Ref("nil"), Ref("Bool"))
+    );
+
+    const result = infer(
+      defs([list, nil, cons, bool, tru, fls]),
+      adts([]),
+      [],
+      expr,
+      0,
+      0
+    );
+
+    if (result._ == "result") {
+      const filled = fill(result);
+      console.log(pretty(filled.term) + ":" + pretty(filled.type));
+    }
   });
 
   /*
@@ -203,6 +153,9 @@ describe("holes", () => {
       0,
       0
     );
-    console.log(result);
+    if (result._ == "result") {
+      const filled = fill(result);
+      console.log(pretty(filled.term) + ":" + pretty(filled.type));
+    }
   });
 });
