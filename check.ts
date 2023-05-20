@@ -707,8 +707,7 @@ const aeq = (t1: Term, t2: Term): boolean => {
     case "id":
       return t2._ == "id" && t1.name == t2.name;
     case "hole":
-      // TODO: return holes
-      return true;
+      return t2._ == "hole" && t1.id == t2.id;
     case "case":
       throw "aeq: unexpected case";
     case "if":
