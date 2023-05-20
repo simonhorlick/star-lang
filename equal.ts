@@ -1,6 +1,8 @@
 import { App, Context, Def, Normal, Self, Term } from "./ast";
 import { TypecheckError, identifier, lookupType, substTop } from "./check";
 
+var _ = require("lodash");
+
 // Compute the weak head normal form for a term.
 export const whnf = (
   unfold: boolean,
@@ -55,7 +57,9 @@ export const whnf = (
         selfTerm
       );
     case "var":
-      return lookupType(ctx, t.index, t.name);
+      //throw "this looks wrong";
+      //return lookupType(ctx, t.index, t.name);
+      return t;
     case "lam":
     case "pi":
     case "star":
@@ -71,12 +75,3 @@ export const whnf = (
       return whnf(unfold, ctx, defs, t.child, selfTerm);
   }
 };
-
-export const equate = (t1: Term, t2: Term): boolean => {
-  return false;
-};
-
-// equate t1 t2 = do
-//     nf1 <- reduce t1  -- full reduction, not just weak head reduction
-//     nf2 <- reduce t2
-//     Unbound.aeq nf1 nf2

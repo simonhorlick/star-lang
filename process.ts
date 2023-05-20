@@ -126,7 +126,7 @@ const buildTypeArgSignature = (
 
   // Build Πa:A. Πb:B. ... P(constructorN(a,b,...))
   // Pi("a", A, Pi("b", B, App(P, App(App(Ref(constructorN), a), b))))
-  const Pis = args.reduce(
+  const Pis = reverse(args).reduce(
     (acc: Term, curr) => Pi(curr.name, curr.type, acc),
     PcN
   );
@@ -395,22 +395,15 @@ export const GenerateConstructorTerm = (
   i: number
 ) => {
   /*
-    cons = <A> (head) (tail) <P> (nil) (cons) cons(A)(head)(tail)
-    nil = <A> <P> (nil) (cons) nil(A)
+    cons = <A> (head) (tail) <P> (nil) (cons) cons(head)(tail)
+    nil = <A> <P> (nil) (cons) nil
   */
   // Working from right to left.
-
-  // Apply any type parameters first (the `cons(A)` part).
-  const appTypeParams = params.reduceRight<Term>(
-    // FIXME: Ensure type parameter names don't conflict with constructor names.
-    (acc, curr) => App(acc, Par(curr.name)),
-    Par(identifier(constructors[i].name))
-  );
 
   // Apply all arguments to the constructor
   const apps = constructors[i].args.reduce<Term>(
     (acc, curr) => App(acc, Par(curr.name)),
-    appTypeParams
+    Par(identifier(constructors[i].name))
   );
 
   // Abstract constructors

@@ -32,6 +32,8 @@ export function erase(term: Term): Erased.Term {
       throw "unexpected par";
     case "id":
       throw "unexpected id";
+    case "hole":
+      throw "unexpected hole";
   }
 }
 

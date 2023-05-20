@@ -42,10 +42,10 @@ export function pretty(term: Term, indices: boolean = false): string {
       if (term.name == "") {
         return pretty(term.from, indices) + "→" + pretty(term.to, indices);
       } else {
-        return `Π${term.name}:${pretty(term.from, indices)}. ${pretty(
+        return `(Π${term.name}:${pretty(term.from, indices)}. ${pretty(
           term.to,
           indices
-        )}`;
+        )})`;
       }
     case "ann":
       return pretty(term.term, indices);

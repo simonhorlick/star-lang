@@ -25,8 +25,8 @@ import {
   shift,
   strip,
   TypecheckError,
-  whnf,
 } from "./check";
+import { whnf } from "./equal";
 import { indexToLineCol, printLine } from "./parser";
 import { pretty, printCtx } from "./pretty";
 
@@ -219,6 +219,8 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
         return t;
       case "orig":
         return traverse(t.child, ty, t.start, t.end, ctx, defs);
+      case "hole":
+        return t;
     }
   };
 

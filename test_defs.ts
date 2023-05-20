@@ -24,6 +24,25 @@ export const tru = Def(
   GenerateConstructorType("Bool", [], boolConstructors[1])
 );
 
+const natConstructors = [
+  { name: Identifier("zero"), args: [] },
+  { name: Identifier("succ"), args: [{ name: "n", type: Ref("Nat") }] },
+];
+
+export const nat = buildType(Identifier("Nat"), [], natConstructors);
+
+export const zero = Def(
+  "zero",
+  GenerateConstructorTerm([], natConstructors, 0),
+  GenerateConstructorType("Nat", [], natConstructors[0])
+);
+
+export const succ = Def(
+  "succ",
+  GenerateConstructorTerm([], natConstructors, 1),
+  GenerateConstructorType("Nat", [], natConstructors[1])
+);
+
 const listParams = [{ name: "A", type: Star() }];
 
 const listConstructors = [

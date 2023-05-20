@@ -286,9 +286,7 @@ const check = (
   }
 
   if (verbose) {
-    console.log(
-      `check ${pretty(term)} has type ${pretty(type)} in ${printCtx(ctx)}`
-    );
+    console.log(`check ${pretty(term)} <= ${pretty(type)} in ${printCtx(ctx)}`);
   }
 
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
@@ -453,7 +451,7 @@ const check = (
   if (ty1._ == "typecheckerror") {
     return ty1;
   }
-  console.log(pretty(ty1.term) + ":" + pretty(ty1.type));
+  console.log("inferred " + pretty(ty1.term) + " => " + pretty(ty1.type));
 
   // TODO: Fill hole from type. Say type=Maybe(Bool) and ty1.type=Maybe(▨0) then
   // we can substitute all ▨0 in ty1 with Bool.
@@ -679,9 +677,43 @@ export function substHole(j: number, s: Term, t: Term): Term {
 // aeq returns true if the two terms are alpha-equivalent, i.e. they are the
 // same up to renaming of bound variables.
 const aeq = (t1: Term, t2: Term): boolean => {
-  // FIXME: This isn't really correct because the name fields (used for
-  // debugging) would collide.
-  return _.isEqual(t1, t2);
+  // ignore origins
+  if (t1._ == "orig") {
+    return aeq(t1.child, t2);
+  }
+  if (t2._ == "orig") {
+    return aeq(t1, t2.child);
+  }
+
+  switch (t1._) {
+    case "var":
+      return t2._ == "var" && t1.index == t2.index;
+    case "lam":
+      return t2._ == "lam" && aeq(t1.body, t2.body);
+    case "self":
+      return t2._ == "self" && aeq(t1.body, t2.body);
+    case "app":
+      return t2._ == "app" && aeq(t1.left, t2.left) && aeq(t1.right, t2.right);
+    case "ann":
+      return t2._ == "ann" && aeq(t1.term, t2.term) && aeq(t1.typ, t2.typ);
+    case "pi":
+      return t2._ == "pi" && aeq(t1.from, t2.from) && aeq(t1.to, t2.to);
+    case "par":
+      throw "aeq: unexpected par";
+    case "star":
+      return t2._ == "star";
+    case "ref":
+      return t2._ == "ref" && t2.name == t1.name;
+    case "id":
+      return t2._ == "id" && t1.name == t2.name;
+    case "hole":
+      // TODO: return holes
+      return true;
+    case "case":
+      throw "aeq: unexpected case";
+    case "if":
+      throw "aeq: unexpected if";
+  }
 };
 
 export const equate = (
@@ -692,39 +724,26 @@ export const equate = (
   ty2: Term,
   depth: number = 0
 ): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
-  // if (verbose)
-  //   console.log(`${" ".repeat(depth)}equate ${pretty(ty1)} == ${pretty(ty2)}`);
   if (aeq(ty1, ty2)) {
+    // FIXME: holes
     return { eq: true, holes: [] };
   }
 
-  const bothref = ty1._ == "ref" && ty2._ == "ref";
-
-  if (bothref) {
-    return { eq: ty1.name == ty2.name, holes: [] };
-  }
-
-  if (ty1._ == "app" && ty2._ == "app") {
-    let a1 = ty1.left;
-    let a2 = ty1.right;
-    let b1 = ty2.left;
-    let b2 = ty2.right;
-
-    const l = equate(ctx, defs, term, a1, b1, depth + 1);
-    const r = equate(ctx, defs, term, a2, b2, depth + 1);
-    return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
-  }
-
-  let n1 = whnf(!bothref, ctx, defs, ty1, term);
-  let n2 = whnf(!bothref, ctx, defs, ty2, term);
+  let n1 = whnf(true, ctx, defs, ty1, term);
+  let n2 = whnf(true, ctx, defs, ty2, term);
   if (n1._ == "typecheckerror" || n2._ == "typecheckerror") {
     return { eq: false, holes: [] };
   }
 
-  if (verbose)
-    console.log(`${" ".repeat(depth)}equate ${pretty(n1)} == ${pretty(n2)}`);
+  if (verbose) {
+    console.log(`equate ${pretty(n1)} == ${pretty(n2)}`);
+  }
 
-  if (n1._ == "lam" && n2._ == "lam") {
+  if (ty1._ == "app" && ty2._ == "app") {
+    const l = equate(ctx, defs, term, ty1.left, ty2.left, depth + 1);
+    const r = equate(ctx, defs, term, ty1.right, ty2.right, depth + 1);
+    return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
+  } else if (n1._ == "lam" && n2._ == "lam") {
     return equate(ctx, defs, term, n1.body, n2.body, depth + 1);
   } else if (n1._ == "self" && n2._ == "self") {
     return equate(ctx, defs, term, n1.body, n2.body, depth + 1);
