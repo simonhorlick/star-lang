@@ -56,7 +56,7 @@ export function pretty(term: Term, indices: boolean = false): string {
       return "★";
     case "case":
       return `case ${pretty(term.name)} of ${term.branches
-        .map((b) => `${b.constructor} -> ${pretty(b.term)}`)
+        .map((b) => `${pretty(b.constructor)} -> ${pretty(b.term)}`)
         .join(" | ")}`;
     case "orig":
       return pretty(term.child);
