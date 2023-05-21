@@ -1,6 +1,6 @@
 import { describe, test } from "@jest/globals";
 import { Ann, App, Hole, Ref } from "./ast";
-import { fill, infer } from "./check";
+import { Result, TypecheckError, fill, infer } from "./check";
 import { adts, defs } from "./typecheck_test";
 import { pretty } from "./pretty";
 import {
@@ -14,6 +14,14 @@ import {
   nil,
   tru,
 } from "./test_defs";
+
+const ensure = (r: Result | TypecheckError): Result => {
+  if (r._ == "typecheckerror") {
+    throw r.msg;
+  } else {
+    return r;
+  }
+};
 
 describe("holes", () => {
   /*
@@ -79,19 +87,12 @@ describe("holes", () => {
       App(Ref("nil"), Hole(1))
     );
 
-    const result = infer(
-      defs([list, nil, cons, bool, tru, fls]),
-      adts([]),
-      [],
-      expr,
-      0,
-      0
+    const result = ensure(
+      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
     );
 
-    if (result._ == "result") {
-      const filled = fill(result);
-      console.log(pretty(filled.term) + ":" + pretty(filled.type));
-    }
+    const filled = fill(result);
+    console.log(pretty(filled.term) + ":" + pretty(filled.type));
   });
 
   test("cons(▨, true, nil(Bool))", () => {
@@ -100,21 +101,36 @@ describe("holes", () => {
       App(Ref("nil"), Ref("Bool"))
     );
 
-    const result = infer(
-      defs([list, nil, cons, bool, tru, fls]),
-      adts([]),
-      [],
-      expr,
-      0,
-      0
+    const result = ensure(
+      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
     );
 
-    if (result._ == "result") {
-      const filled = fill(result);
-      console.log(pretty(filled.term) + ":" + pretty(filled.type));
-    }
+    const filled = fill(result);
+    console.log(pretty(filled.term) + ":" + pretty(filled.type));
   });
 
+  test("unify many holes", () => {
+    // [true, true, true]
+    // cons(▨, true, cons(▨, true, cons(▨, true, nil(▨))))
+    // all the holes should have the same type
+    const expr = App(
+      App(App(Ref("cons"), Hole(0)), Ref("true")),
+      App(
+        App(App(Ref("cons"), Hole(1)), Ref("true")),
+        App(
+          App(App(Ref("cons"), Hole(2)), Ref("true")),
+          App(Ref("nil"), Ref("Bool"))
+        )
+      )
+    );
+
+    const result = ensure(
+      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
+    );
+
+    const filled = fill(result);
+    console.log(pretty(filled.term) + ":" + pretty(filled.type));
+  });
   /*
   Note that the constructors for Maybe are defined as:
     null : (T *) → Maybe(T)
@@ -145,17 +161,17 @@ describe("holes", () => {
   test("null(▨):Maybe(Bool)", () => {
     const expr = Ann(App(Ref("null"), Hole(0)), App(Ref("Maybe"), Ref("Bool")));
 
-    const result = infer(
-      defs([maybe, mnull, just, bool, tru, fls]),
-      adts([]),
-      [],
-      expr,
-      0,
-      0
+    const result = ensure(
+      infer(
+        defs([maybe, mnull, just, bool, tru, fls]),
+        adts([]),
+        [],
+        expr,
+        0,
+        0
+      )
     );
-    if (result._ == "result") {
-      const filled = fill(result);
-      console.log(pretty(filled.term) + ":" + pretty(filled.type));
-    }
+    const filled = fill(result);
+    console.log(pretty(filled.term) + ":" + pretty(filled.type));
   });
 });

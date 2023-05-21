@@ -246,6 +246,53 @@ export const any8 = <A, B, C, D, E, F, G, H>(
     either(p2, either(p3, either(p4, either(p5, either(p6, either(p7, p8))))))
   );
 
+// see any
+export const any9 = <A, B, C, D, E, F, G, H, I>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>,
+  p5: Parser<E>,
+  p6: Parser<F>,
+  p7: Parser<G>,
+  p8: Parser<H>,
+  p9: Parser<I>
+) =>
+  either(
+    p1,
+    either(
+      p2,
+      either(p3, either(p4, either(p5, either(p6, either(p7, either(p8, p9))))))
+    )
+  );
+
+// see any
+export const any10 = <A, B, C, D, E, F, G, H, I, J>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>,
+  p5: Parser<E>,
+  p6: Parser<F>,
+  p7: Parser<G>,
+  p8: Parser<H>,
+  p9: Parser<I>,
+  p10: Parser<J>
+) =>
+  either(
+    p1,
+    either(
+      p2,
+      either(
+        p3,
+        either(
+          p4,
+          either(p5, either(p6, either(p7, either(p8, either(p9, p10)))))
+        )
+      )
+    )
+  );
+
 // optional returns a parser that attempts to use the supplied parser, but
 // if it fails it doesn't return a parse error and instead allows the parsing to
 // continue.

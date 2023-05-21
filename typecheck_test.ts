@@ -899,7 +899,7 @@ describe("typechecker", () => {
   test("recursive parameterised types", () => {
     /*
       // List is a singly-linked list with elements of type T.
-      type List<T *> =
+      type List(T *) =
         // nil constructs an empty list.
         nil |
         // cons constructs a list by passing a head element and an

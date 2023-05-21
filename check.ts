@@ -475,7 +475,7 @@ const check = (
     );
   }
 
-  return Result(ty1.term, ty1.type, eq.holes);
+  return Result(ty1.term, ty1.type, ty1.holes.concat(eq.holes));
 };
 
 export const fill = (chk: Result): Result => {

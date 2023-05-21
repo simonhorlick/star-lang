@@ -35,6 +35,7 @@ import {
   any6,
   any8,
   num,
+  any10,
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
@@ -594,9 +595,45 @@ export const annotation = (term: () => Parser<Term>): Parser<Ann> =>
     bind(str(":"), (_) => bind(lazy(term), (typ) => pure(Ann(body, typ))))
   );
 
+export const integerLiteral: Parser<IntLit> = map(num, (x) => ({
+  _: "int",
+  num: x,
+}));
+
+// listLiteral parses a literal list constructor. Examples include:
+// [] - an empty list
+// [1] - a singleton list
+// [1,2,3] - elements are delimited by commas
+// [[],[],[]] - a list of lists
+export const listLiteral: Parser<Term> =
+  // opening bracket
+  bind(str("["), (_) =>
+    // elements
+    bind(join(term, spc(char(","))), (elements) =>
+      // closing bracket
+      bind(
+        str("]"),
+        // The parser outputs terms to construct the list, for example,
+        //  [] => nil(▨)
+        //  [1,2] => cons(▨, 1, cons(▨, 2, nil(▨)))
+        (_) =>
+          pure(
+            elements.reduceRight(
+              // cons(▨, x, ...)
+              // FIXME: What's the best way to number holes?
+              (acc, curr) =>
+                App(App(App(Ref("cons"), Hole(Math.random())), curr), acc),
+              // nil(▨)
+              App(Ref("nil"), Hole(Math.random()))
+            )
+          )
+      )
+    )
+  );
+
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
-export const term: Parser<Term> = any8(
+export const term: Parser<Term> = any10(
   // abstraction `λx.t`
   block(abstraction(() => term)),
   // application `f(x)`
@@ -612,7 +649,11 @@ export const term: Parser<Term> = any8(
   // a reference for example `t`
   block(reference),
   // an annotation for example `(f(x)):Y`
-  block(annotation(() => term))
+  block(annotation(() => term)),
+  // a list literal, for example `[1,2,3]`
+  block(listLiteral),
+  // an integer literal
+  block(integerLiteral)
 );
 
 export const type: Parser<Type> = term;
@@ -685,11 +726,6 @@ export const adt: Parser<ADT> = bind(str("type"), (_) =>
     )
   )
 );
-
-export const integerLiteral: Parser<IntLit> = map(num, (x) => ({
-  _: "int",
-  num: x,
-}));
 
 const parseWhitespace: Parser<Space> = map(whitespace, () => ({ _: "sp" }));
 const parseNewline: Parser<Newline> = map(newline, () => ({ _: "nl" }));
