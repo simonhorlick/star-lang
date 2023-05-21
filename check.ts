@@ -712,7 +712,19 @@ const aeq = (t1: Term, t2: Term): boolean => {
     case "hole":
       return t2._ == "hole" && t1.id == t2.id;
     case "case":
-      throw "aeq: unexpected case";
+      // TODO: Should case statements still exist at this point? Why do they?
+      return (
+        t2._ == "case" &&
+        aeq(t1.name, t2.name) &&
+        t1.branches.length == t2.branches.length &&
+        // FIXME: This also maintains ordering of the branches - is this what
+        // we want?
+        t1.branches.every(
+          (branch, i) =>
+            aeq(branch.constructor, t2.branches[i].constructor) &&
+            aeq(branch.term, t2.branches[i].term)
+        )
+      );
     case "if":
       throw "aeq: unexpected if";
     case "int":
