@@ -288,6 +288,7 @@ export const desugarTerm = (
     case "var":
     case "id":
     case "hole":
+    case "int":
       return t;
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
@@ -354,6 +355,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "var":
     case "id":
     case "hole":
+    case "int":
       return t;
   }
 };

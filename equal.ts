@@ -65,6 +65,7 @@ export const whnf = (
     case "star":
     case "id":
     case "hole":
+    case "int":
       return t;
     case "case":
       return t;

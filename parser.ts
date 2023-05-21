@@ -305,6 +305,11 @@ export const line: Parser<string> = bind(
     )
 );
 
+// num parses an integer
+export const num = map(many1(digit), (digits) =>
+  Number.parseInt(digits.join(""))
+);
+
 export const whitespace = char(" ");
 export const newline = char("\n");
 

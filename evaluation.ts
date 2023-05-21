@@ -16,24 +16,26 @@ export function erase(term: Term): Erased.Term {
     case "ref":
       return Erased.Ref(term.name);
     case "pi":
-      throw "unexpected pi";
+      throw "erase: unexpected pi";
     case "star":
-      throw "unexpected star";
+      throw "erase: unexpected star";
     case "case":
-      throw "unexpected case";
+      throw "erase: unexpected case";
     case "if":
-      throw "unexpected if";
+      throw "erase: unexpected if";
     case "self":
       // throw "unexpected self";
       return Erased.Abs("erased", Erased.Var("erased", 0));
     case "orig":
       return erase(term.child);
     case "par":
-      throw "unexpected par";
+      throw "erase: unexpected par";
     case "id":
-      throw "unexpected id";
+      throw "erase: unexpected id";
     case "hole":
-      throw "unexpected hole";
+      throw "erase: unexpected hole";
+    case "int":
+      throw "erase: unexpected integer literal";
   }
 }
 

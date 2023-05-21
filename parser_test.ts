@@ -14,6 +14,7 @@ import {
   seq,
   many1,
   indexToLineCol,
+  num,
 } from "./parser";
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
@@ -99,6 +100,9 @@ describe("parser", () => {
 
   test("should parse ab+a with b present", () =>
     expect(result(parseAoptionalB(ts("aba")))).toStrictEqual(["a", "b", "a"]));
+
+  test("should parse 12345", () =>
+    expect(result(num(ts("12345")))).toStrictEqual(12345));
 });
 
 describe("util", () => {

@@ -34,6 +34,7 @@ import {
   spc1,
   any6,
   any8,
+  num,
 } from "./parser";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
@@ -210,7 +211,8 @@ export type Term =
   | If
   | Origin
   | Identifier
-  | Hole;
+  | Hole
+  | IntLit;
 export type Type = Term;
 
 export type ASTNode = Pkg | Com | Def | ADT | Space | Newline | Origin2;
@@ -316,6 +318,9 @@ export const Def = (name: string, term: Term, type: Type): Def => ({
   typ: type,
   term: term,
 });
+
+// An integer literal
+export type IntLit = { _: "int"; num: number };
 
 export type Pkg = { _: "pkg"; name: string };
 
@@ -680,6 +685,11 @@ export const adt: Parser<ADT> = bind(str("type"), (_) =>
     )
   )
 );
+
+export const integerLiteral: Parser<IntLit> = map(num, (x) => ({
+  _: "int",
+  num: x,
+}));
 
 const parseWhitespace: Parser<Space> = map(whitespace, () => ({ _: "sp" }));
 const parseNewline: Parser<Newline> = map(newline, () => ({ _: "nl" }));
