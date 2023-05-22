@@ -36,6 +36,7 @@ import {
   num,
   any10,
   any9,
+  FatalParseError,
 } from "./parser";
 
 // ParseError is a syntax node that allows partial parse trees to be
@@ -360,7 +361,7 @@ export type File = {
 export const orFail = <A>(
   msg: string,
   p: Parser<A | ParseError>
-): Parser<A | ParseError> => either(p, pure(ParseError(msg)));
+): Parser<A | ParseError> => either(p, pure(ParseError(`${msg}`)));
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
@@ -637,7 +638,7 @@ export const listLiteral: Parser<Term> =
     bind(join(term, spc(char(","))), (elements) =>
       // closing bracket
       bind(
-        str("]"),
+        orFail("expected ]", str("]")),
         // The parser outputs terms to construct the list, for example,
         //  [] => nil(▨)
         //  [1,2] => cons(▨, 1, cons(▨, 2, nil(▨)))
@@ -680,20 +681,22 @@ export const subterm: Parser<Term> =
       ),
       (lhs) =>
         // A term may be followed by a type annotation, for example `(f(x)):Y`.
-        either(
-          bind(str(":"), (_) =>
-            bind(
-              lazy(() => term),
-              (typ) => pure(Ann(lhs, typ))
+        bind(
+          either(
+            bind(str(":"), (_) =>
+              bind(
+                lazy(() => term),
+                (typ) => pure(Ann(lhs, typ))
+              )
+            ),
+            // A term followed by another term is a function application, for
+            // example `g(x)(y)(z)`.
+            either(
+              application(() => term, lhs),
+              pure(lhs)
             )
           ),
-          // A term followed by another term is a function application, for
-          // example `g(x)(y)(z)`.
-          either(
-            application(() => term, lhs),
-            // consume any trailing whitespace.
-            bind(many(whitespace), (_) => pure(lhs))
-          )
+          (t) => bind(many(whitespace), (_) => pure(t))
         )
     )
   );
@@ -722,16 +725,15 @@ export const type: Parser<Type> = term;
 // definition parses a top-level function definition, for example
 // `func id: A->A = λx.x`.
 export const definition: Parser<ParseError | Def> = bind(str("func"), (_) =>
-  orFail(
-    "bad definition",
-    bind(many1(whitespace), (_) =>
-      bind(identifier, (name) =>
-        bind(many(whitespace), (_) =>
-          bind(char(":"), (_) =>
-            bind(type, (typ) =>
-              bind(char("="), (_) =>
-                bind(many(either(whitespace, newline)), (_) =>
-                  bind(term, (tm) => pure(Def(name, tm, typ)))
+  bind(orFail("expected space after func", many1(whitespace)), (_) =>
+    bind(identifier, (name) =>
+      bind(many(whitespace), (_) =>
+        bind(orFail("expected :", char(":")), (_) =>
+          bind(orFail("expected type", type), (typ) =>
+            bind(orFail("expected =", char("=")), (_) =>
+              bind(many(either(whitespace, newline)), (_) =>
+                bind(orFail("expected term", term), (tm) =>
+                  pure(Def(name, tm, typ))
                 )
               )
             )

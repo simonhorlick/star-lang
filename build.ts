@@ -3,7 +3,7 @@
 import { parseFile, ADT, Def, ASTNode, File } from "./ast";
 import { TypecheckError, identifier, logFull, typecheck } from "./check";
 import { typecheckErrorDiagnostic } from "./inspect";
-import { ParseError, parseErrorDiagnostic } from "./parser";
+import { FatalParseError, parseErrorDiagnostic } from "./parser";
 import { processADTs, desugar } from "./process";
 
 // What's the MVP for this?
@@ -27,7 +27,7 @@ export type BuildResult = {
 
 export const build = (
   src: string
-): BuildResult | ParseError | TypecheckError => {
+): BuildResult | FatalParseError | TypecheckError => {
   const t = parseFile({ src, idx: 0 });
 
   // TODO: Expose any parse errors to the user.

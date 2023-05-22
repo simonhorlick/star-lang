@@ -41,13 +41,13 @@ export interface OutputValue<T> {
 }
 
 // Parse error with its location.
-export interface ParseError {
+export interface FatalParseError {
   _: "parseerror";
   stream: Stream;
   error: string;
 }
 
-export type Result<T> = OutputValue<T> | ParseError;
+export type Result<T> = OutputValue<T> | FatalParseError;
 
 export type Parser<T> = (s: Stream) => Result<T>;
 
@@ -436,7 +436,7 @@ export const indexToLineCol = (src: string, idx: number) =>
 
 export const printLine = (src: string, line: number) => src.split("\n")[line];
 
-export const parseErrorDiagnostic = (err: ParseError) => {
+export const parseErrorDiagnostic = (err: FatalParseError) => {
   const lc = indexToLineCol(err.stream.src, err.stream.idx);
   return (
     `error at line ${lc.line} col ${lc.col}: ${err.error}\n` +

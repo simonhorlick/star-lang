@@ -10,6 +10,7 @@ import {
   identifier,
   identifier2,
   If,
+  orFail,
   Par,
   parenthesis,
   ParseError,
@@ -22,7 +23,19 @@ import {
   type,
 } from "./ast";
 import { logFull, serialise, strip, stripAST } from "./check";
-import { char, many, parseErrorDiagnostic, Result } from "./parser";
+import {
+  bind,
+  char,
+  either,
+  many,
+  many1,
+  newline,
+  parseErrorDiagnostic,
+  pure,
+  Result,
+  str,
+  whitespace,
+} from "./parser";
 import { result, ts } from "./parser_test";
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
@@ -211,6 +224,11 @@ describe("ast", () => {
       "App(Ref(nil), Hole())"
     ));
 
+  test("should parse list literal with integers", () =>
+    expect(serialise(strip(result(term(ts("[1,2,3]")))))).toBe(
+      "App(App(App(Ref(cons), Hole()), 1), App(App(App(Ref(cons), Hole()), 2), App(App(App(Ref(cons), Hole()), 3), App(Ref(nil), Hole()))))"
+    ));
+
   test("should parse if statement", () => {
     expect(serialise(strip(result(term(ts("if x then y else z")))))).toBe(
       "If(Par(x), Ref(y), Ref(z))"
@@ -250,8 +268,14 @@ describe("ast", () => {
       'Pi("", App(Ref(x), App(Ref(y), Ref(z))), Ref(x))'
     ));
 
-  test("should parse definition", () =>
-    expect(stripAST(result(definition(ts("func id:X = λx x"))))).toStrictEqual(
-      Def("id", Abs("x", Ref("x")), Ref("X"))
-    ));
+  test("should parse definition containing list literal", () => {
+    const ast = stripAST(
+      result(definition(ts("func abc:List(Nat) = zero\n\n")))
+    );
+    if (ast._ != "def") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialise(ast.typ)).toBe("App(Ref(List), Ref(Nat))");
+    expect(serialise(ast.term)).toBe("Ref(zero)");
+  });
 });
