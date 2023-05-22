@@ -374,7 +374,7 @@ export const spc1 = <T>(between: Parser<T>): Parser<T> =>
   bind(spaces, (_) => bind(between, (x) => bind(spaces, (_) => pure(x))));
 
 // orFail raises a specific parse error if the parser is unsuccessful.
-export const orFail = <A>(msg: string, p: Parser<A>): Parser<A> =>
+const orFail = <A>(msg: string, p: Parser<A>): Parser<A> =>
   either(p, zero<A>(msg));
 
 // lazy is a parser that takes a parser generator and generates the parser at

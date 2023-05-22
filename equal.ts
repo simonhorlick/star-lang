@@ -74,5 +74,7 @@ export const whnf = (
       return t;
     case "orig": // remove origins
       return whnf(unfold, ctx, defs, t.child, selfTerm);
+    case "err":
+      throw "whnf: unexpected parse error";
   }
 };

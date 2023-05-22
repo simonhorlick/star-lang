@@ -36,6 +36,8 @@ export function erase(term: Term): Erased.Term {
       throw "erase: unexpected hole";
     case "int":
       throw "erase: unexpected integer literal";
+    case "err":
+      throw "erase: unexpected parse error";
   }
 }
 

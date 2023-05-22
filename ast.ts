@@ -24,7 +24,6 @@ import {
   many1,
   newline,
   optional,
-  orFail,
   whitespace,
   join,
   join1,
@@ -36,8 +35,20 @@ import {
   any8,
   num,
   any10,
+  any9,
 } from "./parser";
 
+// ParseError is a syntax node that allows partial parse trees to be
+// constructed.
+export type ParseError = {
+  _: "err";
+  msg: string;
+};
+
+export const ParseError = (msg: string): ParseError => ({
+  _: "err",
+  msg: msg,
+});
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
 
 export type Binding = VariableBinding;
@@ -213,10 +224,19 @@ export type Term =
   | Origin
   | Identifier
   | Hole
-  | IntLit;
+  | IntLit
+  | ParseError;
 export type Type = Term;
 
-export type ASTNode = Pkg | Com | Def | ADT | Space | Newline | Origin2;
+export type ASTNode =
+  | Pkg
+  | Com
+  | Def
+  | ADT
+  | Space
+  | Newline
+  | Origin2
+  | ParseError;
 
 // Normal is a hint to the user that the term is in weak head normal form.
 export type Normal = Term;
@@ -335,21 +355,26 @@ export type File = {
   content: ASTNode[];
 };
 
+// orFail returns A if the parser succeeds, or ParseError if the parser fails.
+// Either way it returns successfully.
+export const orFail = <A>(
+  msg: string,
+  p: Parser<A | ParseError>
+): Parser<A | ParseError> => either(p, pure(ParseError(msg)));
+
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
-export const identifier: Parser<string> = orFail(
-  "expected identifier",
-  bind(alpha, (a) =>
-    bind(many(any(alpha, digit, oneOf("_."))), (b) =>
-      pure(a + (b?.join("") ?? ""))
-    )
+export const identifier: Parser<string> = bind(alpha, (a) =>
+  bind(many(any(alpha, digit, oneOf("_."))), (b) =>
+    pure(a + (b?.join("") ?? ""))
   )
 );
 
 // identifier2 parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
-export const identifier2: Parser<Identifier> = bind(identifier, (id) =>
-  pure(Identifier(id))
+export const identifier2: Parser<Identifier | ParseError> = orFail(
+  "expected identifier",
+  bind(identifier, (id) => pure(Identifier(id)))
 );
 
 export type Origin = {
@@ -497,58 +522,58 @@ export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
   bind(char("λ"), (_) =>
     bind(optional(spaces), (_) =>
       bind(block(identifier2), (name) =>
-        bind(spaces, (_) => bind(lazy(term), (body) => pure(AbsI(name, body))))
+        bind(spaces, (_) =>
+          bind(orFail("expected term", lazy(term)), (body) =>
+            pure(AbsI(name, body))
+          )
+        )
       )
     )
   );
 
 // application is a parser for function application `f(x)`; `f(x)(y)`; `f (x(t))`.
-export const application = (term: () => Parser<Term>): Parser<App> =>
+export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
   // f(x) or (some term)(x)
-  bind(either(reference, parenthesis(lazy(term))), (lhs) =>
-    // allow `f(x)` and `f (x)`.
-    bind(many(whitespace), (_) =>
-      // args: greedily parse as many as we're able to
-      bind(many1(parenthesis(lazy(term))), (ts) => {
-        const terms = [lhs, ...ts];
-        // Application is left-associative, so form the following tree of
-        // applications, i.e. f(x)(y) == (f(x))(y):
-        //      ap
-        //     /  \
-        //    ap   y
-        //   /  \
-        //  f    x
+  bind(many(whitespace), (_) =>
+    // args: greedily parse as many as we're able to
+    bind(many1(parenthesis(lazy(term))), (ts) => {
+      const terms = [lhs, ...ts];
+      // Application is left-associative, so form the following tree of
+      // applications, i.e. f(x)(y) == (f(x))(y):
+      //      ap
+      //     /  \
+      //    ap   y
+      //   /  \
+      //  f    x
 
-        // ["f","x","y","z"]
-        //    {f x}["y","z"]
-        //    {{f x} y}["z"]
-        //     {{{f x} y} z}
-        const expr = terms.slice(2).reduce<App>(
-          (acc, t) => ({
-            _: "app",
-            left: acc,
-            right: t,
-          }),
-          {
-            _: "app",
-            left: terms[0],
-            right: terms[1],
-          }
-        );
+      // ["f","x","y","z"]
+      //    {f x}["y","z"]
+      //    {{f x} y}["z"]
+      //     {{{f x} y} z}
+      const expr = terms.slice(2).reduce<App>(
+        (acc, t) => ({
+          _: "app",
+          left: acc,
+          right: t,
+        }),
+        {
+          _: "app",
+          left: terms[0],
+          right: terms[1],
+        }
+      );
 
-        return pure(expr);
-      })
-    )
+      return pure(expr);
+    })
   );
 
 //  true -> false
-const caseBranch: Parser<Branch> = orFail(
-  "case branch not well formed",
-  bind(spaces, (_) =>
-    bind(block(identifier2), (id) =>
-      bind(many(whitespace), (_) =>
-        bind(either(str("->"), str("=>")), (_) =>
-          bind(many(whitespace), (_) => bind(term, (t) => pure(Branch(id, t))))
+const caseBranch: Parser<Branch> = bind(spaces, (_) =>
+  bind(block(identifier2), (id) =>
+    bind(many(whitespace), (_) =>
+      bind(either(str("->"), str("=>")), (_) =>
+        bind(many(whitespace), (_) =>
+          bind(orFail("expected term", term), (t) => pure(Branch(id, t)))
         )
       )
     )
@@ -558,7 +583,7 @@ const caseBranch: Parser<Branch> = orFail(
 // case b of
 //  true -> false
 //  false -> true
-export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
+export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
   orFail(
     "case statment not well formed",
     bind(spc1(block(par)), (id) =>
@@ -573,7 +598,7 @@ export const caseStatement: Parser<Case> = bind(str("case"), (_) =>
 
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
-export const ifStatement: Parser<If> = bind(str("if"), (_) =>
+export const ifStatement: Parser<If | ParseError> = bind(str("if"), (_) =>
   orFail(
     "if statment not well formed",
     bind(spc(par), (condition) =>
@@ -631,52 +656,82 @@ export const listLiteral: Parser<Term> =
     )
   );
 
+export const subterm: Parser<Term> =
+  // consume any leading whitespace
+  bind(many(whitespace), (_) =>
+    bind(
+      any8(
+        // parenthesis `(T)`
+        block(parenthesis(lazy(() => term))),
+        // abstraction `λx t`
+        block(abstraction(() => term)),
+        // a case destructuring `case x of ...`
+        block(caseStatement),
+        // an if-then-else block
+        block(ifStatement),
+        // the type of types `*`
+        block(star),
+        // a reference for example `t`
+        block(reference),
+        // a list literal, for example `[1,2,3]`
+        block(listLiteral),
+        // an integer literal
+        block(integerLiteral)
+      ),
+      (lhs) =>
+        // A term may be followed by a type annotation, for example `(f(x)):Y`.
+        either(
+          bind(str(":"), (_) =>
+            bind(
+              lazy(() => term),
+              (typ) => pure(Ann(lhs, typ))
+            )
+          ),
+          // A term followed by another term is a function application, for
+          // example `g(x)(y)(z)`.
+          either(
+            application(() => term, lhs),
+            // consume any trailing whitespace.
+            bind(many(whitespace), (_) => pure(lhs))
+          )
+        )
+    )
+  );
+
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
-export const term: Parser<Term> = any10(
-  // abstraction `λx.t`
-  block(abstraction(() => term)),
-  // application `f(x)`
-  block(application(() => term)),
-  // a case destructuring `case x of ...`
-  block(caseStatement),
-  // an if-then-else block
-  block(ifStatement),
-  // a pi type `X->X`
-  block(arrow(() => type)),
-  // the type of types `*`
-  block(star),
-  // a reference for example `t`
-  block(reference),
-  // an annotation for example `(f(x)):Y`
-  block(annotation(() => term)),
-  // a list literal, for example `[1,2,3]`
-  block(listLiteral),
-  // an integer literal
-  block(integerLiteral)
-);
+export const term: Parser<Term> =
+  // Parse the actual term.
+  bind(subterm, (lhs) =>
+    // A term may be followed by an arrow - making it a pi type.
+    either(
+      bind(str("->"), (_) =>
+        bind(
+          lazy(() => term),
+          (to) => pure(Pi("", lhs, to))
+        )
+      ),
+
+      // If it's not, just return the term.
+      pure(lhs)
+    )
+  );
 
 export const type: Parser<Type> = term;
 
 // definition parses a top-level function definition, for example
 // `func id: A->A = λx.x`.
-export const definition: Parser<Def> = bind(str("func"), (_) =>
-  // FIXME: This doesn't actually work because `either` will just skip past this
-  // and try the next parser.
+export const definition: Parser<ParseError | Def> = bind(str("func"), (_) =>
   orFail(
-    "failed to parse function definition",
+    "bad definition",
     bind(many1(whitespace), (_) =>
       bind(identifier, (name) =>
         bind(many(whitespace), (_) =>
           bind(char(":"), (_) =>
-            bind(many(whitespace), (_) =>
-              bind(type, (typ) =>
-                bind(spaces, (_) =>
-                  bind(char("="), (_) =>
-                    bind(spaces, (_) =>
-                      bind(term, (tm) => pure(Def(name, tm, typ)))
-                    )
-                  )
+            bind(type, (typ) =>
+              bind(char("="), (_) =>
+                bind(many(either(whitespace, newline)), (_) =>
+                  bind(term, (tm) => pure(Def(name, tm, typ)))
                 )
               )
             )

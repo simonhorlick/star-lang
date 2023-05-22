@@ -8,7 +8,11 @@ import {
   Def,
   definition,
   identifier,
+  identifier2,
+  If,
+  Par,
   parenthesis,
+  ParseError,
   parseLineComment,
   parsePackage,
   Pi,
@@ -17,7 +21,7 @@ import {
   term,
   type,
 } from "./ast";
-import { strip, stripAST } from "./check";
+import { logFull, serialise, strip, stripAST } from "./check";
 import { char, many, parseErrorDiagnostic, Result } from "./parser";
 import { result, ts } from "./parser_test";
 
@@ -43,6 +47,18 @@ describe("ast", () => {
     }
     // Expect the parser to consume the input.
     expect(t.stream.idx).toBe(src.length);
+  });
+
+  test("should return an error node for unparseable terms", () => {
+    expect(serialise(strip(result(identifier2(ts("&")))))).toBe(
+      "ParseError(expected identifier)"
+    );
+  });
+
+  test("should return an error node for unparseable subtrees", () => {
+    expect(serialise(strip(result(term(ts("λn &")))))).toBe(
+      'Abs("n", ParseError(expected term))'
+    );
   });
 
   test("should parse package", () =>
@@ -94,13 +110,13 @@ describe("ast", () => {
     expect(success(parenthesis(char("a"))(ts("(a)")))).toStrictEqual(true));
 
   test("should parse lambda abstraction", () =>
-    expect(strip(result(abstraction(() => term)(ts("λx t"))))).toStrictEqual(
-      Abs("x", Ref("t"))
+    expect(serialise(strip(result(abstraction(() => term)(ts("λx t")))))).toBe(
+      'Abs("x", Ref(t))'
     ));
 
   test("should parse function application", () =>
-    expect(strip(result(application(() => term)(ts("f(x)"))))).toStrictEqual(
-      App(Ref("f"), Ref("x"))
+    expect(serialise(strip(result(term(ts("f(x)")))))).toBe(
+      "App(Ref(f), Ref(x))"
     ));
 
   // want to parse `f(x)(y)` as the following tree:
@@ -111,74 +127,131 @@ describe("ast", () => {
   //   /  \
   //  f    x
   //
-  test("should parse function application with multiple arguments", () =>
-    expect(strip(result(application(() => term)(ts("f(x)(y)"))))).toStrictEqual(
-      App(App(Ref("f"), Ref("x")), Ref("y"))
+  test("should parse function application with two arguments", () =>
+    expect(serialise(strip(result(term(ts("f(x)(y)")))))).toBe(
+      "App(App(Ref(f), Ref(x)), Ref(y))"
+    ));
+
+  test("should parse function application with three arguments", () =>
+    expect(serialise(strip(result(term(ts("f(x)(y)(z)")))))).toBe(
+      "App(App(App(Ref(f), Ref(x)), Ref(y)), Ref(z))"
     ));
 
   test("should parse function application with additional parens", () =>
-    expect(
-      strip(result(application(() => term)(ts("(b(v))(w)"))))
-    ).toStrictEqual(App(App(Ref("b"), Ref("v")), Ref("w"))));
+    expect(serialise(strip(result(term(ts("(b(v))(w)")))))).toBe(
+      "App(App(Ref(b), Ref(v)), Ref(w))"
+    ));
 
   test("should parse true", () =>
-    expect(strip(result(term(ts("λt λf t"))))).toStrictEqual(
-      Abs("t", Abs("f", Ref("t")))
+    expect(serialise(strip(result(term(ts("λt λf t")))))).toBe(
+      'Abs("t", Abs("f", Ref(t)))'
+    ));
+
+  test("should parse application with space", () =>
+    expect(serialise(strip(result(term(ts("f ( x )")))))).toBe(
+      "App(Ref(f), Ref(x))"
+    ));
+
+  test("should parse application within application", () =>
+    expect(serialise(strip(result(term(ts("f(x(y))")))))).toBe(
+      "App(Ref(f), App(Ref(x), Ref(y)))"
     ));
 
   test("should parse bracketed application", () =>
-    expect(strip(result(term(ts("x (y (z))"))))).toStrictEqual(
-      App(Ref("x"), App(Ref("y"), Ref("z")))
+    expect(serialise(strip(result(term(ts("x (y (z))")))))).toBe(
+      "App(Ref(x), App(Ref(y), Ref(z)))"
     ));
 
   test("should parse term", () =>
-    expect(strip(result(term(ts("λz λx λy x (y (z))"))))).toStrictEqual(
-      Abs("z", Abs("x", Abs("y", App(Ref("x"), App(Ref("y"), Ref("z"))))))
+    expect(serialise(strip(result(term(ts("λz λx λy x (y (z))")))))).toBe(
+      'Abs("z", Abs("x", Abs("y", App(Ref(x), App(Ref(y), Ref(z))))))'
+    ));
+
+  test("should parse reference", () =>
+    expect(serialise(strip(result(term(ts("ex2")))))).toBe("Ref(ex2)"));
+
+  test("should parse reference", () =>
+    expect(serialise(strip(result(type(ts("Bool")))))).toBe("Ref(Bool)"));
+
+  test("should parse reference in parenthesis", () =>
+    expect(serialise(strip(result(type(ts("(Bool)")))))).toBe("Ref(Bool)"));
+
+  test("should parse arrow", () =>
+    expect(serialise(strip(result(term(ts("A->B")))))).toBe(
+      'Pi("", Ref(A), Ref(B))'
+    ));
+
+  test("should parse arrow with correct precedence", () =>
+    expect(serialise(strip(result(type(ts("A->B->C")))))).toBe(
+      'Pi("", Ref(A), Pi("", Ref(B), Ref(C)))'
+    ));
+
+  test("should parse arrow type", () =>
+    expect(serialise(strip(result(type(ts("B->C")))))).toBe(
+      'Pi("", Ref(B), Ref(C))'
+    ));
+
+  test("should parse arrow with bracketing", () =>
+    expect(serialise(strip(result(term(ts("A->(B->C)")))))).toBe(
+      'Pi("", Ref(A), Pi("", Ref(B), Ref(C)))'
+    ));
+
+  test("should parse arrow with bracketing", () =>
+    expect(serialise(strip(resultC(term(ts("(A->B)->C")))))).toStrictEqual(
+      'Pi("", Pi("", Ref(A), Ref(B)), Ref(C))'
+    ));
+
+  test("should parse arrow with bracketing", () =>
+    expect(serialise(strip(result(term(ts("(A->B)->(C->D)")))))).toStrictEqual(
+      'Pi("", Pi("", Ref(A), Ref(B)), Pi("", Ref(C), Ref(D)))'
+    ));
+
+  test("should parse empty list", () =>
+    expect(serialise(strip(result(term(ts("[]")))))).toBe(
+      "App(Ref(nil), Hole())"
+    ));
+
+  test("should parse if statement", () => {
+    expect(serialise(strip(result(term(ts("if x then y else z")))))).toBe(
+      "If(Par(x), Ref(y), Ref(z))"
+    );
+  });
+
+  test("should return an error node for unparseable if statement", () => {
+    expect(serialise(strip(result(term(ts("if = then y else z")))))).toBe(
+      "ParseError(if statment not well formed)"
+    );
+  });
+
+  test("should return an error node for unparseable true branch", () => {
+    expect(serialise(strip(result(term(ts("if x then @ else z")))))).toBe(
+      "ParseError(if statment not well formed)"
+    );
+  });
+
+  test("should return an error node for unparseable false branch", () => {
+    expect(serialise(strip(result(term(ts("if x then y else @")))))).toBe(
+      "ParseError(if statment not well formed)"
+    );
+  });
+
+  test("should parse type constructor", () =>
+    expect(serialise(strip(result(type(ts("List(Nat)")))))).toBe(
+      "App(Ref(List), Ref(Nat))"
+    ));
+
+  test("should parse type constructor on the left of an arrow", () =>
+    expect(serialise(strip(result(term(ts("List(Nat)->Nat")))))).toBe(
+      'Pi("", App(Ref(List), Ref(Nat)), Ref(Nat))'
+    ));
+
+  test("should parse arrow with lots of parenthesis", () =>
+    expect(serialise(strip(result(term(ts("(x)((y)(z))->(x)")))))).toBe(
+      'Pi("", App(Ref(x), App(Ref(y), Ref(z))), Ref(x))'
     ));
 
   test("should parse definition", () =>
     expect(stripAST(result(definition(ts("func id:X = λx x"))))).toStrictEqual(
       Def("id", Abs("x", Ref("x")), Ref("X"))
-    ));
-
-  test("should parse reference", () =>
-    expect(strip(result(reference(ts("ex2"))))).toStrictEqual(Ref("ex2")));
-
-  test("should parse reference", () =>
-    expect(strip(result(type(ts("Bool"))))).toStrictEqual(Ref("Bool")));
-
-  // test("should parse reference", () =>
-  //   expect(strip(result(type(ts("(Bool)"))))).toStrictEqual(Ref("Bool")));
-
-  test("should parse arrow", () =>
-    expect(strip(result(arrow(() => type)(ts("A->B"))))).toStrictEqual(
-      Pi("", Ref("A"), Ref("B"))
-    ));
-
-  test("should parse arrow with correct precedence", () =>
-    expect(strip(result(type(ts("A->B->C"))))).toStrictEqual(
-      Pi("", Ref("A"), Pi("", Ref("B"), Ref("C")))
-    ));
-
-  test("should parse arrow type", () =>
-    expect(strip(result(type(ts("B->C"))))).toStrictEqual(
-      Pi("", Ref("B"), Ref("C"))
-    ));
-
-  test("should parse arrow with bracketing", () =>
-    expect(strip(result(arrow(() => type)(ts("A->(B->C)"))))).toStrictEqual(
-      Pi("", Ref("A"), Pi("", Ref("B"), Ref("C")))
-    ));
-
-  test("should parse arrow with bracketing", () =>
-    expect(strip(resultC(arrow(() => type)(ts("(A->B)->C"))))).toStrictEqual(
-      Pi("", Pi("", Ref("A"), Ref("B")), Ref("C"))
-    ));
-
-  test("should parse arrow with bracketing", () =>
-    expect(
-      strip(result(arrow(() => type)(ts("(A->B)->(C->D)"))))
-    ).toStrictEqual(
-      Pi("", Pi("", Ref("A"), Ref("B")), Pi("", Ref("C"), Ref("D")))
     ));
 });

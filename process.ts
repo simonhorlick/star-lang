@@ -292,6 +292,8 @@ export const desugarTerm = (
       return t;
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
+    case "err":
+      throw "unexpected parse error";
   }
 };
 
@@ -357,6 +359,8 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "hole":
     case "int":
       return t;
+    case "err":
+      throw "unexpected parse error";
   }
 };
 

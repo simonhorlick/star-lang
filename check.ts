@@ -23,6 +23,7 @@ import {
   Argument,
   If,
   Hole,
+  Ref,
 } from "./ast";
 import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -260,6 +261,8 @@ export const infer = (
         return tc;
       }
       return Result(Origin(term.start, term.end, tc.term), tc.type, tc.holes);
+    case "int":
+      return Result(term, Ref("Nat"), []);
     default:
       return TypecheckError(`cannot infer type of ${term._}`, os, oe);
   }
@@ -572,13 +575,14 @@ export function shift(d: number, c: number, t: Term): Term {
         shift(d, c, t.name),
         t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term))) // TODO: Is this correct? Do we need to shift here?
       );
-      throw "shift: unexpected case";
     case "if":
       return If(
         shift(d, c, t.condition),
         shift(d, c, t.trueBranch),
         shift(d, c, t.falseBranch)
       );
+    case "err":
+      throw "unexpected parse error";
   }
 }
 
@@ -629,6 +633,8 @@ export function subst(
       throw "subst: unexpected case";
     case "if":
       throw "subst: unexpected if";
+    case "err":
+      throw "subst: unexpected parse error";
   }
 }
 
@@ -674,6 +680,8 @@ export function substHole(j: number, s: Term, t: Term): Term {
       throw "substHole: unexpected case";
     case "if":
       throw "substHole: unexpected if";
+    case "err":
+      throw "substHole: unexpected parse error";
   }
 }
 
@@ -729,6 +737,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
       throw "aeq: unexpected if";
     case "int":
       return t2._ == "int" && t2.num == t1.num;
+    case "err":
+      throw "aeq: unexpected parse error";
   }
 };
 
@@ -836,6 +846,8 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "orig":
       dbgCheckIndices(ctx, depth, t.child);
       return t;
+    case "err":
+      throw "unexpected parse error";
   }
 };
 
@@ -864,6 +876,8 @@ export function stripAST(t: ASTNode): ASTNode {
       return t;
     case "sp":
       return t;
+    case "err":
+      return t;
   }
 }
 
@@ -887,6 +901,7 @@ export function strip(t: Term): Term {
     case "id":
     case "hole":
     case "int":
+    case "err":
       return t;
     case "orig":
       return strip(t.child);
@@ -901,57 +916,48 @@ export function strip(t: Term): Term {
 }
 
 export function serialise(t: Term, d: number = 0): string {
-  const pd = "  ".repeat(d);
   switch (t._) {
     case "var":
-      return `${pd}Var(${t.name})`;
+      return `Var(${t.name})`;
     case "lam":
-      return `${pd}Abs("${identifier(t.name)}", \n${serialise(
-        t.body,
-        d + 1
-      )}\n${pd})`;
+      return `Abs("${identifier(t.name)}", ${serialise(t.body, d + 1)})`;
     case "self":
-      return `${pd}Self("${t.name}", \n${serialise(t.body, d + 1)}\n${pd})`;
+      return `Self("${t.name}", ${serialise(t.body, d + 1)})`;
     case "app":
-      return `${pd}App(\n${serialise(t.left, d + 1)}, \n${serialise(
-        t.right,
-        d + 1
-      )}\n${pd})`;
+      return `App(${serialise(t.left, d + 1)}, ${serialise(t.right, d + 1)})`;
     case "ann":
-      return `${pd}Ann(\n${serialise(t.term, d + 1)}, \n${serialise(
-        t.typ,
-        d + 1
-      )}\n${pd})`;
+      return `Ann(${serialise(t.term, d + 1)}, ${serialise(t.typ, d + 1)})`;
     case "pi":
-      return `${pd}Pi("${t.name}", \n${serialise(t.from, d + 1)}, \n${serialise(
+      return `Pi("${t.name}", ${serialise(t.from, d + 1)}, ${serialise(
         t.to,
         d + 1
-      )}\n${pd})`;
+      )})`;
     case "par":
-      return `${pd}Par(${t.name})`;
+      return `Par(${t.name})`;
     case "star":
-      return `${pd}Star`;
+      return `Star`;
     case "ref":
-      return `${pd}Ref(${t.name})`;
+      return `Ref(${t.name})`;
     case "id":
-      return `${pd}Identifier(${t.name})`;
+      return `Identifier(${t.name})`;
     case "orig":
-      return `${pd}Origin(${t.start}, ${t.end}, \n${serialise(
-        t.child,
-        d + 1
-      )}\n${pd})`;
+      return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
     case "case":
-      return `${pd}Case(
+      return `Case(
         ${serialise(t.name, d + 1)},
         [${t.branches
           .map((b) => `Branch(${b.constructor}, ${serialise(b.term, d + 1)})`)
           .join(",")}]
       )`;
     case "if":
-      throw "not implemented";
+      return `If(${serialise(t.condition)}, ${serialise(
+        t.trueBranch
+      )}, ${serialise(t.falseBranch)})`;
     case "hole":
-      return "Hole()";
+      return `Hole()`;
     case "int":
       return `${t.num}`;
+    case "err":
+      return `ParseError(${t.msg})`;
   }
 }

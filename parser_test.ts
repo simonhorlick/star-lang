@@ -15,6 +15,7 @@ import {
   many1,
   indexToLineCol,
   num,
+  parseErrorDiagnostic,
 } from "./parser";
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
@@ -26,8 +27,8 @@ export const ts = (s: string): Stream => ({
 
 export const result = <T>(x: Result<T>) => {
   if (x._ == "parseerror") {
-    const loc = indexToLineCol(x.stream.src, x.stream.idx);
-    throw `parsing failed at line ${loc.line} col ${loc.col}: ${x.error}`;
+    const msg = parseErrorDiagnostic(x);
+    throw msg;
   } else {
     return x.value;
   }

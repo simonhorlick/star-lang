@@ -1,7 +1,7 @@
 // build is a library for orchestrating builds of source files for this language.
 
 import { parseFile, ADT, Def, ASTNode, File } from "./ast";
-import { TypecheckError, identifier, typecheck } from "./check";
+import { TypecheckError, identifier, logFull, typecheck } from "./check";
 import { typecheckErrorDiagnostic } from "./inspect";
 import { ParseError, parseErrorDiagnostic } from "./parser";
 import { processADTs, desugar } from "./process";
@@ -30,9 +30,13 @@ export const build = (
 ): BuildResult | ParseError | TypecheckError => {
   const t = parseFile({ src, idx: 0 });
 
+  // TODO: Expose any parse errors to the user.
+
   if (t._ != "outputvalue") {
     return t;
   }
+
+  logFull(t.value.content);
 
   // generate syntax nodes for ADTs, etc
   const f = processADTs(t.value);
