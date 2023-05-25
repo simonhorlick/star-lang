@@ -1,6 +1,7 @@
 import { Term } from "./ast";
 import { identifier } from "./check";
 import * as Erased from "./erased";
+import { prettyC } from "./pretty";
 
 export function erase(term: Term): Erased.Term {
   // TODO: remove unused arguments
@@ -102,42 +103,75 @@ export function termSubstTop2(s: Erased.Term, t: Erased.Term): Erased.Term {
   return termShift2(-1, termSubst2(0, termShift2(1, s), t));
 }
 
-// Evaluate this term by a single step. When applied to a term that is not yet a value, it yields
+// A term is in normal form if it cannot be reduced any further. Reduce the
+// expression so that it no longer contains any function applications and
+// becomes in normal form.
+//
+// Normal-order evaluation of a lambda expression is the repeated application of the leftmost reducible function application. In other words, normal order evaluation is the strategy that always reduces the left-most outer-most redex first. You can think about normal-order evaluation as traversing the lambda expression and evaluating every function you find before evaluating any function arguments.
+//
+// Evaluate this term by. When applied to a term that is not yet a value, it yields
 // the next step of evaluation for that term. When applied to a value an exception is thrown.
+// This function delays reduction of the arguments. Due to the way datatypes are
+// encoded as lambdas we cannot always eagerly evaluate arguments, for example
+// an if statement is expressed as a function `if(c,t,f)` and we only ever want
+// to evaluate the appropriate branch.
 export function reduceOnce2(
   defs: Erased.Def[],
   term: Erased.Term
-): Erased.Term {
-  let isValue = (term: Erased.Term) => term._ == "lam";
+): [Erased.Term, boolean] {
   switch (term._) {
     case "app":
-      if (term.left._ == "lam" && isValue(term.right)) {
-        // E-AppAbs: (λx:T11.t12)v2 → [x/v2]t12
-        return termSubstTop2(term.right, term.left.body);
-      } else if (isValue(term.left)) {
-        // E-App2
-        return Erased.App(term.left, reduceOnce2(defs, term.right));
+      if (term.left._ == "lam") {
+        const abstraction = term.left;
+        const argument = term.right;
+        // Beta reduction. Substitute the argument in the body of the
+        // abstraction.
+        return [termSubstTop2(argument, abstraction.body), true];
       } else {
-        // E-App1
-        return Erased.App(reduceOnce2(defs, term.left), term.right);
+        // we know left is an not an abstraction.
+        if (term.left._ != "var") {
+          const left = reduceOnce2(defs, term.left);
+          return [Erased.App(left[0], term.right), true];
+        } else {
+          // if LHS is a var and RHS contains no redex, then the expression is
+          // in normal form.
+          const right = reduceOnce2(defs, term.right);
+          return [Erased.App(term.left, right[0]), right[1]];
+        }
       }
     case "lam":
-      throw "cannot reduce Abs";
+      // As we substitute arguments into the body of abstractions we need to
+      // reduce those.
+      if (term.body._ == "var") {
+        return [term, false];
+      }
+      const body = reduceOnce2(defs, term.body);
+      return [Erased.Abs(term.name, body[0]), body[1]];
     case "var":
       throw "cannot reduce Var";
     case "ref":
       const match = defs.filter((d) => d.name == term.name);
       if (match.length == 0) {
-        return term;
+        throw `reference not found: ${term.name}`;
       }
-      return match[0].term;
+      return [match[0].term, true];
   }
 }
 
 export function reduce(defs: Erased.Def[], t: Erased.Term): Erased.Term {
-  let isValue = (term: Erased.Term) => term._ == "lam";
-  while (!isValue(t)) {
-    t = reduceOnce2(defs, t);
+  let normalForm = false;
+  let prev: Erased.Term = t;
+  while (!normalForm) {
+    // console.log(prettyC(t, false));
+    const [rt, b] = reduceOnce2(defs, t);
+    normalForm = !b;
+
+    // debug check
+    if (!normalForm && prettyC(rt) == prettyC(prev)) {
+      throw "no forward progress";
+    }
+    prev = t;
+    t = rt;
   }
   return t;
 }

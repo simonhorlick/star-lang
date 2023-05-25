@@ -288,8 +288,14 @@ export const desugarTerm = (
     case "var":
     case "id":
     case "hole":
-    case "int":
       return t;
+    case "int": {
+      let term: Term = Ref("zero");
+      for (let i = 0; i < t.num; i++) {
+        term = App(Ref("succ"), term);
+      }
+      return term;
+    }
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
     case "err":

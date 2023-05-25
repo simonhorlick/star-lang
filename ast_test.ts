@@ -231,8 +231,26 @@ describe("ast", () => {
 
   test("should parse if statement", () => {
     expect(serialise(strip(result(term(ts("if x then y else z")))))).toBe(
-      "If(Par(x), Ref(y), Ref(z))"
+      "If(Ref(x), Ref(y), Ref(z))"
     );
+  });
+
+  test("should parse multiline if statement", () => {
+    expect(
+      serialise(
+        strip(
+          result(
+            term(
+              ts(`if x then
+  y
+else
+  z
+`)
+            )
+          )
+        )
+      )
+    ).toBe("If(Ref(x), Ref(y), Ref(z))");
   });
 
   test("should return an error node for unparseable if statement", () => {
@@ -277,5 +295,45 @@ describe("ast", () => {
     }
     expect(serialise(ast.typ)).toBe("App(Ref(List), Ref(Nat))");
     expect(serialise(ast.term)).toBe("Ref(zero)");
+  });
+
+  test("should parse if");
+
+  test("should parse case", () => {
+    const src = `case n of
+      zero -> true
+      succ -> false`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe(
+      "Case(Par(n),[Branch(Identifier(zero), Ref(true)),Branch(Identifier(succ), Ref(false))])"
+    );
+  });
+
+  test("should parse case with annotation", () => {
+    const src = `(case n of
+      zero -> true
+      succ -> false
+    ):Bool`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe(
+      "Ann(Case(Par(n),[Branch(Identifier(zero), Ref(true)),Branch(Identifier(succ), Ref(false))]), Ref(Bool))"
+    );
+  });
+
+  test("should parse nested case", () => {
+    const src = `(case n of
+      zero -> (case m of
+          zero -> false
+          succ -> true
+        ):Bool
+      succ -> (case m of
+          zero -> false
+          succ -> lt(n.x)(m.x)
+        ):Bool
+      ):Bool`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe(
+      "Ann(Case(Par(n),[Branch(Identifier(zero), Ann(Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), Ref(true))]), Ref(Bool))),Branch(Identifier(succ), Ann(Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), App(App(Ref(lt), Ref(n.x)), Ref(m.x)))]), Ref(Bool)))]), Ref(Bool))"
+    );
   });
 });

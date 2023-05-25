@@ -14,7 +14,7 @@ export function pretty(term: Term, indices: boolean = false): string {
   }
   switch (term._) {
     case "lam":
-      return "λ" + pretty(term.name) + ". " + pretty(term.body, indices) + "";
+      return "λ" + pretty(term.name) + " " + pretty(term.body, indices) + "";
     case "self":
       return `ι${term.name}. ${pretty(term.body, indices)}`;
     case "app": {
@@ -77,7 +77,7 @@ export function pretty(term: Term, indices: boolean = false): string {
 export function prettyC(term: Erased.Term, indices: boolean = true): string {
   switch (term._) {
     case "lam":
-      return "λ" + term.name + ". " + prettyC(term.body, indices) + "";
+      return "λ" + term.name + " " + prettyC(term.body, indices) + "";
     case "app": {
       let l = prettyC(term.left, indices);
       let r = "(" + prettyC(term.right, indices) + ")";
@@ -92,9 +92,9 @@ export function prettyC(term: Erased.Term, indices: boolean = true): string {
       return term.name;
     case "var":
       if (indices) {
-        return `${term.index}`;
-      } else {
         return `${term.name}@${term.index}`;
+      } else {
+        return `${term.name}`;
       }
   }
 }

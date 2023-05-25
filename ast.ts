@@ -569,7 +569,7 @@ export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
   );
 
 //  true -> false
-const caseBranch: Parser<Branch> = bind(spaces, (_) =>
+const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
   bind(block(identifier2), (id) =>
     bind(many(whitespace), (_) =>
       bind(either(str("->"), str("=>")), (_) =>
@@ -602,7 +602,7 @@ export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
 export const ifStatement: Parser<If | ParseError> = bind(str("if"), (_) =>
   orFail(
     "if statment not well formed",
-    bind(spc(par), (condition) =>
+    bind(spc(term), (condition) =>
       bind(str("then"), (_) =>
         bind(spc(term), (trueBranch) =>
           bind(str("else"), (_) =>
@@ -657,55 +657,51 @@ export const listLiteral: Parser<Term> =
     )
   );
 
-export const subterm: Parser<Term> =
-  // consume any leading whitespace
-  bind(many(whitespace), (_) =>
+export const subterm: Parser<Term> = bind(
+  any8(
+    // parenthesis `(T)`
+    block(parenthesis(lazy(() => term))),
+    // abstraction `λx t`
+    block(abstraction(() => term)),
+    // a case destructuring `case x of ...`
+    block(caseStatement),
+    // an if-then-else block
+    block(ifStatement),
+    // the type of types `*`
+    block(star),
+    // a reference for example `t`
+    block(reference),
+    // a list literal, for example `[1,2,3]`
+    block(listLiteral),
+    // an integer literal
+    block(integerLiteral)
+  ),
+  (lhs) =>
+    // A term may be followed by a type annotation, for example `(f(x)):Y`.
     bind(
-      any8(
-        // parenthesis `(T)`
-        block(parenthesis(lazy(() => term))),
-        // abstraction `λx t`
-        block(abstraction(() => term)),
-        // a case destructuring `case x of ...`
-        block(caseStatement),
-        // an if-then-else block
-        block(ifStatement),
-        // the type of types `*`
-        block(star),
-        // a reference for example `t`
-        block(reference),
-        // a list literal, for example `[1,2,3]`
-        block(listLiteral),
-        // an integer literal
-        block(integerLiteral)
-      ),
-      (lhs) =>
-        // A term may be followed by a type annotation, for example `(f(x)):Y`.
-        bind(
-          either(
-            bind(str(":"), (_) =>
-              bind(
-                lazy(() => term),
-                (typ) => pure(Ann(lhs, typ))
-              )
-            ),
-            // A term followed by another term is a function application, for
-            // example `g(x)(y)(z)`.
-            either(
-              application(() => term, lhs),
-              pure(lhs)
-            )
-          ),
-          (t) => bind(many(whitespace), (_) => pure(t))
+      either(
+        bind(str(":"), (_) =>
+          bind(
+            lazy(() => term),
+            (typ) => pure(Ann(lhs, typ))
+          )
+        ),
+        // A term followed by another term is a function application, for
+        // example `g(x)(y)(z)`.
+        either(
+          application(() => term, lhs),
+          pure(lhs)
         )
+      ),
+      (t) => pure(t)
     )
-  );
+);
 
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
 export const term: Parser<Term> =
   // Parse the actual term.
-  bind(subterm, (lhs) =>
+  bind(spc(subterm), (lhs) =>
     // A term may be followed by an arrow - making it a pi type.
     either(
       bind(str("->"), (_) =>

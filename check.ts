@@ -338,8 +338,13 @@ const check = (
           if (xTyp._ == "typecheckerror") {
             return xTyp;
           }
-          const ref = strip(xTyp.type);
-          if (ref._ != "ref") {
+          let ref = strip(xTyp.type);
+          if (ref._ == "ref") {
+            // ok
+          } else if (ref._ == "app") {
+            // find the type
+            ref = getTypeNameFromTypeConstructor(ref);
+          } else {
             return TypecheckError(
               `type of argument to case should be a reference; got ${ref._}`,
               os,
@@ -366,7 +371,7 @@ const check = (
 
           // FIXME: Ensure all branches are covered.
 
-          const absArgs = constructor.args.reduce(
+          const absArgs = constructor.args.reduceRight(
             (acc2, curr2) => Abs(`${pretty(term.name)}.${curr2.name}`, acc2),
             shift(constructor.args.length, 0, branchTerm)
           );
@@ -751,7 +756,6 @@ export const equate = (
   depth: number = 0
 ): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
   if (aeq(ty1, ty2)) {
-    // FIXME: holes
     return { eq: true, holes: [] };
   }
 
@@ -908,7 +912,9 @@ export function strip(t: Term): Term {
     case "case":
       return Case(
         strip(t.name),
-        t.branches.map((b) => Branch(b.constructor, strip(b.term)))
+        t.branches.map((b) =>
+          Branch(strip(b.constructor) as Identifier, strip(b.term))
+        )
       );
     case "if":
       return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
@@ -943,12 +949,15 @@ export function serialise(t: Term, d: number = 0): string {
     case "orig":
       return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
     case "case":
-      return `Case(
-        ${serialise(t.name, d + 1)},
-        [${t.branches
-          .map((b) => `Branch(${b.constructor}, ${serialise(b.term, d + 1)})`)
-          .join(",")}]
-      )`;
+      return `Case(${serialise(t.name, d + 1)},[${t.branches
+        .map(
+          (b) =>
+            `Branch(${serialise(b.constructor, d + 1)}, ${serialise(
+              b.term,
+              d + 1
+            )})`
+        )
+        .join(",")}])`;
     case "if":
       return `If(${serialise(t.condition)}, ${serialise(
         t.trueBranch
@@ -959,5 +968,17 @@ export function serialise(t: Term, d: number = 0): string {
       return `${t.num}`;
     case "err":
       return `ParseError(${t.msg})`;
+  }
+}
+
+// given an ast of the form App(App(App(X,y),z),w) return the leftmost ref X.
+function getTypeNameFromTypeConstructor(t: Term): Ref {
+  switch (t._) {
+    case "ref":
+      return t;
+    case "app":
+      return getTypeNameFromTypeConstructor(t.left);
+    default:
+      throw `unexpected ${t._}`;
   }
 }
