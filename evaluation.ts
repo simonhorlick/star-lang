@@ -150,11 +150,11 @@ export function reduceOnce2(
     case "var":
       throw "cannot reduce Var";
     case "ref":
-      const match = defs.filter((d) => d.name == term.name);
-      if (match.length == 0) {
+      const match = defs.find((d) => d.name == term.name);
+      if (match == undefined) {
         throw `reference not found: ${term.name}`;
       }
-      return [match[0].term, true];
+      return [match.term, true];
   }
 }
 
