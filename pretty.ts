@@ -68,8 +68,10 @@ export function pretty(term: Term, indices: boolean = false): string {
       return `▨${term.id}`;
     case "int":
       return `${term.num}`;
+    case "str":
+      return `"${term.str}"`;
     case "err":
-      throw `##${term.msg}##`;
+      return `##${term.msg}##`;
   }
 }
 

@@ -572,6 +572,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "id":
     case "hole":
     case "int":
+    case "str":
       return t;
     case "orig":
       return Origin(t.start, t.end, shift(d, c, t.child));
@@ -631,6 +632,7 @@ export function subst(
     case "id":
     case "hole":
     case "int":
+    case "str":
       return t;
     case "orig":
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
@@ -673,6 +675,7 @@ export function substHole(j: number, s: Term, t: Term): Term {
     case "ref":
     case "id":
     case "int":
+    case "str":
       return t;
     case "hole":
       if (t.id == j) {
@@ -742,6 +745,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
       throw "aeq: unexpected if";
     case "int":
       return t2._ == "int" && t2.num == t1.num;
+    case "str":
+      return t2._ == "str" && t2.str == t1.str;
     case "err":
       throw "aeq: unexpected parse error";
   }
@@ -841,6 +846,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "par":
     case "hole":
     case "int":
+    case "str":
       return t;
     case "case":
       // FIXME: Improve the types here.
@@ -905,6 +911,7 @@ export function strip(t: Term): Term {
     case "id":
     case "hole":
     case "int":
+    case "str":
     case "err":
       return t;
     case "orig":
@@ -966,6 +973,8 @@ export function serialise(t: Term, d: number = 0): string {
       return `Hole()`;
     case "int":
       return `${t.num}`;
+    case "str":
+      return `"${t.str}"`;
     case "err":
       return `ParseError(${t.msg})`;
   }

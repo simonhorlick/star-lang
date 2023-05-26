@@ -226,6 +226,7 @@ export type Term =
   | Identifier
   | Hole
   | IntLit
+  | StringLit
   | ParseError;
 export type Type = Term;
 
@@ -343,6 +344,9 @@ export const Def = (name: string, term: Term, type: Type): Def => ({
 
 // An integer literal
 export type IntLit = { _: "int"; num: number };
+
+// A string literal
+export type StringLit = { _: "str"; str: string };
 
 export type Pkg = { _: "pkg"; name: string };
 
@@ -657,8 +661,14 @@ export const listLiteral: Parser<Term> =
     )
   );
 
+export const stringLiteral: Parser<Term> = bind(str('"'), (_) =>
+  bind(many(alpha), (s) =>
+    bind(str('"'), (_) => pure({ _: "str", str: s.join("") }))
+  )
+);
+
 export const subterm: Parser<Term> = bind(
-  any8(
+  any9(
     // parenthesis `(T)`
     block(parenthesis(lazy(() => term))),
     // abstraction `λx t`
@@ -673,8 +683,10 @@ export const subterm: Parser<Term> = bind(
     block(reference),
     // a list literal, for example `[1,2,3]`
     block(listLiteral),
-    // an integer literal
-    block(integerLiteral)
+    // an integer literal, for example `123`
+    block(integerLiteral),
+    // a string literal, for example `"abc"`
+    block(stringLiteral)
   ),
   (lhs) =>
     // A term may be followed by a type annotation, for example `(f(x)):Y`.

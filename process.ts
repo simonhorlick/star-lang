@@ -30,6 +30,7 @@ import {
 } from "./ast";
 import { addTermToCtx, identifier, shift } from "./check";
 import { pretty } from "./pretty";
+import { stringToUtf8ByteArray } from "./strings";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 
@@ -296,11 +297,41 @@ export const desugarTerm = (
       }
       return term;
     }
+    case "str": {
+      const bytes = stringToUtf8ByteArray(t.str);
+      return bytes.reduceRight<Term>(
+        (acc, curr) => App(App(Ref("scons"), byteFromNumber(curr)), acc),
+        Ref("snil")
+      );
+    }
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
     case "err":
       throw "unexpected parse error";
   }
+};
+
+const byteFromNumber = (num: number): Term => {
+  // 0 0 0 0 0 0 0 1 = 0x01
+  // 0 0 0 0 0 0 1 0 = 0x02
+  // 0 0 0 0 0 1 0 0 = 0x04
+  // 0 0 0 0 1 0 0 0 = 0x08
+  // 0 0 0 1 0 0 0 0 = 0x10
+  // 0 0 1 0 0 0 0 0 = 0x20
+  // 0 1 0 0 0 0 0 0 = 0x40
+  // 1 0 0 0 0 0 0 0 = 0x80
+  const b7 = (num & 0x01) == 0 ? Ref("z") : Ref("o");
+  const b6 = (num & 0x02) == 0 ? Ref("z") : Ref("o");
+  const b5 = (num & 0x04) == 0 ? Ref("z") : Ref("o");
+  const b4 = (num & 0x08) == 0 ? Ref("z") : Ref("o");
+  const b3 = (num & 0x10) == 0 ? Ref("z") : Ref("o");
+  const b2 = (num & 0x20) == 0 ? Ref("z") : Ref("o");
+  const b1 = (num & 0x40) == 0 ? Ref("z") : Ref("o");
+  const b0 = (num & 0x80) == 0 ? Ref("z") : Ref("o");
+  return App(
+    App(App(App(App(App(App(App(Ref("byte"), b0), b1), b2), b3), b4), b5), b6),
+    b7
+  );
 };
 
 export const desugar = (def: Def, adts: Map<string, ADT>): Def => {
@@ -364,6 +395,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "id":
     case "hole":
     case "int":
+    case "str":
       return t;
     case "err":
       throw "unexpected parse error";

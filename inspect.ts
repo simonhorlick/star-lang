@@ -223,6 +223,8 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
         return t;
       case "int":
         return t;
+      case "str":
+        return t;
       case "err":
         return t;
     }

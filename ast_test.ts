@@ -297,8 +297,6 @@ else
     expect(serialise(ast.term)).toBe("Ref(zero)");
   });
 
-  test("should parse if");
-
   test("should parse case", () => {
     const src = `case n of
       zero -> true
@@ -335,5 +333,26 @@ else
     expect(serialise(ast)).toBe(
       "Ann(Case(Par(n),[Branch(Identifier(zero), Ann(Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), Ref(true))]), Ref(Bool))),Branch(Identifier(succ), Ann(Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), App(App(Ref(lt), Ref(n.x)), Ref(m.x)))]), Ref(Bool)))]), Ref(Bool))"
     );
+  });
+
+  test("should parse empty string literal", () => {
+    const src = `""`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe('""');
+  });
+
+  test("should parse string literal", () => {
+    const src = `"hello"`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe('"hello"');
+  });
+
+  test("should parse definition containing string literal", () => {
+    const ast = stripAST(result(definition(ts('func abc:String = ""'))));
+    if (ast._ != "def") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialise(ast.typ)).toBe("Ref(String)");
+    expect(serialise(ast.term)).toBe('""');
   });
 });
