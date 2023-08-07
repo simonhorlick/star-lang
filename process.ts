@@ -298,6 +298,10 @@ export const desugarTerm = (
       return term;
     }
     case "str": {
+      // TODO: How can we keep this as a string literal rather than expanding
+      // into scons terms?
+      // - Retain the StringLit term, if it's ever applied then reduce it
+      //   lazily.
       const bytes = stringToUtf8ByteArray(t.str);
       return bytes.reduceRight<Term>(
         (acc, curr) => App(App(Ref("scons"), byteFromNumber(curr)), acc),

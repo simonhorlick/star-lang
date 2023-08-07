@@ -105,6 +105,49 @@ export function termSubstTop2(s: Erased.Term, t: Erased.Term): Erased.Term {
   return termShift2(-1, termSubst2(0, termShift2(1, s), t));
 }
 
+// Traverse App terms and collect the arguments in-order.
+//       ap
+//      /  \
+//     ap   d
+//    /  \
+//   ap   c
+//  /  \
+// a    b
+export const traverseInOrder = (
+  root: Erased.Term,
+  rightDepthLimit: number
+): Array<Erased.Term> => {
+  const doTraverse = (
+    s: Erased.Term,
+    rightDepth: number
+  ): Array<Erased.Term> => {
+    if (rightDepth >= rightDepthLimit) {
+      return [s];
+    }
+    if (s._ == "app") {
+      return doTraverse(s.left, 0).concat(doTraverse(s.right, rightDepth + 1));
+    } else {
+      return [s];
+    }
+  };
+
+  return doTraverse(root, 0);
+};
+
+export function toJsArray(s: Erased.Term): Array<Erased.Term> {
+  // either `nil(T)` or `((cons(T))(head))(tail)`
+  const terms = traverseInOrder(s, 1);
+  if (terms[0]._ == "ref" && terms[0].name == "nil") {
+    return [];
+  } else if (terms[0]._ == "ref" && terms[0].name == "cons") {
+    const head = terms[2];
+    const tail = terms[3];
+    return [head].concat(toJsArray(tail));
+  } else {
+    throw `unexpected ${prettyC(terms[0])}`;
+  }
+}
+
 // A term is in normal form if it cannot be reduced any further. Reduce the
 // expression so that it no longer contains any function applications and
 // becomes in normal form.
@@ -130,6 +173,15 @@ export function reduceOnce2(
         // abstraction.
         return [termSubstTop2(argument, abstraction.body), true];
       } else {
+        if (term.left._ == "ref" && term.left.name == "runtime") {
+          // runtime(["println","string"])
+          const args = toJsArray(term.right);
+
+          // (cons(T))("println")(cons(T)("string")(nil(T)))
+          //
+          console.log(args.map((x) => prettyC(x)).join(", "));
+        }
+
         // we know left is an not an abstraction.
         if (term.left._ != "var") {
           const left = reduceOnce2(defs, term.left);
