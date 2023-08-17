@@ -302,11 +302,8 @@ export const desugarTerm = (
       // into scons terms?
       // - Retain the StringLit term, if it's ever applied then reduce it
       //   lazily.
-      const bytes = stringToUtf8ByteArray(t.str);
-      return bytes.reduceRight<Term>(
-        (acc, curr) => App(App(Ref("scons"), byteFromNumber(curr)), acc),
-        Ref("snil")
-      );
+      return t;
+      // return stringLiteralToTerm(t.str);
     }
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
@@ -314,6 +311,14 @@ export const desugarTerm = (
       throw "unexpected parse error";
   }
 };
+
+// stringLiteralToTerm expands the given string literal into calls to scons
+// of the utf-8 bytes in the string literal.
+export const stringLiteralToTerm = (str: string) =>
+  stringToUtf8ByteArray(str).reduceRight<Term>(
+    (acc, curr) => App(App(Ref("scons"), byteFromNumber(curr)), acc),
+    Ref("snil")
+  );
 
 const byteFromNumber = (num: number): Term => {
   // 0 0 0 0 0 0 0 1 = 0x01
