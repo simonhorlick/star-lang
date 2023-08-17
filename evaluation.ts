@@ -38,7 +38,7 @@ export function erase(term: Term): Erased.Term {
     case "int":
       throw "erase: unexpected integer literal";
     case "str":
-      throw "erase: unexpected string literal";
+      return Erased.StringLit(term.str);
     case "err":
       throw "erase: unexpected parse error";
   }
@@ -59,6 +59,8 @@ export function termShift2(d: number, t: Erased.Term): Erased.Term {
       case "app":
         return Erased.App(walk(d, c, t.left), walk(d, c, t.right));
       case "ref":
+        return t;
+      case "str":
         return t;
     }
   };
@@ -91,6 +93,8 @@ export function termSubst2(
       case "app":
         return Erased.App(walk(j, s, c, t.left), walk(j, s, c, t.right));
       case "ref":
+        return t;
+      case "str":
         return t;
     }
   };
@@ -175,11 +179,21 @@ export function reduceOnce2(
       } else {
         if (term.left._ == "ref" && term.left.name == "runtime") {
           // runtime(["println","string"])
-          const args = toJsArray(term.right);
 
-          // (cons(T))("println")(cons(T)("string")(nil(T)))
-          //
-          console.log(args.map((x) => prettyC(x)).join(", "));
+          // FIXME: This is not going to work if the string isn't
+          // a literal.
+          const args = toJsArray(term.right) as Erased.StringLit[];
+
+          switch (args[0].str) {
+            case "println":
+              console.log(args[1].str);
+              // evaluate this expression to the argument string.
+              return [args[1], false];
+            default:
+              throw `unknown runtime function: ${args[0].str}`;
+          }
+
+          return [term, false];
         }
 
         // we know left is an not an abstraction.
@@ -209,6 +223,10 @@ export function reduceOnce2(
         throw `reference not found: ${term.name}`;
       }
       return [match.term, true];
+    case "str":
+      return [term, false];
+    default:
+      throw "not implemented";
   }
 }
 

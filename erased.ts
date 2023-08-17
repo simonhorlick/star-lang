@@ -55,7 +55,7 @@ export const App = (left: Term, right: Term): App => ({
   right: right,
 });
 
-export type Term = Abs | App | Var | Ref;
+export type Term = Abs | App | Var | Ref | StringLit;
 
 // A top-level definition.
 export type Def = {
@@ -68,4 +68,15 @@ export const Def = (name: string, term: Term): Def => ({
   _: "def",
   name: name,
   term: term,
+});
+
+// A string literal.
+export type StringLit = {
+  _: "str";
+  str: string;
+};
+
+export const StringLit = (str: string): StringLit => ({
+  _: "str",
+  str: str,
 });
