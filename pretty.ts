@@ -98,5 +98,7 @@ export function prettyC(term: Erased.Term, indices: boolean = true): string {
       } else {
         return `${term.name}`;
       }
+    case "str":
+      return `"${term.str}"`;
   }
 }
