@@ -263,6 +263,8 @@ export const infer = (
       return Result(Origin(term.start, term.end, tc.term), tc.type, tc.holes);
     case "int":
       return Result(term, Ref("Nat"), []);
+    case "str":
+      return Result(term, Ref("String"), []);
     default:
       return TypecheckError(`cannot infer type of ${term._}`, os, oe);
   }
