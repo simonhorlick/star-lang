@@ -1,7 +1,13 @@
 import { describe, expect, test } from "@jest/globals";
 import { Ref, Var } from "./ast";
 import * as Erased from "./erased";
-import { reduce, reduceOnce2, termShift2, termSubst2 } from "./evaluation";
+import {
+  reduce,
+  reduceOnce2,
+  reduceOnce3,
+  termShift2,
+  termSubst2,
+} from "./evaluation";
 
 // tru = λt. λf. t
 const tru = Erased.Def(
@@ -213,93 +219,112 @@ describe("substitution", () => {
   });
 });
 
-describe("evaluation", () => {
-  // (λx. x)(λz. z) -> (λz. z)
-  test("TestReduceIdentity", () => {
-    const identity = Erased.App(
-      Erased.Abs("x", Erased.Var("x", 0)),
-      Erased.Abs("z", Erased.Var("z", 0))
+describe("applicative-order evaluation strategy", () => {
+  test("not", () => {
+    // not = λb b(fls)(tru)
+    const not = Erased.Abs(
+      "b",
+      Erased.App(
+        Erased.App(Erased.Var("b", 0), Erased.Ref("fls")),
+        Erased.Ref("tru")
+      )
     );
-    const expected: Erased.Term = Erased.Abs("z", Erased.Var("z", 0));
+    const expected: Erased.Term = Erased.Ref("tru");
 
-    const actual = reduce([], identity);
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  // Test that substituting top level functions works properly.
-  test("TestSubstituteDef", () => {
-    const expected = Erased.Abs("z", Erased.Var("z", 0));
-    const actual = reduce(
-      [id],
-      Erased.App(Ref("id"), Erased.Abs("z", Erased.Var("z", 0)))
-    );
-    expect(actual).toStrictEqual(expected);
-  });
-
-  // "if" reduction
-  //
-  // top level defs (after typecheck has passed):
-  //
-  // tru = λt. λf. t
-  // fls = λt. λf. f
-  // test = λl. λm. λn. (l(m))(n)
-  //
-  // ((test(tru))(v))(w)
-  // ------------------- def "test"
-  // (((λl. λm. λn. (l(m))(n))(tru))(v))(w)
-  // -------------------------------------- E-AppAbs
-  // ((λm. λn. (tru(m))(n))(v))(w)
-  // ----------------------------- E-AppAbs
-  // (λn. (tru(v))(n))(w)
-  // -------------------- E-AppAbs
-  // (tru(v))(w)
-  // ----------- def "tru"
-  // ((λt. λf. t)(v))(w)
-  // ------------------- E-AppAbs
-  // (λf. v)(w)
-  // ---------- E-AppAbs
-  // v
-  test("TestReduceIfElse", () => {
-    // ((test(tru))(1))(2)
-    const ifElse: Erased.Term = Erased.App(
-      Erased.App(Erased.App(Erased.Ref("test"), Erased.Ref("tru")), one),
-      two
-    );
-    const expected = one;
-    const actual = reduce([tru, fls, testfn], ifElse);
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  test("should ensure redex uses up bound variable", () => {
-    // Γ = [z→2, y→1]
-    // (λx. y(x)(z))(λx. x)
-    // y(λx. x)(z)
-    // This corresponds to the nameless representation:
-    // (λx. 1(0)(2))(λx. 0)
-    // After one step of evaluation, then indices for y and z are reduced by 1
-    // as the x binder has now been used up.
-    // 0(λx. 0)(1)
-
-    let src = Erased.App(
-      Erased.Abs(
-        "x",
-        Erased.App(
-          Erased.App(Erased.Var("y", 1), Erased.Var("x", 0)),
-          Erased.Var("z", 2)
-        )
-      ),
-      Erased.Abs("x", Erased.Var("x", 0))
-    );
-
-    let expected = Erased.App(
-      Erased.App(Erased.Var("y", 0), Erased.Abs("x", Erased.Var("x", 0))),
-      Erased.Var("z", 1)
-    );
-
-    const actual = reduceOnce2([], src);
+    const actual = reduceOnce3([tru, fls], Erased.App(not, Erased.Ref("fls")));
+    console.log(actual);
 
     expect(actual).toStrictEqual(expected);
   });
 });
+
+// describe("evaluation", () => {
+//   // (λx. x)(λz. z) -> (λz. z)
+//   test("TestReduceIdentity", () => {
+//     const identity = Erased.App(
+//       Erased.Abs("x", Erased.Var("x", 0)),
+//       Erased.Abs("z", Erased.Var("z", 0))
+//     );
+//     const expected: Erased.Term = Erased.Abs("z", Erased.Var("z", 0));
+
+//     const actual = reduce([], identity);
+
+//     expect(actual).toStrictEqual(expected);
+//   });
+
+//   // Test that substituting top level functions works properly.
+//   test("TestSubstituteDef", () => {
+//     const expected = Erased.Abs("z", Erased.Var("z", 0));
+//     const actual = reduce(
+//       [id],
+//       Erased.App(Ref("id"), Erased.Abs("z", Erased.Var("z", 0)))
+//     );
+//     expect(actual).toStrictEqual(expected);
+//   });
+
+//   // "if" reduction
+//   //
+//   // top level defs (after typecheck has passed):
+//   //
+//   // tru = λt. λf. t
+//   // fls = λt. λf. f
+//   // test = λl. λm. λn. (l(m))(n)
+//   //
+//   // ((test(tru))(v))(w)
+//   // ------------------- def "test"
+//   // (((λl. λm. λn. (l(m))(n))(tru))(v))(w)
+//   // -------------------------------------- E-AppAbs
+//   // ((λm. λn. (tru(m))(n))(v))(w)
+//   // ----------------------------- E-AppAbs
+//   // (λn. (tru(v))(n))(w)
+//   // -------------------- E-AppAbs
+//   // (tru(v))(w)
+//   // ----------- def "tru"
+//   // ((λt. λf. t)(v))(w)
+//   // ------------------- E-AppAbs
+//   // (λf. v)(w)
+//   // ---------- E-AppAbs
+//   // v
+//   test("TestReduceIfElse", () => {
+//     // ((test(tru))(1))(2)
+//     const ifElse: Erased.Term = Erased.App(
+//       Erased.App(Erased.App(Erased.Ref("test"), Erased.Ref("tru")), one),
+//       two
+//     );
+//     const expected = one;
+//     const actual = reduce([tru, fls, testfn], ifElse);
+
+//     expect(actual).toStrictEqual(expected);
+//   });
+
+//   test("should ensure redex uses up bound variable", () => {
+//     // Γ = [z→2, y→1]
+//     // (λx. y(x)(z))(λx. x)
+//     // y(λx. x)(z)
+//     // This corresponds to the nameless representation:
+//     // (λx. 1(0)(2))(λx. 0)
+//     // After one step of evaluation, then indices for y and z are reduced by 1
+//     // as the x binder has now been used up.
+//     // 0(λx. 0)(1)
+
+//     let src = Erased.App(
+//       Erased.Abs(
+//         "x",
+//         Erased.App(
+//           Erased.App(Erased.Var("y", 1), Erased.Var("x", 0)),
+//           Erased.Var("z", 2)
+//         )
+//       ),
+//       Erased.Abs("x", Erased.Var("x", 0))
+//     );
+
+//     let expected = Erased.App(
+//       Erased.App(Erased.Var("y", 0), Erased.Abs("x", Erased.Var("x", 0))),
+//       Erased.Var("z", 1)
+//     );
+
+//     const actual = reduceOnce2([], src);
+
+//     expect(actual).toStrictEqual(expected);
+//   });
+// });

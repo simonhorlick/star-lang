@@ -79,7 +79,9 @@ export function pretty(term: Term, indices: boolean = false): string {
 export function prettyC(term: Erased.Term, indices: boolean = true): string {
   switch (term._) {
     case "lam":
+    case "vlam":
       return "λ" + term.name + " " + prettyC(term.body, indices) + "";
+    case "vapp":
     case "app": {
       let l = prettyC(term.left, indices);
       let r = "(" + prettyC(term.right, indices) + ")";

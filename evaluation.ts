@@ -55,8 +55,10 @@ export function termShift2(d: number, t: Erased.Term): Erased.Term {
           return Erased.Var(t.name, t.index);
         }
       case "lam":
+      case "vlam":
         return Erased.Abs(t.name, walk(d, c + 1, t.body));
       case "app":
+      case "vapp":
         return Erased.App(walk(d, c, t.left), walk(d, c, t.right));
       case "ref":
         return t;
@@ -89,8 +91,10 @@ export function termSubst2(
           return Erased.Var(t.name, t.index);
         }
       case "lam":
+      case "vlam":
         return Erased.Abs(t.name, walk(j, s, c + 1, t.body));
       case "app":
+      case "vapp":
         return Erased.App(walk(j, s, c, t.left), walk(j, s, c, t.right));
       case "ref":
         return t;
@@ -128,7 +132,7 @@ export const traverseInOrder = (
     if (rightDepth >= rightDepthLimit) {
       return [s];
     }
-    if (s._ == "app") {
+    if (s._ == "app" || s._ == "vapp") {
       return doTraverse(s.left, 0).concat(doTraverse(s.right, rightDepth + 1));
     } else {
       return [s];
@@ -164,6 +168,57 @@ export function toJsArray(s: Erased.Term): Array<Erased.Term> {
 // encoded as lambdas we cannot always eagerly evaluate arguments, for example
 // an if statement is expressed as a function `if(c,t,f)` and we only ever want
 // to evaluate the appropriate branch.
+//
+
+// Reduce the term using a applicative-order evaluation strategy whereby a
+// function's arguments are evaluated completely before the function is applied.
+// returns false if there are no more redexes and the term is in normal form.
+// TODO: I think for this we need the concept of a value - i.e. a term that's
+// in normal form, and then apply the function if all args are in normal form.
+export function reduceOnce3(
+  defs: Erased.Def[],
+  term: Erased.Term
+): [Erased.Term, boolean] {
+  switch (term._) {
+    case "app":
+      const isval = (t: Erased.Term) => t._ == "vlam" || t._ == "vapp";
+      if (term.left._ == "lam" && isval(term.right)) {
+        // E-AppAbs: (λx:T11.t12)v2 → [x/v2]t12
+        return [termSubstTop2(term.right, term.left.body), true];
+      } else if (isval(term.left)) {
+        // E-App2: reduce the argument
+        const reduced = reduceOnce3(defs, term.right);
+        return [Erased.App(term.left, reduced[0]), true];
+      } else {
+        // E-App1: reduce the left side of the app
+        const reduced = reduceOnce3(defs, term.left);
+        return [Erased.App(reduced[0], term.right), true];
+      }
+    case "lam":
+      throw "cannot reduce Abs";
+    // // As we substitute arguments into the body of abstractions we need to
+    // // reduce those.
+    // if (term.body._ == "var") {
+    //   return [term, false];
+    // }
+    // const body = reduceOnce2(defs, term.body);
+    // return [Erased.Abs(term.name, body[0]), body[1]];
+    case "var":
+      throw "cannot reduce Var";
+    case "ref":
+      const match = defs.find((d) => d.name == term.name);
+      if (match == undefined) {
+        throw `reference not found: ${term.name}`;
+      }
+      return [match.term, true];
+    case "str":
+      return [term, false];
+    default:
+      throw "not implemented";
+  }
+}
+
+// Reduce using a normal-order evaluation strategy.
 export function reduceOnce2(
   defs: Erased.Def[],
   term: Erased.Term
@@ -234,8 +289,8 @@ export function reduce(defs: Erased.Def[], t: Erased.Term): Erased.Term {
   let normalForm = false;
   let prev: Erased.Term = t;
   while (!normalForm) {
-    // console.log(prettyC(t, false));
-    const [rt, b] = reduceOnce2(defs, t);
+    console.log(prettyC(t, false));
+    const [rt, b] = reduceOnce3(defs, t);
     normalForm = !b;
 
     // debug check
