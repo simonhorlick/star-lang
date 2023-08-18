@@ -81,7 +81,7 @@ export const VApp = (left: Term, right: Term): VApp => ({
   right: right,
 });
 
-export type Term = Abs | VAbs | App | VApp | Var | Ref | StringLit;
+export type Term = Abs | App | Var | Ref | StringLit; //  | VAbs | VApp
 
 // A top-level definition.
 export type Def = {

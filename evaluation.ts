@@ -55,10 +55,10 @@ export function termShift2(d: number, t: Erased.Term): Erased.Term {
           return Erased.Var(t.name, t.index);
         }
       case "lam":
-      case "vlam":
+        // case "vlam":
         return Erased.Abs(t.name, walk(d, c + 1, t.body));
       case "app":
-      case "vapp":
+        // case "vapp":
         return Erased.App(walk(d, c, t.left), walk(d, c, t.right));
       case "ref":
         return t;
@@ -91,10 +91,10 @@ export function termSubst2(
           return Erased.Var(t.name, t.index);
         }
       case "lam":
-      case "vlam":
+        // case "vlam":
         return Erased.Abs(t.name, walk(j, s, c + 1, t.body));
       case "app":
-      case "vapp":
+        // case "vapp":
         return Erased.App(walk(j, s, c, t.left), walk(j, s, c, t.right));
       case "ref":
         return t;
@@ -132,7 +132,10 @@ export const traverseInOrder = (
     if (rightDepth >= rightDepthLimit) {
       return [s];
     }
-    if (s._ == "app" || s._ == "vapp") {
+    if (
+      s._ == "app"
+      //  || s._ == "vapp"
+    ) {
       return doTraverse(s.left, 0).concat(doTraverse(s.right, rightDepth + 1));
     } else {
       return [s];
@@ -156,133 +159,148 @@ export function toJsArray(s: Erased.Term): Array<Erased.Term> {
   }
 }
 
-// A term is in normal form if it cannot be reduced any further. Reduce the
-// expression so that it no longer contains any function applications and
-// becomes in normal form.
-//
-// Normal-order evaluation of a lambda expression is the repeated application of the leftmost reducible function application. In other words, normal order evaluation is the strategy that always reduces the left-most outer-most redex first. You can think about normal-order evaluation as traversing the lambda expression and evaluating every function you find before evaluating any function arguments.
-//
-// Evaluate this term by. When applied to a term that is not yet a value, it yields
-// the next step of evaluation for that term. When applied to a value an exception is thrown.
-// This function delays reduction of the arguments. Due to the way datatypes are
-// encoded as lambdas we cannot always eagerly evaluate arguments, for example
-// an if statement is expressed as a function `if(c,t,f)` and we only ever want
-// to evaluate the appropriate branch.
-//
+interface Redex {
+  _: "rx";
+  term: Erased.Term;
+}
+interface NormalForm {
+  _: "nf";
+  term: Erased.Term;
+}
+type Step = Redex | NormalForm;
 
+export const Redex = (t: Erased.Term): Redex => ({
+  _: "rx",
+  term: t,
+});
+export const NormalForm = (t: Erased.Term): NormalForm => ({
+  _: "nf",
+  term: t,
+});
+
+// When applied to a term that is not yet a value, it yields
+// the next step of evaluation for that term. When applied to a value an exception is thrown.
 // Reduce the term using a applicative-order evaluation strategy whereby a
 // function's arguments are evaluated completely before the function is applied.
-// returns false if there are no more redexes and the term is in normal form.
+// returns true if there are more redexes and the term is not yet in normal form.
 // TODO: I think for this we need the concept of a value - i.e. a term that's
 // in normal form, and then apply the function if all args are in normal form.
-export function reduceOnce3(
-  defs: Erased.Def[],
-  term: Erased.Term
-): [Erased.Term, boolean] {
-  switch (term._) {
-    case "app":
-      const isval = (t: Erased.Term) => t._ == "vlam" || t._ == "vapp";
-      if (term.left._ == "lam" && isval(term.right)) {
-        // E-AppAbs: (λx:T11.t12)v2 → [x/v2]t12
-        return [termSubstTop2(term.right, term.left.body), true];
-      } else if (isval(term.left)) {
-        // E-App2: reduce the argument
-        const reduced = reduceOnce3(defs, term.right);
-        return [Erased.App(term.left, reduced[0]), true];
-      } else {
-        // E-App1: reduce the left side of the app
-        const reduced = reduceOnce3(defs, term.left);
-        return [Erased.App(reduced[0], term.right), true];
-      }
-    case "lam":
-      throw "cannot reduce Abs";
-    // // As we substitute arguments into the body of abstractions we need to
-    // // reduce those.
-    // if (term.body._ == "var") {
-    //   return [term, false];
-    // }
-    // const body = reduceOnce2(defs, term.body);
-    // return [Erased.Abs(term.name, body[0]), body[1]];
-    case "var":
-      throw "cannot reduce Var";
-    case "ref":
-      const match = defs.find((d) => d.name == term.name);
-      if (match == undefined) {
-        throw `reference not found: ${term.name}`;
-      }
-      return [match.term, true];
-    case "str":
-      return [term, false];
-    default:
-      throw "not implemented";
+// reduce the arguments first, then do beta reduction.
+//
+// Reduction rules:
+//
+//
+// ------------------  beta (apply a function)
+// (λx M)N → M[x ↦ N]
+//
+// N → N'
+// ------------ mu (evaluate an actual parameter)
+// M(N) → M(N')
+//
+// M → M'
+// ------------ nu (evaluate to get a closure that can be applied)
+// M(N) → M'(N)
+//
+// M → M'
+// ------------ xi (optimise code, e.g., by inlining)
+// λx M → λx M'
+//
+//
+//
+//
+export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
+  // A term has one of three forms (x, λx M, and M(N)), and given each form, you look for a rule that has the form in the conclusion.
+
+  // The x form is not reduced by any rule, so the reducer always returns NormalForm.
+  if (term._ == "var" || term._ == "str") {
+    return NormalForm(term);
   }
-}
 
-// Reduce using a normal-order evaluation strategy.
-export function reduceOnce2(
-  defs: Erased.Def[],
-  term: Erased.Term
-): [Erased.Term, boolean] {
-  switch (term._) {
-    case "app":
-      if (term.left._ == "lam") {
-        const abstraction = term.left;
-        const argument = term.right;
-        // Beta reduction. Substitute the argument in the body of the
-        // abstraction.
-        return [termSubstTop2(argument, abstraction.body), true];
+  // The λx M form is reduced by exactly one of the rules above (Xi), and there’s a reduction judgment above the line, so the reducer always makes a recursive call to try to reduce M.
+  if (term._ == "lam") {
+    // M → M'
+    // ------------ xi (optimise code, e.g., by inlining)
+    // λx M → λx M'
+
+    const MprimeXi = reduceOnce3(defs, term.body);
+    if (prettyC(term.body) != prettyC(MprimeXi.term)) {
+      if (MprimeXi._ == "nf") {
+        return NormalForm(Erased.Abs(term.name, MprimeXi.term));
       } else {
-        if (term.left._ == "ref" && term.left.name == "runtime") {
-          // runtime(["println","string"])
-
-          // FIXME: This is not going to work if the string isn't
-          // a literal.
-          const args = toJsArray(term.right) as Erased.StringLit[];
-
-          switch (args[0].str) {
-            case "println":
-              console.log(args[1].str);
-              // evaluate this expression to the argument string.
-              return [args[1], false];
-            default:
-              throw `unknown runtime function: ${args[0].str}`;
-          }
-
-          return [term, false];
-        }
-
-        // we know left is an not an abstraction.
-        if (term.left._ != "var") {
-          const left = reduceOnce2(defs, term.left);
-          return [Erased.App(left[0], term.right), true];
-        } else {
-          // if LHS is a var and RHS contains no redex, then the expression is
-          // in normal form.
-          const right = reduceOnce2(defs, term.right);
-          return [Erased.App(term.left, right[0]), right[1]];
-        }
+        // console.log(prettyC(Erased.Abs(term.name, MprimeXi.term)));
+        return Redex(Erased.Abs(term.name, MprimeXi.term));
       }
-    case "lam":
-      // As we substitute arguments into the body of abstractions we need to
-      // reduce those.
-      if (term.body._ == "var") {
-        return [term, false];
-      }
-      const body = reduceOnce2(defs, term.body);
-      return [Erased.Abs(term.name, body[0]), body[1]];
-    case "var":
-      throw "cannot reduce Var";
-    case "ref":
-      const match = defs.find((d) => d.name == term.name);
-      if (match == undefined) {
-        throw `reference not found: ${term.name}`;
-      }
-      return [match.term, true];
-    case "str":
-      return [term, false];
-    default:
-      throw "not implemented";
+    }
+
+    // If it's an abstraction and we can't reduce the body, then it's in
+    // normal form.
+    return NormalForm(Erased.Abs(term.name, term.body));
   }
+
+  if (term._ == "app") {
+    // The M(N) form (application) might be reduced by Beta, Mu, or Nu. The choices for reducing M(N) are:
+    //  Nu    Try to reduce M
+    //  Mu    Try to reduce N
+    //  Beta  (only applies if M is a λ-form)
+
+    // Three rules can be ordered in six ways, but in practice, only three orders are used.
+    // If we try first Beta, then Nu, and finally Mu, we are implementing the normal-order reduction strategy. It is also called the “leftmost, outer- most” reduction strategy.
+    // If we try Mu before Beta, we have an applicative-order reduction strategy. There are two typical variants: Mu, Nu, Beta is a left-to-right applicative-order reduction strategy, and Nu, Mu, Beta is a right-to-left applicative-order reduction strategy.
+
+    const M = term.left;
+    const N = term.right;
+
+    // N → N'
+    // ------------ mu (evaluate an actual parameter)
+    // M(N) → M(N')
+    //
+    // M → M'
+    // ------------ nu (evaluate to get a closure that can be applied)
+    // M(N) → M'(N)
+    //
+    // ------------------  beta (apply a function)
+    // (λx M)N → M[x ↦ N]
+
+    const Nprime = reduceOnce3(defs, N);
+    // TODO: How do we know whether this rule applies? Surely it needs to be known as part of the term.
+    if (prettyC(N) != prettyC(Nprime.term)) {
+      //     console.log(`${prettyC(N)} → ${prettyC(Nprime.term)}
+      // ------------ mu (evaluate an actual parameter)
+      // ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}
+      //   `);
+      return Redex(Erased.App(M, Nprime.term));
+    }
+
+    // look up a def.
+    if (M._ == "ref") {
+      const match = defs.find((d) => d.name == M.name);
+      if (match == undefined) {
+        throw `reference not found: ${M.name}`;
+      }
+      return Redex(Erased.App(match.term, N));
+    }
+
+    const Mprime = reduceOnce3(defs, M);
+    if (prettyC(M) != prettyC(Mprime.term)) {
+      return Redex(Erased.App(Mprime.term, N));
+    }
+
+    if (M._ == "lam") {
+      return Redex(termSubstTop2(N, M.body));
+    }
+  }
+
+  // this happens if the body of a def is a ref.
+  if (term._ == "ref") {
+    const match = defs.find((d) => d.name == term.name);
+    if (match == undefined) {
+      throw `reference not found: ${term.name}`;
+    }
+    return Redex(match.term);
+  }
+
+  // throw "no rule applies";
+  return NormalForm(term);
 }
 
 export function reduce(defs: Erased.Def[], t: Erased.Term): Erased.Term {
@@ -290,15 +308,15 @@ export function reduce(defs: Erased.Def[], t: Erased.Term): Erased.Term {
   let prev: Erased.Term = t;
   while (!normalForm) {
     console.log(prettyC(t, false));
-    const [rt, b] = reduceOnce3(defs, t);
-    normalForm = !b;
+    const result = reduceOnce3(defs, t);
+    normalForm = result._ == "nf";
 
     // debug check
-    if (!normalForm && prettyC(rt) == prettyC(prev)) {
+    if (!normalForm && prettyC(result.term) == prettyC(prev)) {
       throw "no forward progress";
     }
     prev = t;
-    t = rt;
+    t = result.term;
   }
   return t;
 }
