@@ -728,7 +728,7 @@ describe("typechecker", () => {
     if (reduced._ == "typecheckerror") {
       throw reduced.msg;
     }
-    expect(pretty(reduced)).toBe("λP. λfalse. λtrue. false");
+    expect(pretty(reduced)).toBe("λP λfalse λtrue false");
   });
 
   test("simple parameterised types", () => {
