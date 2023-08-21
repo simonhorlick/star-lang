@@ -108,3 +108,31 @@ export const just = Def(
   GenerateConstructorTerm(maybeParams, maybeConstructors, 1),
   GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
 );
+
+const pairParams = [
+  { name: "A", type: Star() },
+  { name: "B", type: Star() },
+];
+
+const pairConstructors = [
+  {
+    name: Identifier("pair"),
+    args: [
+      {
+        name: "a",
+        type: Par("A"),
+      },
+      {
+        name: "b",
+        type: Par("B"),
+      },
+    ],
+  },
+];
+
+export const pair = buildType(Identifier("Pair"), pairParams, pairConstructors);
+export const ppair = Def(
+  "pair",
+  GenerateConstructorTerm(pairParams, pairConstructors, 0),
+  GenerateConstructorType("Pair", pairParams, pairConstructors[0])
+);

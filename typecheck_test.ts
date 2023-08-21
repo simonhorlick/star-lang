@@ -33,6 +33,8 @@ import {
   succ,
   tru,
   zero,
+  pair,
+  ppair,
 } from "./test_defs";
 import { whnf } from "./equal";
 
@@ -1061,6 +1063,10 @@ describe("typechecker", () => {
     ensure(
       typecheck(defs([list, nil, cons]), adts([]), [], cons.term, cons.typ)
     );
+  });
+
+  test("pair checks", () => {
+    ensure(typecheck(defs([pair, ppair]), adts([]), [], ppair.term, ppair.typ));
   });
 
   //   test("indexed types", () => {

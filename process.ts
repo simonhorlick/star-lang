@@ -183,14 +183,17 @@ export const buildType = (
     // back to the source text.
     wrapOrigin(
       processPars(
-        parameters.reduce<Term>((acc, paramN) => Abs(paramN.name, acc), self),
+        parameters.reduceRight<Term>(
+          (acc, paramN) => Abs(paramN.name, acc),
+          self
+        ),
         []
       ),
       name
     ),
     // Ensure that type-constructors such as Maybe have type arguments here.
     // Maybe does not have type * - instead it has type A->*.
-    parameters.reduce<Term>(
+    parameters.reduceRight<Term>(
       (acc, curr) => Pi(curr.name, curr.type, acc),
       Star()
     )
@@ -419,7 +422,7 @@ export const GenerateConstructorType = (
   // nil : (T *) → List(T)
   // cons : (T *) → (head T) → (tail List(T)) → List(T)
 
-  // The type and all params. i.e. List(T), or Pair(A,B)
+  // The type and all params. i.e. List(T), or Pair(A)(B)
   const apps = params.reduce<Term>(
     (acc, curr) => App(acc, Par(curr.name)),
     Ref(typeName)
@@ -434,7 +437,7 @@ export const GenerateConstructorType = (
 
   // Prepend type parameters, for example
   // (T *) → (head T) → (tail List(T)) → List(T)
-  const typeParams = params.reduce<Term>(
+  const typeParams = params.reduceRight<Term>(
     (acc, curr) => Pi(curr.name, curr.type, acc),
     prependConstructorArgs
   );
