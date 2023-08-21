@@ -40,32 +40,34 @@ describe("pretty", () => {
 
   const id = Erased.App(Erased.Abs("x", Erased.Ref("x")), Erased.Ref("y"));
 
-  test("λt. λf. t", () => expect(prettyC(tru.term)).toBe("λt. λf. t"));
-  test("λt. λf. f", () => expect(prettyC(fls.term)).toBe("λt. λf. f"));
-  test("λl. λm. λn. l(m)(n)", () =>
-    expect(prettyC(testFn.term)).toBe("λl. λm. λn. l(m)(n)"));
+  test("λt λf t", () => expect(prettyC(tru.term)).toBe("λt λf t"));
+  test("λt λf f", () => expect(prettyC(fls.term)).toBe("λt λf f"));
+  test("λl λm λn l(m)(n)", () =>
+    expect(prettyC(testFn.term)).toBe("λl λm λn l(m)(n)"));
   // test("λn:Nat. λm:Nat. n", () =>
   //   expect(pretty(fst.term)).toBe("λn:Nat. λm:Nat. n"));
-  test("(λx. x)(y)", () => expect(prettyC(id)).toBe("(λx. x)(y)"));
-  test("(λx. 0)(λz. 0)", () =>
+  test("(λx x)(y)", () => expect(prettyC(id)).toBe("(λx x)(y)"));
+  test("(λx 0)(λz 0)", () =>
     expect(
       prettyC(
         Erased.App(
           Erased.Abs("x", Erased.Var("x", 0)),
           Erased.Abs("z", Erased.Var("z", 0))
-        )
+        ),
+        true
       )
-    ).toBe("(λx. 0)(λz. 0)"));
-  test("λs. λz. 1(0)", () =>
+    ).toBe("(λx x@0)(λz z@0)"));
+  test("λs λz 1(0)", () =>
     expect(
       prettyC(
         Erased.Abs(
           "s",
           Erased.Abs("z", Erased.App(Erased.Var("s", 1), Erased.Var("z", 0)))
-        )
+        ),
+        true
       )
-    ).toBe("λs. λz. 1(0)"));
-  test("λs. λz. 1(1(0))", () =>
+    ).toBe("λs λz s@1(z@0)"));
+  test("λs λz 1(1(0))", () =>
     expect(
       prettyC(
         Erased.Abs(
@@ -77,7 +79,8 @@ describe("pretty", () => {
               Erased.App(Var("s", 1), Erased.Var("z", 0))
             )
           )
-        )
+        ),
+        true
       )
-    ).toBe("λs. λz. 1(1(0))"));
+    ).toBe("λs λz s@1(s@1(z@0))"));
 });

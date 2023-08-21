@@ -76,7 +76,7 @@ export function pretty(term: Term, indices: boolean = false): string {
 }
 
 // pretty print an erased term
-export function prettyC(term: Erased.Term, indices: boolean = true): string {
+export function prettyC(term: Erased.Term, indices: boolean = false): string {
   switch (term._) {
     case "lam":
       // case "vlam":
