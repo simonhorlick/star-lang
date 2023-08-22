@@ -286,6 +286,11 @@ else
       'Pi("", App(Ref(x), App(Ref(y), Ref(z))), Ref(x))'
     ));
 
+  test("should parse named pi types", () =>
+    expect(serialise(strip(result(term(ts("(A *)->A")))))).toBe(
+      'Pi("A", Var(A))'
+    ));
+
   test("should parse definition containing list literal", () => {
     const ast = stripAST(
       result(definition(ts("func abc:List(Nat) = zero\n\n")))
