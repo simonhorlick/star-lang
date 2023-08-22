@@ -148,6 +148,8 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
         );
       case "par":
         throw "unexpected par";
+      case "let":
+        throw "unexpected let";
       case "pi":
         return Pi(
           t.name,

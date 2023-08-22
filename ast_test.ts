@@ -355,4 +355,11 @@ else
     expect(serialise(ast.typ)).toBe("Ref(String)");
     expect(serialise(ast.term)).toBe('""');
   });
+
+  test("should parse let expression", () => {
+    const ast = strip(result(term(ts("let g = f(x) in h(g)(g)"))));
+    expect(serialise(ast)).toBe(
+      "Let(Identifier(g), App(Ref(f), Ref(x)), App(App(Ref(h), Ref(g)), Ref(g)))"
+    );
+  });
 });

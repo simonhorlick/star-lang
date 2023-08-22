@@ -55,15 +55,24 @@ export function pretty(term: Term, indices: boolean = false): string {
     case "star":
       return "★";
     case "case":
-      return `case ${pretty(term.name)} of ${term.branches
-        .map((b) => `${pretty(b.constructor)} -> ${pretty(b.term)}`)
+      return `case ${pretty(term.name, indices)} of ${term.branches
+        .map(
+          (b) =>
+            `${pretty(b.constructor, indices)} -> ${pretty(b.term, indices)}`
+        )
         .join(" | ")}`;
+    case "let":
+      return `let ${pretty(term.name, indices)} = ${pretty(
+        term.expr,
+        indices
+      )} in ${pretty(term.body, indices)}`;
     case "orig":
-      return pretty(term.child);
+      return pretty(term.child, indices);
     case "if":
-      return `if ${pretty(term.condition)} then ${pretty(
-        term.trueBranch
-      )} else ${pretty(term.falseBranch)}`;
+      return `if ${pretty(term.condition, indices)} then ${pretty(
+        term.trueBranch,
+        indices
+      )} else ${pretty(term.falseBranch, indices)}`;
     case "hole":
       return `▨${term.id}`;
     case "int":

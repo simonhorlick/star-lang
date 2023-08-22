@@ -27,6 +27,8 @@ import {
   AbsI,
   Identifier,
   If,
+  Hole,
+  Let,
 } from "./ast";
 import { addTermToCtx, identifier, shift } from "./check";
 import { pretty } from "./pretty";
@@ -258,6 +260,20 @@ export const desugarTerm = (
           Branch(b.constructor, desugarTerm(b.term, undefined, adts, ctx))
         )
       );
+    case "let":
+      return App(
+        AbsI(
+          t.name as Origin | Identifier,
+          desugarTerm(
+            t.body,
+            undefined,
+            adts,
+            addTermToCtx(ctx, identifier(t.name), Hole(Math.random()))
+          )
+        ),
+        desugarTerm(t.expr, undefined, adts, ctx)
+      );
+
     case "if":
       /*
         func F:Bool->* = λb if b then Bool else Nat
@@ -395,6 +411,13 @@ export const processPars = (t: Term, ctx: Context): Term => {
           Branch(branch.constructor, processPars(branch.term, ctx))
         )
       );
+    case "let":
+      return Let(
+        t.name,
+        processPars(t.expr, ctx),
+        processPars(t.body, addTermToCtx(ctx, identifier(t.name), Star()))
+      );
+
     case "if":
       return If(
         processPars(t.condition, ctx),

@@ -67,6 +67,7 @@ export const whnf = (
     case "hole":
     case "int":
     case "str":
+    case "let":
       return t;
     case "case":
       return t;

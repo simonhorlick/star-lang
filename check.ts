@@ -24,6 +24,7 @@ import {
   If,
   Hole,
   Ref,
+  Let,
 } from "./ast";
 import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -583,6 +584,8 @@ export function shift(d: number, c: number, t: Term): Term {
         shift(d, c, t.name),
         t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term))) // TODO: Is this correct? Do we need to shift here?
       );
+    case "let":
+      return Let(t.name, shift(d, c, t.expr), shift(d, c + 1, t.body));
     case "if":
       return If(
         shift(d, c, t.condition),
@@ -640,6 +643,12 @@ export function subst(
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
     case "case":
       throw "subst: unexpected case";
+    case "let":
+      return Let(
+        t.name,
+        subst(j, s, c, t.expr, name),
+        subst(j, s, c + 1, t.body, name)
+      );
     case "if":
       throw "subst: unexpected if";
     case "err":
@@ -688,6 +697,8 @@ export function substHole(j: number, s: Term, t: Term): Term {
       return Origin(t.start, t.end, substHole(j, s, t.child));
     case "case":
       throw "substHole: unexpected case";
+    case "let":
+      throw "substHole: unexpected let";
     case "if":
       throw "substHole: unexpected if";
     case "err":
@@ -743,6 +754,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
             aeq(branch.term, t2.branches[i].term)
         )
       );
+    case "let":
+      return t2._ == "let" && aeq(t1.expr, t2.expr) && aeq(t1.body, t2.body);
     case "if":
       throw "aeq: unexpected if";
     case "int":
@@ -853,6 +866,8 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "case":
       // FIXME: Improve the types here.
       throw "unexpected case at typecheck";
+    case "let":
+      throw "unexpected let at typecheck";
     case "if":
       throw "unexpected if at typecheck";
     case "orig":
@@ -925,6 +940,8 @@ export function strip(t: Term): Term {
           Branch(strip(b.constructor) as Identifier, strip(b.term))
         )
       );
+    case "let":
+      return Let(strip(t.name) as Identifier, strip(t.expr), strip(t.body));
     case "if":
       return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
   }
@@ -967,6 +984,12 @@ export function serialise(t: Term, d: number = 0): string {
             )})`
         )
         .join(",")}])`;
+    case "let":
+      return `Let(${serialise(t.name)}, ${serialise(
+        t.expr,
+        d + 1
+      )}, ${serialise(t.body, d + 1)})`;
+
     case "if":
       return `If(${serialise(t.condition)}, ${serialise(
         t.trueBranch

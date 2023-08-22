@@ -221,6 +221,7 @@ export type Term =
   | Star
   | Self
   | Case
+  | Let
   | If
   | Origin
   | Identifier
@@ -307,6 +308,24 @@ export const Case = (name: Term, branches: Branch[]): Case => ({
   _: "case",
   name: name,
   branches: branches,
+});
+
+export type Let = {
+  _: "let";
+  name: Origin | Identifier;
+  expr: Term;
+  body: Term;
+};
+
+export const Let = (
+  name: Origin | Identifier,
+  expr: Term,
+  body: Term
+): Let => ({
+  _: "let",
+  name: name,
+  expr: expr,
+  body: body,
 });
 
 export type If = {
@@ -601,6 +620,22 @@ export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
   )
 );
 
+// let b = f(x) in ...
+export const letStatement: Parser<Let | ParseError> = bind(str("let"), (_) =>
+  orFail(
+    "let statment not well formed",
+    bind(spc1(block(identifier2)), (id) =>
+      bind(str("="), (_) =>
+        bind(term, (expr) =>
+          bind(str("in"), (_) =>
+            bind(term, (body) => pure(Let(id, expr, body)))
+          )
+        )
+      )
+    )
+  )
+);
+
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
 export const ifStatement: Parser<If | ParseError> = bind(str("if"), (_) =>
@@ -668,13 +703,15 @@ export const stringLiteral: Parser<Term> = bind(str('"'), (_) =>
 );
 
 export const subterm: Parser<Term> = bind(
-  any9(
+  any10(
     // parenthesis `(T)`
     block(parenthesis(lazy(() => term))),
     // abstraction `λx t`
     block(abstraction(() => term)),
     // a case destructuring `case x of ...`
     block(caseStatement),
+    // a let statement `let x = ...`
+    block(letStatement),
     // an if-then-else block
     block(ifStatement),
     // the type of types `*`

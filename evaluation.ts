@@ -24,6 +24,8 @@ export function erase(term: Term): Erased.Term {
       throw "erase: unexpected case";
     case "if":
       throw "erase: unexpected if";
+    case "let":
+      throw "erase: unexpected let";
     case "self":
       // throw "unexpected self";
       return Erased.Abs("erased", Erased.Var("erased", 0));
