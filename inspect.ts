@@ -15,6 +15,7 @@ import {
   AbsI,
   Origin,
   Identifier,
+  Let,
 } from "./ast";
 import {
   addTermToCtx,
@@ -118,14 +119,14 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
       case "lam":
         // the type of a lambda abstraction is a pi type.
         if (ty == undefined) {
-          throw "type not present";
+          throw "inspect: type not present";
         }
         const typ = whnf(true, [], defs, ty, t);
         if (typ._ == "typecheckerror") {
           return t;
         }
         if (typ._ != "pi") {
-          throw "expected pi";
+          throw "inspect: expected pi";
         }
         if (start != undefined && end != undefined) {
           spans.set(
@@ -147,9 +148,9 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
           )
         );
       case "par":
-        throw "unexpected par";
+        throw "inspect: unexpected par";
       case "let":
-        throw "unexpected let";
+        throw "inspect: unexpected let";
       case "pi":
         return Pi(
           t.name,
@@ -176,9 +177,9 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
           )
         );
       case "case":
-        throw "unexpected case";
+        throw "inspect: unexpected case";
       case "if":
-        throw "unexpected if";
+        throw "inspect: unexpected if";
       case "ref":
         // TODO: For defs like true, the type is the expanded version. We
         // usually want a pi type so we can find the types of the arguments,

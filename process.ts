@@ -261,17 +261,18 @@ export const desugarTerm = (
         )
       );
     case "let":
-      return App(
-        AbsI(
-          t.name as Origin | Identifier,
-          desugarTerm(
-            t.body,
-            undefined,
-            adts,
-            addTermToCtx(ctx, identifier(t.name), Hole(Math.random()))
-          )
-        ),
-        desugarTerm(t.expr, undefined, adts, ctx)
+      // the type of the newly created bound variable is required when adding it
+      // to the context, so we must defer processing this let statement to the
+      // typechecking stage.
+      return Let(
+        t.name,
+        desugarTerm(t.expr, undefined, adts, ctx),
+        desugarTerm(
+          t.body,
+          undefined,
+          adts,
+          addTermToCtx(ctx, identifier(t.name), Star())
+        )
       );
 
     case "if":

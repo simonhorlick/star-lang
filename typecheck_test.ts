@@ -1096,6 +1096,19 @@ describe("typechecker", () => {
   //   if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
   // });
 
+  test("let statements should typecheck", () => {
+    const src = `
+    type Bool = false | true
+    // the typechecker should infer the expression of the let statement as Bool
+    // then with [x:Bool] check that the body of the let statement is of type
+    // Bool.
+    func ex:Bool->Bool = λb let x = b in x
+    `;
+    const t = build(src);
+    if (t._ == "parseerror") throw `parse failed: ${t.error}`;
+    if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
+  });
+
   describe("type equality", () => {
     const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
 

@@ -396,6 +396,32 @@ const check = (
 
       return check(defs, adts, ctx, desugared, type, os, oe);
     }
+    case "let": {
+      // A let statement desugars to a lambda.
+      //
+      //   let x = t1 in t2 => (λx:T1 t2)(t1)
+      //
+      // the typechecker should infer the expression of the let statement as Bool
+      // then with [x:Bool] check that the body of the let statement is of type
+      // Bool.
+      //
+      //   func ex:Bool->Bool = λb let x = b in x
+      //
+
+      const expressionType = infer(defs, adts, ctx, term.expr, os, oe);
+      if (expressionType._ == "typecheckerror") {
+        return expressionType;
+      }
+
+      // let x = t1 in t2 => (λx:T1 t2)(t1)
+      // Annotate the lambda with the expected type and check it.
+      const desugared = App(
+        Ann(AbsI(term.name, term.body), Pi("", expressionType.type, type)),
+        term.expr
+      );
+
+      return check(defs, adts, ctx, desugared, type, os, oe);
+    }
     case "self": {
       // What's the type of a self-type?
       if (type._ != "star") {
