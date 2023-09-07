@@ -1096,6 +1096,17 @@ describe("typechecker", () => {
   //   if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
   // });
 
+  test("type constructor with multiple arguments", () => {
+    const src = `
+    type Bool = false | true
+    type Pair(A *, B *) = pair(a A, b B)
+    func ex:Pair(Bool)(Bool) = pair(Bool)(Bool)(true)(true)    
+    `;
+    const t = build(src);
+    if (t._ == "parseerror") throw `parse failed: ${t.error}`;
+    if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
+  });
+
   test("let statements should typecheck", () => {
     const src = `
     type Bool = false | true

@@ -222,6 +222,8 @@ export const inspect = (def: Def, defs: Map<string, Def>) => {
         return t;
       case "orig":
         return traverse(t.child, ty, t.start, t.end, ctx, defs);
+      case "rel":
+        return traverse(t.term, ty, undefined, undefined, ctx, defs);
       case "hole":
         return t;
       case "int":

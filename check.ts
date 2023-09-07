@@ -25,6 +25,7 @@ import {
   Hole,
   Ref,
   Let,
+  Rel,
 } from "./ast";
 import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -618,6 +619,8 @@ export function shift(d: number, c: number, t: Term): Term {
         shift(d, c, t.trueBranch),
         shift(d, c, t.falseBranch)
       );
+    case "rel":
+      return Rel(shift(d, c, t.term), t.uses);
     case "err":
       throw "unexpected parse error";
   }
@@ -677,6 +680,8 @@ export function subst(
       );
     case "if":
       throw "subst: unexpected if";
+    case "rel":
+      return Rel(subst(j, s, c, t.term, name), t.uses);
     case "err":
       throw "subst: unexpected parse error";
   }
@@ -727,6 +732,8 @@ export function substHole(j: number, s: Term, t: Term): Term {
       throw "substHole: unexpected let";
     case "if":
       throw "substHole: unexpected if";
+    case "rel":
+      return Rel(substHole(j, s, t.term), t.uses);
     case "err":
       throw "substHole: unexpected parse error";
   }
@@ -790,6 +797,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
       return t2._ == "str" && t2.str == t1.str;
     case "err":
       throw "aeq: unexpected parse error";
+    case "rel":
+      throw "aeq: unexpected rel";
   }
 };
 
@@ -894,6 +903,8 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       throw "unexpected case at typecheck";
     case "let":
       throw "unexpected let at typecheck";
+    case "rel":
+      throw "unexpected rel at typecheck";
     case "if":
       throw "unexpected if at typecheck";
     case "orig":
@@ -970,6 +981,8 @@ export function strip(t: Term): Term {
       return Let(strip(t.name) as Identifier, strip(t.expr), strip(t.body));
     case "if":
       return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
+    case "rel":
+      throw "strip: unexpected rel";
   }
 }
 
@@ -1000,6 +1013,8 @@ export function serialise(t: Term, d: number = 0): string {
       return `Identifier(${t.name})`;
     case "orig":
       return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
+    case "rel":
+      return `Rel(${serialise(t.term, d + 1)}, ${t.uses})`;
     case "case":
       return `Case(${serialise(t.name, d + 1)},[${t.branches
         .map(
@@ -1028,6 +1043,60 @@ export function serialise(t: Term, d: number = 0): string {
       return `"${t.str}"`;
     case "err":
       return `ParseError(${t.msg})`;
+  }
+}
+
+export function tree(t: Term, prefix: string, typ?: Term): string {
+  switch (t._) {
+    case "var":
+      return `${prefix}${t.name}`;
+    case "lam":
+      return `${prefix}λ${identifier(t.name)}\n${tree(t.body, prefix + "  ")}`;
+    case "self":
+      return `${prefix}TODO`;
+    case "app":
+      const ann = typ ? `:${pretty(typ)}` : "";
+      return `${prefix}ap${ann}\n${tree(t.left, prefix + "  ")}\n${tree(
+        t.right,
+        prefix + "  "
+      )}`;
+    case "ann":
+      return tree(t.term, prefix, t.typ);
+    // return `${prefix}ann(typ=${pretty(t.typ)})\n${tree(
+    //   t.term,
+    //   prefix + "  "
+    // )}`;
+    case "pi":
+      return `${prefix}Π${t.name}\n${tree(t.from, prefix + "  ")}\n${tree(
+        t.to,
+        prefix + "  "
+      )}`;
+    case "par":
+      return `${prefix}TODO`;
+    case "star":
+      return `${prefix}*`;
+    case "ref":
+      return `${prefix}${t.name}`;
+    case "id":
+      return `${prefix}${t.name}`;
+    case "orig":
+      return tree(t.child, prefix);
+    case "case":
+      return `${prefix}TODO`;
+    case "let":
+      return `${prefix}TODO`;
+    case "if":
+      return `${prefix}TODO`;
+    case "hole":
+      return `${prefix}TODO`;
+    case "int":
+      return `${prefix}${t.num}`;
+    case "str":
+      return `${prefix}"${t.str}"`;
+    case "rel":
+      return `${prefix}Rel(${t.uses})${tree(t.term, prefix + "  ")}`;
+    case "err":
+      return `${prefix}ParseError(${t.msg})`;
   }
 }
 

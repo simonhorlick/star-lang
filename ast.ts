@@ -210,6 +210,19 @@ export const Ann = (term: Term, type: Type): Ann => ({
   typ: type,
 });
 
+// Runtime relevance.
+export type Rel = {
+  _: "rel";
+  term: Term;
+  uses: number;
+};
+
+export const Rel = (term: Term, uses: number): Rel => ({
+  _: "rel",
+  term: term,
+  uses: uses,
+});
+
 export type Term =
   | Abs
   | App
@@ -228,6 +241,7 @@ export type Term =
   | Hole
   | IntLit
   | StringLit
+  | Rel
   | ParseError;
 export type Type = Term;
 

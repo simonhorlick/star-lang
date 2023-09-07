@@ -39,6 +39,8 @@ export const whnf = (
       return whnf(unfold, ctx, defs, t.term, selfTerm);
     case "par":
       throw "whnf: unexpected Par";
+    case "rel":
+      throw "whnf: unexpected Rel";
     case "self":
       // eliminate self
       if (selfTerm == undefined) {

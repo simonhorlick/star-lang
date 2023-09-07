@@ -3,6 +3,14 @@ import { identifier } from "./check";
 import * as Erased from "./erased";
 import { prettyC } from "./pretty";
 
+let fs = require("fs");
+
+function getChar(): string {
+  let buffer = Buffer.alloc(1);
+  fs.readSync(0, buffer, 0, 1);
+  return buffer.toString("utf8");
+}
+
 export function erase(term: Term): Erased.Term {
   // TODO: remove unused arguments
   switch (term._) {
@@ -17,7 +25,7 @@ export function erase(term: Term): Erased.Term {
     case "ref":
       return Erased.Ref(term.name);
     case "pi":
-      throw "erase: unexpected pi";
+      return Erased.Abs("pi", Erased.Var("pi", 0));
     case "star":
       throw "erase: unexpected star";
     case "case":
@@ -31,6 +39,8 @@ export function erase(term: Term): Erased.Term {
       return Erased.Abs("erased", Erased.Var("erased", 0));
     case "orig":
       return erase(term.child);
+    case "rel":
+      return erase(term.term);
     case "par":
       throw "erase: unexpected par";
     case "id":
@@ -157,7 +167,7 @@ export function toJsArray(s: Erased.Term): Array<Erased.Term> {
     const tail = terms[3];
     return [head].concat(toJsArray(tail));
   } else {
-    throw `unexpected ${prettyC(terms[0])}`;
+    throw `toJsArray: unexpected ${prettyC(terms[0])}`;
   }
 }
 
@@ -179,6 +189,17 @@ export const NormalForm = (t: Erased.Term): NormalForm => ({
   _: "nf",
   term: t,
 });
+
+function runtime(args: Erased.StringLit[]): Step {
+  switch (args[0].str) {
+    case "println":
+      console.log(args[1].str);
+      // evaluate this expression to the argument string.
+      return NormalForm(args[1]);
+    default:
+      throw `unknown runtime function: ${args[0].str}`;
+  }
+}
 
 // When applied to a term that is not yet a value, it yields
 // the next step of evaluation for that term. When applied to a value an exception is thrown.
@@ -273,15 +294,6 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
       return Redex(Erased.App(M, Nprime.term));
     }
 
-    // look up a def.
-    if (M._ == "ref") {
-      const match = defs.find((d) => d.name == M.name);
-      if (match == undefined) {
-        throw `reference not found: ${M.name}`;
-      }
-      return Redex(Erased.App(match.term, N));
-    }
-
     const Mprime = reduceOnce3(defs, M);
     if (prettyC(M) != prettyC(Mprime.term)) {
       return Redex(Erased.App(Mprime.term, N));
@@ -290,10 +302,81 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
     if (M._ == "lam") {
       return Redex(termSubstTop2(N, M.body));
     }
+
+    // look up a def.
+    if (M._ == "ref") {
+      // special handling for runtime functions.
+      if (M.name == "println") {
+        // FIXME: This is not going to work if the string isn't
+        // a literal.
+        // FIXME: right now terms can contain a bound variable that hasn't yet
+        // been substituted. We need to ensure that the right of the app is
+        // fully normalised.
+        console.log((N as Erased.StringLit).str);
+        // evaluate this expression to the argument string.
+        return NormalForm(N);
+      }
+
+      const match = defs.find((d) => d.name == M.name);
+      if (match == undefined) {
+        throw `reference not found: ${M.name}`;
+      }
+      return Redex(Erased.App(match.term, N));
+    }
   }
 
   // this happens if the body of a def is a ref.
   if (term._ == "ref") {
+    if (term.name == "getchar") {
+      // returns IO(String)
+      // which is
+      // io(u (Unit -> Pair(String)(Unit)))
+      //
+      // io(λn pair(Erased.StringLit("result"))(n)))
+      //
+      // pair = λA λB λa λb λP λpair pair(a)(b)
+      return Redex(
+        Erased.App(
+          Erased.App(Erased.Ref("io"), Erased.Ref("String")),
+          Erased.Abs(
+            "n",
+            Erased.App(
+              Erased.App(
+                Erased.App(
+                  Erased.App(Erased.Ref("pair"), Erased.Ref("String")),
+                  Erased.Ref("Unit")
+                ),
+                Erased.StringLit("result")
+              ),
+              Erased.Var("n", 0)
+            )
+          )
+        )
+      );
+    }
+    if (term.name == "getchar2") {
+      // returns Unit -> Pair(String)(Unit)
+      //
+      // λn pair(String)(Unit)(Erased.StringLit("result"))(n)
+      //
+      // pair = λA λB λa λb λP λpair pair(a)(b)
+      return Redex(
+        Erased.Abs(
+          "n",
+          Erased.App(
+            Erased.App(
+              Erased.App(
+                Erased.App(Erased.Ref("pair"), Erased.Ref("String")),
+                Erased.Ref("Unit")
+              ),
+              Erased.StringLit(getChar())
+            ),
+            Erased.Var("n", 0)
+          )
+        )
+      );
+    }
+
     const match = defs.find((d) => d.name == term.name);
     if (match == undefined) {
       throw `reference not found: ${term.name}`;

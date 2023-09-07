@@ -328,7 +328,9 @@ export const desugarTerm = (
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
     case "err":
-      throw "unexpected parse error";
+      throw "desugarTerm: unexpected parse error";
+    case "rel":
+      throw "desugarTerm: unexpected Rel";
   }
 };
 
@@ -434,7 +436,9 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "str":
       return t;
     case "err":
-      throw "unexpected parse error";
+      throw "processPars: unexpected parse error";
+    case "rel":
+      throw "processPars: unexpected Rel";
   }
 };
 

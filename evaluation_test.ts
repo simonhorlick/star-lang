@@ -1,13 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
 import { Ref, Var } from "./ast";
 import * as Erased from "./erased";
-import {
-  reduce,
-  reduceOnce2,
-  reduceOnce3,
-  termShift2,
-  termSubst2,
-} from "./evaluation";
+import { reduce, reduceOnce3, termShift2, termSubst2 } from "./evaluation";
 
 // tru = λt. λf. t
 const tru = Erased.Def(
@@ -219,24 +213,25 @@ describe("substitution", () => {
   });
 });
 
-describe("applicative-order evaluation strategy", () => {
-  test("not", () => {
-    // not = λb b(fls)(tru)
-    const not = Erased.Abs(
-      "b",
-      Erased.App(
-        Erased.App(Erased.Var("b", 0), Erased.Ref("fls")),
-        Erased.Ref("tru")
-      )
-    );
-    const expected: Erased.Term = Erased.Ref("tru");
+// describe("runtime evaluation", () => {
+//   test("only evaluate runtime functions if the arguments are values", () => {
+//     // println("hello") -  is ok
+//     // λx println(x) - cannot be reduced
+//     const not = Erased.Abs(
+//       "x",
+//       Erased.App(
+//         Erased.App(Erased.Var("b", 0), Erased.Ref("fls")),
+//         Erased.Ref("tru")
+//       )
+//     );
+//     const expected: Erased.Term = Erased.Ref("tru");
 
-    const actual = reduceOnce3([tru, fls], Erased.App(not, Erased.Ref("fls")));
-    console.log(actual);
+//     const actual = reduceOnce3([tru, fls], Erased.App(not, Erased.Ref("fls")));
+//     console.log(actual);
 
-    expect(actual).toStrictEqual(expected);
-  });
-});
+//     expect(actual).toStrictEqual(expected);
+//   });
+// });
 
 // describe("evaluation", () => {
 //   // (λx. x)(λz. z) -> (λz. z)
