@@ -129,7 +129,7 @@ export const pos = (n: number, s: Stream): Stream => ({
 
 // item reads a single character from the stream and advances the stream by one
 // character.
-export function item(cs: Stream): Result<string> {
+export const item: Parser<string> = (cs: Stream) => {
   return cs.idx < cs.src.length
     ? {
         _: "outputvalue",
@@ -142,7 +142,7 @@ export function item(cs: Stream): Result<string> {
         error: "EOF",
         // idx: cs.idx,
       };
-}
+};
 
 // reads a single character then checks whether it satisfies the given
 // predicate.
@@ -363,6 +363,9 @@ export function oneOf(str: string): Parser<string> {
 export function map<S, T>(parser: Parser<T>, f: (t: T) => S) {
   return bind(parser, (x) => pure(f(x)));
 }
+
+// skip the input while p is true.
+export const skip = <T>(p: Parser<T>): Parser<T[]> => many(p);
 
 // line matches until either a newline character is encountered, or EOF.
 export const line: Parser<string> = bind(

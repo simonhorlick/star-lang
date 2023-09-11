@@ -19,6 +19,7 @@ import {
   Pi,
   Ref,
   reference,
+  stringLiteral,
   term,
   type,
 } from "./ast";
@@ -286,9 +287,10 @@ else
       'Pi("", App(Ref(x), App(Ref(y), Ref(z))), Ref(x))'
     ));
 
+  // TODO: Implement.
   test("should parse named pi types", () =>
     expect(serialise(strip(result(term(ts("(A *)->A")))))).toBe(
-      'Pi("A", Var(A))'
+      'Pi("A", *, Var(A))'
     ));
 
   test("should parse definition containing list literal", () => {
@@ -365,6 +367,22 @@ else
     const ast = strip(result(term(ts("let g = f(x) in h(g)(g)"))));
     expect(serialise(ast)).toBe(
       "Let(Identifier(g), App(Ref(f), Ref(x)), App(App(Ref(h), Ref(g)), Ref(g)))"
+    );
+  });
+
+  test("should allow ParseError on the rhs of App", () => {
+    const src = `f("hello )`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe(
+      `App(Ref(f), ParseError(failed to parse string literal))`
+    );
+  });
+
+  test("should parse app with string literal", () => {
+    const src = `elimIO(println("hello))`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe(
+      `App(Ref(elimIO), App(Ref(println), ParseError(failed to parse string literal)))`
     );
   });
 });

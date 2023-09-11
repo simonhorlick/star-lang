@@ -16,6 +16,7 @@ import {
   indexToLineCol,
   num,
   parseErrorDiagnostic,
+  skip,
 } from "./parser";
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
@@ -83,6 +84,11 @@ describe("parser", () => {
 
   test("should parse many as", () =>
     expect(result(parseManyA(ts("aaabbb")))).toStrictEqual(["a", "a", "a"]));
+
+  test("should skip letter a", () =>
+    expect(
+      result(bind(skip(char("a")), (_) => char("b"))(ts("aaaaab")))
+    ).toStrictEqual("b"));
 
   test("should parse many without input successfully as an empty list", () =>
     expect(result(many(char("a"))(ts("")))).toStrictEqual([]));
