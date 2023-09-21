@@ -201,6 +201,41 @@ function runtime(args: Erased.StringLit[]): Step {
   }
 }
 
+const HasFreeVariables = (t: Erased.Term, n: number = 0): boolean => {
+  switch (t._) {
+    case "app":
+      return HasFreeVariables(t.left, n) || HasFreeVariables(t.right, n);
+    case "lam":
+      return HasFreeVariables(t.body, n + 1);
+    case "ref":
+      return false;
+    case "str":
+      return false;
+    case "var":
+      return t.index >= n;
+  }
+};
+
+interface Runtime {
+  getChar: () => string;
+  println: (s: string) => void;
+}
+
+export const nodeJsRuntime: Runtime = {
+  getChar: getChar,
+  println: (s: string) => console.log(s),
+};
+
+export const mockRuntime: Runtime = {
+  getChar: () => "c",
+  println: (s: string) => {},
+};
+
+//
+//
+// Definition : A lambda expression is in normal form if it contains no β-redexes, so that it cannot be further reduced using the β-rule. An expression in normal form has no more function applications to evaluate.
+//
+
 // When applied to a term that is not yet a value, it yields
 // the next step of evaluation for that term. When applied to a value an exception is thrown.
 // Reduce the term using a applicative-order evaluation strategy whereby a
@@ -211,7 +246,6 @@ function runtime(args: Erased.StringLit[]): Step {
 // reduce the arguments first, then do beta reduction.
 //
 // Reduction rules:
-//
 //
 // ------------------  beta (apply a function)
 // (λx M)N → M[x ↦ N]
@@ -228,46 +262,28 @@ function runtime(args: Erased.StringLit[]): Step {
 // ------------ xi (optimise code, e.g., by inlining)
 // λx M → λx M'
 //
-//
-//
-//
-export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
-  // A term has one of three forms (x, λx M, and M(N)), and given each form, you look for a rule that has the form in the conclusion.
+export function reduceOnce3(
+  rt: Runtime,
+  defs: Erased.Def[],
+  term: Erased.Term
+): Step {
+  // A term has one of three forms (x, λx M, and M(N)), and given each form, you
+  // look for a rule that has the form in the conclusion.
 
   // The x form is not reduced by any rule, so the reducer always returns NormalForm.
   if (term._ == "var" || term._ == "str") {
     return NormalForm(term);
   }
 
-  // The λx M form is reduced by exactly one of the rules above (Xi), and there’s a reduction judgment above the line, so the reducer always makes a recursive call to try to reduce M.
-  if (term._ == "lam") {
-    // M → M'
-    // ------------ xi (optimise code, e.g., by inlining)
-    // λx M → λx M'
-
-    const MprimeXi = reduceOnce3(defs, term.body);
-    if (prettyC(term.body) != prettyC(MprimeXi.term)) {
-      if (MprimeXi._ == "nf") {
-        return NormalForm(Erased.Abs(term.name, MprimeXi.term));
-      } else {
-        // console.log(prettyC(Erased.Abs(term.name, MprimeXi.term)));
-        return Redex(Erased.Abs(term.name, MprimeXi.term));
-      }
-    }
-
-    // If it's an abstraction and we can't reduce the body, then it's in
-    // normal form.
-    return NormalForm(Erased.Abs(term.name, term.body));
-  }
-
   if (term._ == "app") {
-    // The M(N) form (application) might be reduced by Beta, Mu, or Nu. The choices for reducing M(N) are:
+    // The M(N) form (application) might be reduced by Beta, Mu, or Nu. The
+    // choices for reducing M(N) are:
     //  Nu    Try to reduce M
     //  Mu    Try to reduce N
     //  Beta  (only applies if M is a λ-form)
 
     // Three rules can be ordered in six ways, but in practice, only three orders are used.
-    // If we try first Beta, then Nu, and finally Mu, we are implementing the normal-order reduction strategy. It is also called the “leftmost, outer- most” reduction strategy.
+    // If we try first Beta, then Nu, and finally Mu, we are implementing the normal-order reduction strategy. It is also called the “leftmost, outer-most” reduction strategy.
     // If we try Mu before Beta, we have an applicative-order reduction strategy. There are two typical variants: Mu, Nu, Beta is a left-to-right applicative-order reduction strategy, and Nu, Mu, Beta is a right-to-left applicative-order reduction strategy.
 
     const M = term.left;
@@ -284,8 +300,9 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
     // ------------------  beta (apply a function)
     // (λx M)N → M[x ↦ N]
 
-    const Nprime = reduceOnce3(defs, N);
-    // TODO: How do we know whether this rule applies? Surely it needs to be known as part of the term.
+    const Nprime = reduceOnce3(rt, defs, N);
+    // TODO: How do we know whether this rule applies? Surely it needs to be
+    // known as part of the term.
     if (prettyC(N) != prettyC(Nprime.term)) {
       //     console.log(`${prettyC(N)} → ${prettyC(Nprime.term)}
       // ------------ mu (evaluate an actual parameter)
@@ -294,7 +311,7 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
       return Redex(Erased.App(M, Nprime.term));
     }
 
-    const Mprime = reduceOnce3(defs, M);
+    const Mprime = reduceOnce3(rt, defs, M);
     if (prettyC(M) != prettyC(Mprime.term)) {
       return Redex(Erased.App(Mprime.term, N));
     }
@@ -303,18 +320,49 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
       return Redex(termSubstTop2(N, M.body));
     }
 
+    // we have to check the tree and match on
+    //     ap
+    //    /  \
+    //   ap   Unit
+    //  /  \
+    // pl  String
+    if (M._ == "app" && M.left._ == "ref" && M.left.name == "println") {
+      // Ensure everything is fully normalised first
+      if (!HasFreeVariables(term)) {
+        // beta-reduce the App, returning Unit -> Pair(String)(Unit)
+        //
+        // λs λn pair(String)(Unit)(Erased.StringLit("result"))(n)
+        //
+        // pair = λA λB λa λb λP λpair pair(a)(b)
+        const argument = M.right;
+        if (argument._ != "str") {
+          throw "runtime error: expected string literal in argument to println";
+        }
+        rt.println(argument.str);
+
+        const result = Erased.Abs(
+          "n",
+          Erased.App(
+            Erased.App(
+              Erased.App(
+                Erased.App(Erased.Ref("pair"), Erased.Ref("String")),
+                Erased.Ref("Unit")
+              ),
+              Erased.StringLit("printed") // no result
+            ),
+            Erased.Var("n", 0)
+          )
+        );
+        const resultTree = Erased.App(result, N);
+
+        return Redex(resultTree);
+      }
+    }
+
     // look up a def.
     if (M._ == "ref") {
-      // special handling for runtime functions.
       if (M.name == "println") {
-        // FIXME: This is not going to work if the string isn't
-        // a literal.
-        // FIXME: right now terms can contain a bound variable that hasn't yet
-        // been substituted. We need to ensure that the right of the app is
-        // fully normalised.
-        console.log((N as Erased.StringLit).str);
-        // evaluate this expression to the argument string.
-        return NormalForm(N);
+        return Redex(term);
       }
 
       const match = defs.find((d) => d.name == M.name);
@@ -325,36 +373,9 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
     }
   }
 
-  // this happens if the body of a def is a ref.
+  // runtime functions that take no arguments
   if (term._ == "ref") {
     if (term.name == "getchar") {
-      // returns IO(String)
-      // which is
-      // io(u (Unit -> Pair(String)(Unit)))
-      //
-      // io(λn pair(Erased.StringLit("result"))(n)))
-      //
-      // pair = λA λB λa λb λP λpair pair(a)(b)
-      return Redex(
-        Erased.App(
-          Erased.App(Erased.Ref("io"), Erased.Ref("String")),
-          Erased.Abs(
-            "n",
-            Erased.App(
-              Erased.App(
-                Erased.App(
-                  Erased.App(Erased.Ref("pair"), Erased.Ref("String")),
-                  Erased.Ref("Unit")
-                ),
-                Erased.StringLit("result")
-              ),
-              Erased.Var("n", 0)
-            )
-          )
-        )
-      );
-    }
-    if (term.name == "getchar2") {
       // returns Unit -> Pair(String)(Unit)
       //
       // λn pair(String)(Unit)(Erased.StringLit("result"))(n)
@@ -369,7 +390,7 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
                 Erased.App(Erased.Ref("pair"), Erased.Ref("String")),
                 Erased.Ref("Unit")
               ),
-              Erased.StringLit(getChar())
+              Erased.StringLit(rt.getChar())
             ),
             Erased.Var("n", 0)
           )
@@ -388,12 +409,16 @@ export function reduceOnce3(defs: Erased.Def[], term: Erased.Term): Step {
   return NormalForm(term);
 }
 
-export function reduce(defs: Erased.Def[], t: Erased.Term): Erased.Term {
+export function reduce(
+  rt: Runtime,
+  defs: Erased.Def[],
+  t: Erased.Term
+): Erased.Term {
   let normalForm = false;
   let prev: Erased.Term = t;
   while (!normalForm) {
     console.log(prettyC(t, false));
-    const result = reduceOnce3(defs, t);
+    const result = reduceOnce3(rt, defs, t);
     normalForm = result._ == "nf";
 
     // debug check
