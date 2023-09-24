@@ -289,17 +289,28 @@ export function reduceOnce3(
     const M = term.left;
     const N = term.right;
 
-    // N → N'
-    // ------------ mu (evaluate an actual parameter)
-    // M(N) → M(N')
+    //
+    // ------------------  beta (apply a function)
+    // (λx M)N → M[x ↦ N]
     //
     // M → M'
     // ------------ nu (evaluate to get a closure that can be applied)
     // M(N) → M'(N)
-    //
-    // ------------------  beta (apply a function)
-    // (λx M)N → M[x ↦ N]
+    // N → N'
+    // ------------ mu (evaluate an actual parameter)
+    // M(N) → M(N')
 
+    // beta
+    if (M._ == "lam") {
+      return Redex(termSubstTop2(N, M.body));
+    }
+    // nu
+    const Mprime = reduceOnce3(rt, defs, M);
+    if (prettyC(M) != prettyC(Mprime.term)) {
+      return Redex(Erased.App(Mprime.term, N));
+    }
+
+    // mu
     const Nprime = reduceOnce3(rt, defs, N);
     // TODO: How do we know whether this rule applies? Surely it needs to be
     // known as part of the term.
@@ -309,15 +320,6 @@ export function reduceOnce3(
       // ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}
       //   `);
       return Redex(Erased.App(M, Nprime.term));
-    }
-
-    const Mprime = reduceOnce3(rt, defs, M);
-    if (prettyC(M) != prettyC(Mprime.term)) {
-      return Redex(Erased.App(Mprime.term, N));
-    }
-
-    if (M._ == "lam") {
-      return Redex(termSubstTop2(N, M.body));
     }
 
     // we have to check the tree and match on

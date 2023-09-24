@@ -336,6 +336,13 @@ describe("runtime evaluation", () => {
     expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
   });
 
+  test("reduction order is Beta, then Nu, and finally Mu", () => {
+    const t = pt("(λn λs λz s(n))(λs λz z)");
+    let result = reduceOnce3(mockRuntime, [], t);
+    expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
+    throw "TODO";
+  });
+
   test("println", () => {
     // TODO: undefined reference?
     const t = pt(`println("hello")(λs λz z)`);
