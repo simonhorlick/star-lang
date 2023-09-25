@@ -307,7 +307,7 @@ describe("untyped lambda calculus parser", () => {
 });
 
 describe("runtime evaluation", () => {
-  test("beta reduction of pair is in applicative order", () => {
+  test(`should correctly evaluate fst(pair("p")("q"))`, () => {
     const pair = Erased.Def("pair", pt("λa λb λf f(a)(b)"));
     const fst = Erased.Def("fst", pt("λg g(λa λb a)"));
     const snd = Erased.Def("snd", pt("λg g(λa λb b)"));
