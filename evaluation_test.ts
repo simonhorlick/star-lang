@@ -354,6 +354,15 @@ describe("runtime evaluation", () => {
     expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
   });
 
+  test("should throw an undefined reference error", () => {
+    try {
+      let result = reduceOnce3(mockRuntime, [], pt("f(λx x)"));
+      throw "exception expected";
+    } catch (e) {
+      expect(e).toBe(`reference not found: f`);
+    }
+  });
+
   test("should not reduce var", () => {
     let result = reduceOnce3(mockRuntime, [], pt("λn n"));
     expect(prettyC(result.term)).toBe(ppt("λn n"));
