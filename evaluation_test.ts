@@ -354,18 +354,30 @@ describe("runtime evaluation", () => {
     expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
   });
 
+  test("should not reduce var", () => {
+    let result = reduceOnce3(mockRuntime, [], pt("λn n"));
+    expect(prettyC(result.term)).toBe(ppt("λn n"));
+  });
+
+  test("should not reduce string", () => {
+    let result = reduceOnce3(mockRuntime, [], pt(`"s"`));
+    expect(prettyC(result.term)).toBe(ppt(`"s"`));
+  });
+
   test("println", () => {
-    // TODO: undefined reference?
     const t = pt(`println("hello")(λs λz z)`);
     let result = reduceOnce3(mockRuntime, [], t);
-    expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
+    expect(prettyC(result.term)).toBe(
+      ppt(`(λn pair(String)(Unit)("printed")(n))(λs λz z)`)
+    );
   });
 
   test("getchar", () => {
-    // TODO: inject runtime functions
     const t = pt(`getchar(λs λz z)`);
     let result = reduceOnce3(mockRuntime, [], t);
-    expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
+    expect(prettyC(result.term)).toBe(
+      ppt(`(λn pair(String)(Unit)("c")(n))(λs λz z)`)
+    );
   });
 
   test("beta reduction of recursive function", () => {

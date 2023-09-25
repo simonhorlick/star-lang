@@ -398,6 +398,8 @@ export function reduceOnce3(
           )
         )
       );
+    } else if (term.name == "println") {
+      return Redex(term);
     }
 
     const match = defs.find((d) => d.name == term.name);
