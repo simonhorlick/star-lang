@@ -334,37 +334,6 @@ export const desugarTerm = (
   }
 };
 
-// stringLiteralToTerm expands the given string literal into calls to scons
-// of the utf-8 bytes in the string literal.
-export const stringLiteralToTerm = (str: string) =>
-  stringToUtf8ByteArray(str).reduceRight<Term>(
-    (acc, curr) => App(App(Ref("scons"), byteFromNumber(curr)), acc),
-    Ref("snil")
-  );
-
-const byteFromNumber = (num: number): Term => {
-  // 0 0 0 0 0 0 0 1 = 0x01
-  // 0 0 0 0 0 0 1 0 = 0x02
-  // 0 0 0 0 0 1 0 0 = 0x04
-  // 0 0 0 0 1 0 0 0 = 0x08
-  // 0 0 0 1 0 0 0 0 = 0x10
-  // 0 0 1 0 0 0 0 0 = 0x20
-  // 0 1 0 0 0 0 0 0 = 0x40
-  // 1 0 0 0 0 0 0 0 = 0x80
-  const b7 = (num & 0x01) == 0 ? Ref("z") : Ref("o");
-  const b6 = (num & 0x02) == 0 ? Ref("z") : Ref("o");
-  const b5 = (num & 0x04) == 0 ? Ref("z") : Ref("o");
-  const b4 = (num & 0x08) == 0 ? Ref("z") : Ref("o");
-  const b3 = (num & 0x10) == 0 ? Ref("z") : Ref("o");
-  const b2 = (num & 0x20) == 0 ? Ref("z") : Ref("o");
-  const b1 = (num & 0x40) == 0 ? Ref("z") : Ref("o");
-  const b0 = (num & 0x80) == 0 ? Ref("z") : Ref("o");
-  return App(
-    App(App(App(App(App(App(App(Ref("byte"), b0), b1), b2), b3), b4), b5), b6),
-    b7
-  );
-};
-
 export const desugar = (def: Def, adts: Map<string, ADT>): Def => {
   return Def(
     def.name,

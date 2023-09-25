@@ -354,6 +354,23 @@ describe("runtime evaluation", () => {
     expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
   });
 
+  test("reduction order: apply mu if no other rule applies", () => {
+    const tru = Erased.Def("true", pt("λf λt t"));
+    const fls = Erased.Def("false", pt("λf λt f"));
+    const zero = Erased.Def("zero", pt("λs λz z"));
+    const succ = Erased.Def("succ", pt("λn λs λz s(n)"));
+    const iszero = Erased.Def("iszero", pt("λn n(true)(λn.x false)"));
+    const defs = [tru, fls, zero, succ, iszero];
+
+    // iszero(succ(zero))
+    const t = pt("(λn n)()");
+
+    // the next evaluation step is beta reduction of n, not a reduction of the
+    // argument `succ(zero)`.
+    let result = reduceOnce3(mockRuntime, defs, t);
+    expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
+  });
+
   test("should throw an undefined reference error", () => {
     try {
       let result = reduceOnce3(mockRuntime, [], pt("f(λx x)"));
@@ -368,9 +385,22 @@ describe("runtime evaluation", () => {
     expect(prettyC(result.term)).toBe(ppt("λn n"));
   });
 
-  test("should not reduce string", () => {
+  test("should not reduce string literal", () => {
     let result = reduceOnce3(mockRuntime, [], pt(`"s"`));
     expect(prettyC(result.term)).toBe(ppt(`"s"`));
+  });
+
+  test("should reduce string if it's being eliminated", () => {
+    const tru = Erased.Def("true", pt("λf λt t"));
+    const fls = Erased.Def("false", pt("λf λt f"));
+    let result = reduceOnce3(
+      mockRuntime,
+      [tru, fls],
+      pt(`"s"(λf λt t)(λf λt f)`)
+    );
+    expect(prettyC(result.term)).toBe(
+      ppt(`scons(byte(o)(i)(i)(i)(o)(o)(i)(i))(snil)(λf λt t)(λf λt f)`)
+    );
   });
 
   test("println", () => {

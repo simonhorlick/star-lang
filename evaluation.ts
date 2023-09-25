@@ -2,6 +2,7 @@ import { Term } from "./ast";
 import { identifier } from "./check";
 import * as Erased from "./erased";
 import { prettyC } from "./pretty";
+import { stringToUtf8ByteArray } from "./strings";
 
 let fs = require("fs");
 
@@ -231,6 +232,50 @@ export const mockRuntime: Runtime = {
   println: (s: string) => {},
 };
 
+// stringLiteralToTerm expands the given string literal into calls to scons
+// of the utf-8 bytes in the string literal.
+export const stringLiteralToTerm = (str: string) =>
+  stringToUtf8ByteArray(str).reduceRight<Erased.Term>(
+    (acc, curr) =>
+      Erased.App(Erased.App(Erased.Ref("scons"), byteFromNumber(curr)), acc),
+    Erased.Ref("snil")
+  );
+
+const byteFromNumber = (num: number): Erased.Term => {
+  // 0 0 0 0 0 0 0 1 = 0x01
+  // 0 0 0 0 0 0 1 0 = 0x02
+  // 0 0 0 0 0 1 0 0 = 0x04
+  // 0 0 0 0 1 0 0 0 = 0x08
+  // 0 0 0 1 0 0 0 0 = 0x10
+  // 0 0 1 0 0 0 0 0 = 0x20
+  // 0 1 0 0 0 0 0 0 = 0x40
+  // 1 0 0 0 0 0 0 0 = 0x80
+  const b7 = (num & 0x01) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  const b6 = (num & 0x02) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  const b5 = (num & 0x04) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  const b4 = (num & 0x08) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  const b3 = (num & 0x10) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  const b2 = (num & 0x20) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  const b1 = (num & 0x40) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  const b0 = (num & 0x80) == 0 ? Erased.Ref("o") : Erased.Ref("i");
+  return Erased.App(
+    Erased.App(
+      Erased.App(
+        Erased.App(
+          Erased.App(
+            Erased.App(Erased.App(Erased.App(Erased.Ref("byte"), b0), b1), b2),
+            b3
+          ),
+          b4
+        ),
+        b5
+      ),
+      b6
+    ),
+    b7
+  );
+};
+
 //
 //
 // Definition : A lambda expression is in normal form if it contains no β-redexes, so that it cannot be further reduced using the β-rule. An expression in normal form has no more function applications to evaluate.
@@ -296,6 +341,7 @@ export function reduceOnce3(
     // M → M'
     // ------------ nu (evaluate to get a closure that can be applied)
     // M(N) → M'(N)
+    //
     // N → N'
     // ------------ mu (evaluate an actual parameter)
     // M(N) → M(N')
@@ -304,6 +350,7 @@ export function reduceOnce3(
     if (M._ == "lam") {
       return Redex(termSubstTop2(N, M.body));
     }
+
     // nu
     const Mprime = reduceOnce3(rt, defs, M);
     if (prettyC(M) != prettyC(Mprime.term)) {
@@ -315,11 +362,16 @@ export function reduceOnce3(
     // TODO: How do we know whether this rule applies? Surely it needs to be
     // known as part of the term.
     if (prettyC(N) != prettyC(Nprime.term)) {
-      //     console.log(`${prettyC(N)} → ${prettyC(Nprime.term)}
-      // ------------ mu (evaluate an actual parameter)
-      // ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}
-      //   `);
+      console.log(`${prettyC(N)} → ${prettyC(Nprime.term)}
+------------ mu (evaluate an actual parameter)
+${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}
+        `);
       return Redex(Erased.App(M, Nprime.term));
+    }
+
+    // Expand string literals that require elimination.
+    if (M._ == "str") {
+      return NormalForm(Erased.App(stringLiteralToTerm(M.str), N));
     }
 
     // we have to check the tree and match on
