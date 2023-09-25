@@ -269,6 +269,7 @@ export const desugar = (t: Erased.Term, ctx: Context = []): Erased.Term => {
 
 // parse a term of untyped lambda calculus.
 const pt = (src: string): Erased.Term => desugar(result(term(ts(src))));
+const ppt = (src: string): String => prettyC(desugar(result(term(ts(src)))));
 
 const expectEquivalent = (a: Erased.Term, b: Erased.Term) =>
   expect(prettyC(a, true)).toBe(prettyC(b, true));
@@ -336,11 +337,21 @@ describe("runtime evaluation", () => {
     expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
   });
 
-  test("reduction order is Beta, then Nu, and finally Mu", () => {
-    const t = pt("(λn λs λz s(n))(λs λz z)");
-    let result = reduceOnce3(mockRuntime, [], t);
-    expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
-    throw "TODO";
+  test("reduction order: reduce beta before mu", () => {
+    const tru = Erased.Def("true", pt("λf λt t"));
+    const fls = Erased.Def("false", pt("λf λt f"));
+    const zero = Erased.Def("zero", pt("λs λz z"));
+    const succ = Erased.Def("succ", pt("λn λs λz s(n)"));
+    const iszero = Erased.Def("iszero", pt("λn n(true)(λn.x false)"));
+    const defs = [tru, fls, zero, succ, iszero];
+
+    // iszero(succ(zero))
+    const t = pt("(λn n(true)(λn.x false))(succ(zero))");
+
+    // the next evaluation step is beta reduction of n, not a reduction of the
+    // argument `succ(zero)`.
+    let result = reduceOnce3(mockRuntime, defs, t);
+    expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
   });
 
   test("println", () => {
