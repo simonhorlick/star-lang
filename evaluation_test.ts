@@ -2,6 +2,7 @@ import { describe, expect, test } from "@jest/globals";
 import { Ref, Var, identifier, identifier2, utf8 } from "./ast";
 import * as Erased from "./erased";
 import {
+  foldTree,
   mockRuntime,
   reduce,
   reduceOnce3,
@@ -337,7 +338,7 @@ describe("runtime evaluation", () => {
     expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
   });
 
-  test("reduction order: reduce beta before mu", () => {
+  test("should do beta reduction (substitution) before evaluating parameters", () => {
     const tru = Erased.Def("true", pt("λf λt t"));
     const fls = Erased.Def("false", pt("λf λt f"));
     const zero = Erased.Def("zero", pt("λs λz z"));
@@ -354,21 +355,8 @@ describe("runtime evaluation", () => {
     expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
   });
 
-  test("reduction order: apply mu if no other rule applies", () => {
-    const tru = Erased.Def("true", pt("λf λt t"));
-    const fls = Erased.Def("false", pt("λf λt f"));
-    const zero = Erased.Def("zero", pt("λs λz z"));
-    const succ = Erased.Def("succ", pt("λn λs λz s(n)"));
-    const iszero = Erased.Def("iszero", pt("λn n(true)(λn.x false)"));
-    const defs = [tru, fls, zero, succ, iszero];
-
-    // iszero(succ(zero))
-    const t = pt("(λn n)()");
-
-    // the next evaluation step is beta reduction of n, not a reduction of the
-    // argument `succ(zero)`.
-    let result = reduceOnce3(mockRuntime, defs, t);
-    expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
+  test("should evaluate parameter if there's no beta reduction to do", () => {
+    throw "not implemented";
   });
 
   test("should throw an undefined reference error", () => {
@@ -417,6 +405,34 @@ describe("runtime evaluation", () => {
     expect(prettyC(result.term)).toBe(
       ppt(`(λn pair(String)(Unit)("c")(n))(λs λz z)`)
     );
+  });
+
+  test("foldtree", () => {
+    //     λx
+    //     |
+    //     λy
+    //     |
+    //     ap
+    //    /  \
+    //   ap   x
+    //  /  \
+    // y   "s"
+    const s = Erased.StringLit("s");
+    const y = Erased.Var("y", 0);
+    const x = Erased.Var("x", 1);
+    const apys = Erased.App(y, s);
+    const apapx = Erased.App(apys, x);
+    const ly = Erased.Abs("y", apapx);
+    const lx = Erased.Abs("x", ly);
+
+    const test = foldTree<Erased.Term[]>((acc, curr) => [...acc, curr], [], lx);
+    expect(test[0]).toBe(lx);
+    expect(test[1]).toBe(ly);
+    expect(test[2]).toBe(y);
+    expect(test[3]).toBe(apys);
+    expect(test[4]).toBe(s);
+    expect(test[5]).toBe(apapx);
+    expect(test[6]).toBe(x);
   });
 
   test("beta reduction of recursive function", () => {

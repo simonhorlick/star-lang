@@ -126,51 +126,26 @@ export function termSubstTop2(s: Erased.Term, t: Erased.Term): Erased.Term {
   return termShift2(-1, termSubst2(0, termShift2(1, s), t));
 }
 
-// Traverse App terms and collect the arguments in-order.
-//       ap
-//      /  \
-//     ap   d
-//    /  \
-//   ap   c
-//  /  \
-// a    b
-export const traverseInOrder = (
-  root: Erased.Term,
-  rightDepthLimit: number
-): Array<Erased.Term> => {
-  const doTraverse = (
-    s: Erased.Term,
-    rightDepth: number
-  ): Array<Erased.Term> => {
-    if (rightDepth >= rightDepthLimit) {
-      return [s];
-    }
-    if (
-      s._ == "app"
-      //  || s._ == "vapp"
-    ) {
-      return doTraverse(s.left, 0).concat(doTraverse(s.right, rightDepth + 1));
-    } else {
-      return [s];
-    }
-  };
-
-  return doTraverse(root, 0);
-};
-
-export function toJsArray(s: Erased.Term): Array<Erased.Term> {
-  // either `nil(T)` or `((cons(T))(head))(tail)`
-  const terms = traverseInOrder(s, 1);
-  if (terms[0]._ == "ref" && terms[0].name == "nil") {
-    return [];
-  } else if (terms[0]._ == "ref" && terms[0].name == "cons") {
-    const head = terms[2];
-    const tail = terms[3];
-    return [head].concat(toJsArray(tail));
-  } else {
-    throw `toJsArray: unexpected ${prettyC(terms[0])}`;
+// in-order traversal of the term tree.
+export const foldTree = <A>(
+  f: (acc: A, curr: Erased.Term) => A,
+  init: A,
+  t: Erased.Term
+): A => {
+  switch (t._) {
+    case "app":
+      const left = foldTree(f, init, t.left);
+      const curr = f(left, t);
+      const rght = foldTree(f, curr, t.right);
+      return rght;
+    case "lam":
+      return foldTree(f, f(init, t), t.body);
+    case "ref":
+    case "str":
+    case "var":
+      return f(init, t);
   }
-}
+};
 
 interface Redex {
   _: "rx";
