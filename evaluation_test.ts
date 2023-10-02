@@ -2,6 +2,7 @@ import { describe, expect, test } from "@jest/globals";
 import { Ref, Var, identifier, identifier2, utf8 } from "./ast";
 import * as Erased from "./erased";
 import {
+  consStringToLiteral,
   foldTree,
   mockRuntime,
   reduce,
@@ -391,9 +392,23 @@ describe("runtime evaluation", () => {
     );
   });
 
-  test("println", () => {
+  test("println with string literal", () => {
     const t = pt(`println("hello")(λs λz z)`);
     let result = reduceOnce3(mockRuntime, [], t);
+    expect(prettyC(result.term)).toBe(
+      ppt(`(λn pair(String)(Unit)("printed")(n))(λs λz z)`)
+    );
+  });
+
+  test("println with cons string", () => {
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const t = pt(`println(λP λsnil λscons snil)(λs λz z)`);
+    let result = reduceOnce3(mockRuntime, [string, snil, scons], t);
     expect(prettyC(result.term)).toBe(
       ppt(`(λn pair(String)(Unit)("printed")(n))(λs λz z)`)
     );
@@ -472,6 +487,100 @@ describe("runtime evaluation", () => {
     }
 
     expect(result.term).toStrictEqual(pt("λs λz z"));
+  });
+
+  test("concatenate two empty strings", () => {
+    const cat = Erased.Def(
+      "cat",
+      pt(
+        `λas λbs as(λerased String)(bs)(λas.head λas.tail scons(as.head)(cat(as.tail)(bs)))`
+      )
+    );
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const defs = [cat, string, snil, scons];
+    const t = pt(`cat(snil)(snil)`);
+    let result = reduceOnce3(mockRuntime, defs, t);
+    console.log(prettyC(result.term));
+    for (let i = 1; i < 7; i++) {
+      result = reduceOnce3(mockRuntime, defs, result.term);
+      console.log(prettyC(result.term));
+    }
+    expect(prettyC(result.term)).toBe(ppt(`snil`));
+  });
+
+  test(`concatenate an empty string and a non-empty string`, () => {
+    const cat = Erased.Def(
+      "cat",
+      pt(
+        `λas λbs as(λerased String)(bs)(λas.head λas.tail scons(as.head)(cat(as.tail)(bs)))`
+      )
+    );
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const defs = [cat, string, snil, scons];
+    const t = pt(`cat(snil)("a")`);
+    let result = reduceOnce3(mockRuntime, defs, t);
+    console.log(prettyC(result.term));
+    for (let i = 1; i < 7; i++) {
+      result = reduceOnce3(mockRuntime, defs, result.term);
+      console.log(prettyC(result.term));
+    }
+    expect(prettyC(result.term)).toBe(ppt(`"a"`));
+  });
+
+  test("convert a nil string to string literal", () => {
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const byte = Erased.Def(
+      "byte",
+      pt(
+        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
+      )
+    );
+    const o = Erased.Def("o", pt(`λP λo λi o`));
+    const i = Erased.Def("i", pt(`λP λo λi i`));
+    const t = pt(`snil`);
+    let result = reduce(mockRuntime, [string, snil, scons, byte, o, i], t);
+    const literal = consStringToLiteral(result as Erased.Abs);
+    expect(literal).toBe("");
+  });
+
+  test("convert a cons string to string literal", () => {
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const byte = Erased.Def(
+      "byte",
+      pt(
+        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
+      )
+    );
+    const o = Erased.Def("o", pt(`λP λo λi o`));
+    const i = Erased.Def("i", pt(`λP λo λi i`));
+
+    // 01110011 = 115 = "s"
+    const t = pt(
+      `scons(byte(o)(i)(i)(i)(o)(o)(i)(i))(scons(byte(o)(i)(i)(i)(o)(i)(o)(o))(scons(byte(o)(i)(i)(i)(o)(o)(i)(o))(snil)))`
+    );
+    let result = reduce(mockRuntime, [string, snil, scons, byte, o, i], t);
+    const literal = consStringToLiteral(result as Erased.Abs);
+    expect(literal).toBe("str");
   });
 });
 

@@ -2,7 +2,7 @@ import { Term } from "./ast";
 import { identifier } from "./check";
 import * as Erased from "./erased";
 import { prettyC } from "./pretty";
-import { stringToUtf8ByteArray } from "./strings";
+import { stringToUtf8ByteArray, utf8ByteArrayToString } from "./strings";
 
 let fs = require("fs");
 
@@ -166,17 +166,6 @@ export const NormalForm = (t: Erased.Term): NormalForm => ({
   term: t,
 });
 
-function runtime(args: Erased.StringLit[]): Step {
-  switch (args[0].str) {
-    case "println":
-      console.log(args[1].str);
-      // evaluate this expression to the argument string.
-      return NormalForm(args[1]);
-    default:
-      throw `unknown runtime function: ${args[0].str}`;
-  }
-}
-
 const HasFreeVariables = (t: Erased.Term, n: number = 0): boolean => {
   switch (t._) {
     case "app":
@@ -215,6 +204,45 @@ export const stringLiteralToTerm = (str: string) =>
       Erased.App(Erased.App(Erased.Ref("scons"), byteFromNumber(curr)), acc),
     Erased.Ref("snil")
   );
+
+// converts a runtime Byte term to a javascript number.
+export const byteToNumber = (P: any): number => {
+  const body = P.body.body;
+
+  const folded = foldTree(
+    (acc: any, curr: any) => {
+      if (curr._ == "var") {
+        return [...acc, curr];
+      } else {
+        return acc;
+      }
+    },
+    [],
+    body
+  );
+
+  const b0 = 1 - folded[1].index;
+  const b1 = 1 - folded[2].index;
+  const b2 = 1 - folded[3].index;
+  const b3 = 1 - folded[4].index;
+  const b4 = 1 - folded[5].index;
+  const b5 = 1 - folded[6].index;
+  const b6 = 1 - folded[7].index;
+  const b7 = 1 - folded[8].index;
+
+  return (
+    b7 |
+    (b6 << 1) |
+    (b5 << 2) |
+    (b4 << 3) |
+    (b3 << 4) |
+    (b2 << 5) |
+    (b1 << 6) |
+    (b0 << 7)
+  );
+};
+
+const numberToStringLiteral = (n: number): string => utf8ByteArrayToString([n]);
 
 const byteFromNumber = (num: number): Erased.Term => {
   // 0 0 0 0 0 0 0 1 = 0x01
@@ -295,6 +323,29 @@ export function reduceOnce3(
     return NormalForm(term);
   }
 
+  // The λx M form is reduced by exactly one of the rules above (Xi), and there’s a reduction judgment above the line, so the reducer always makes a recursive call to try to reduce M.
+  if (term._ == "lam") {
+    const M = term.body;
+    // M → M'
+    // ------------ xi (optimise code, e.g., by inlining)
+    // λx M → λx M'
+    const Mprime = reduceOnce3(rt, defs, M);
+    if (prettyC(term.body) != prettyC(Mprime.term)) {
+      console.log(`${prettyC(M)} → ${prettyC(Mprime.term)}
+------------ xi (optimise code, e.g., by inlining)
+${prettyC(term)} → ${prettyC(Erased.Abs(term.name, Mprime.term))}`);
+
+      if (Mprime._ == "nf") {
+        return NormalForm(Erased.Abs(term.name, Mprime.term));
+      } else {
+        return Redex(Erased.Abs(term.name, Mprime.term));
+      }
+    }
+    // If it's an abstraction and we can't reduce the body, then it's in
+    // normal form.
+    return NormalForm(Erased.Abs(term.name, term.body));
+  }
+
   if (term._ == "app") {
     // The M(N) form (application) might be reduced by Beta, Mu, or Nu. The
     // choices for reducing M(N) are:
@@ -309,44 +360,42 @@ export function reduceOnce3(
     const M = term.left;
     const N = term.right;
 
+    // for debugging...
+    const Md = prettyC(M);
+    const Nd = prettyC(N);
+
     //
     // ------------------  beta (apply a function)
     // (λx M)N → M[x ↦ N]
-    //
-    // M → M'
-    // ------------ nu (evaluate to get a closure that can be applied)
-    // M(N) → M'(N)
-    //
-    // N → N'
-    // ------------ mu (evaluate an actual parameter)
-    // M(N) → M(N')
-
-    // beta
     if (M._ == "lam") {
+      console.log(`
+------------------  beta (apply a function)
+(${prettyC(term)} → ${prettyC(termSubstTop2(N, M.body))}`);
       return Redex(termSubstTop2(N, M.body));
     }
 
-    // nu
+    // M → M'
+    // ------------ nu (evaluate to get a closure that can be applied)
+    // M(N) → M'(N)
     const Mprime = reduceOnce3(rt, defs, M);
     if (prettyC(M) != prettyC(Mprime.term)) {
+      console.log(`${prettyC(M)} → ${prettyC(Mprime.term)}
+------------ nu (evaluate to get a closure that can be applied)
+${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(Mprime.term, N))}`);
       return Redex(Erased.App(Mprime.term, N));
     }
 
-    // mu
+    // N → N'
+    // ------------ mu (evaluate an actual parameter)
+    // M(N) → M(N')
     const Nprime = reduceOnce3(rt, defs, N);
     // TODO: How do we know whether this rule applies? Surely it needs to be
     // known as part of the term.
     if (prettyC(N) != prettyC(Nprime.term)) {
       console.log(`${prettyC(N)} → ${prettyC(Nprime.term)}
 ------------ mu (evaluate an actual parameter)
-${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}
-        `);
+${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}`);
       return Redex(Erased.App(M, Nprime.term));
-    }
-
-    // Expand string literals that require elimination.
-    if (M._ == "str") {
-      return NormalForm(Erased.App(stringLiteralToTerm(M.str), N));
     }
 
     // we have to check the tree and match on
@@ -363,11 +412,16 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}
         // λs λn pair(String)(Unit)(Erased.StringLit("result"))(n)
         //
         // pair = λA λB λa λb λP λpair pair(a)(b)
-        const argument = M.right;
-        if (argument._ != "str") {
-          throw "runtime error: expected string literal in argument to println";
+        let argument = M.right;
+        if (argument._ == "str") {
+          // string literal
+          rt.println(argument.str);
+        } else if (argument._ == "lam") {
+          // cons string
+          rt.println(consStringToLiteral(argument));
+        } else {
+          throw "runtime error: unexpected argument to printf";
         }
-        rt.println(argument.str);
 
         const result = Erased.Abs(
           "n",
@@ -399,6 +453,11 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}
         throw `reference not found: ${M.name}`;
       }
       return Redex(Erased.App(match.term, N));
+    }
+
+    // Expand string literals that require elimination.
+    if (M._ == "str") {
+      return Redex(Erased.App(stringLiteralToTerm(M.str), N));
     }
   }
 
@@ -460,4 +519,29 @@ export function reduce(
     t = result.term;
   }
   return t;
+}
+
+// Takes a runtime cons-string term and converts it to a javascript string literal.
+export function consStringToLiteral(P: any): string {
+  const snil = P.body;
+  const scons = snil.body;
+  const _ = scons.body;
+
+  const folded = foldTree<Erased.Term[]>((acc, curr) => [...acc, curr], [], _);
+
+  switch ((folded[0] as Erased.Var).name) {
+    case "scons": {
+      const head = P.body.body.body.left.right;
+      const tail = P.body.body.body.right;
+
+      const b = byteToNumber(head);
+      const char = numberToStringLiteral(b);
+
+      return char + consStringToLiteral(tail);
+    }
+    case "snil":
+      return "";
+    default:
+      throw "bug";
+  }
 }
