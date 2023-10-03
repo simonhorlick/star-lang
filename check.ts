@@ -33,7 +33,7 @@ import { desugarTerm } from "./process";
 
 var _ = require("lodash");
 
-const verbose = true;
+const verbose = false;
 
 export const logFull = (x: any) => {
   const util = require("util");
@@ -489,7 +489,9 @@ const check = (
   if (ty1._ == "typecheckerror") {
     return ty1;
   }
-  console.log("inferred " + pretty(ty1.term) + " => " + pretty(ty1.type));
+  if (verbose) {
+    console.log("inferred " + pretty(ty1.term) + " => " + pretty(ty1.type));
+  }
 
   // TODO: Fill hole from type. Say type=Maybe(Bool) and ty1.type=Maybe(▨0) then
   // we can substitute all ▨0 in ty1 with Bool.
