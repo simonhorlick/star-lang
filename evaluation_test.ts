@@ -1,94 +1,35 @@
 import { describe, expect, test } from "@jest/globals";
-import { Ref, Var } from "./ast";
+import { Ref, Var, identifier, identifier2, utf8 } from "./ast";
 import * as Erased from "./erased";
-import { reduce, reduceOnce2, termShift2, termSubst2 } from "./evaluation";
-
-// tru = λt. λf. t
-const tru = Erased.Def(
-  "tru",
-  Erased.Abs("t", Erased.Abs("f", Erased.Var("t", 1)))
-);
-
-// fls = λt. λf. f
-const fls = Erased.Def(
-  "fls",
-  Erased.Abs("t", Erased.Abs("f", Erased.Var("f", 0)))
-);
-
-// test = λl. λm. λn. (l(m))(n)
-// test = λ2. λ1. λ0. (2(1))(0)
-const testfn = Erased.Def(
-  "test",
-  Erased.Abs(
-    "l",
-    Erased.Abs(
-      "m",
-      Erased.Abs(
-        "n",
-        Erased.App(
-          Erased.App(Erased.Var("l", 2), Erased.Var("m", 1)),
-          Erased.Var("n", 0)
-        )
-      )
-    )
-  )
-);
-
-// λs. λz. z
-// const zero = Abs("s", Abs("z", Var("z", 0)));
-
-// λs. λz. s z
-const one = Erased.Abs(
-  "s",
-  Erased.Abs("z", Erased.App(Erased.Var("s", 1), Erased.Var("z", 0)))
-);
-
-// λs. λz. s (s z)
-const two = Erased.Abs(
-  "s",
-  Erased.Abs(
-    "z",
-    Erased.App(
-      Erased.Var("s", 1),
-      Erased.App(Erased.Var("s", 1), Erased.Var("z", 0))
-    )
-  )
-);
-
-// λx. x
-const id = Erased.Def("id", Erased.Abs("x", Erased.Var("x", 0)));
-
-//
-// Evaluation Rules
-//
-
-//     t1 → t1'
-// ---------------- E-App1
-// t1(t2) → t1'(t2)
-
-//     t2 → t2'
-// ---------------- E-App2
-// v1(t2) → v1(t2')
-
-// (λx:T11.t12)(v2) → [x/v2]t12     E-AppAbs
-
-//     t1 → t1'
-// ---------------- E-TApp
-// t1(T2) → t1'(T2)
-
-// (ΛX.t12)(T2) → [X/T2]t12    E-TappTabs
-
-describe("erasure", () => {
-  // test("polymorphic identity function erases to untyped identity", () => {
-  //   const program = TApp(
-  //     TAbs("X", Abs("x", Var("x", 0), Var("X", 1)), Star()),
-  //     Ref("Y")
-  //   );
-  //   const actual = erase(program);
-  //   const expected = Erased.Abs("x", Erased.Var("x", 0));
-  //   expect(actual).toStrictEqual(expected);
-  // });
-});
+import {
+  consStringToLiteral,
+  foldTree,
+  mockRuntime,
+  reduce,
+  reduceOnce3,
+  termShift2,
+  termSubst2,
+} from "./evaluation";
+import { prettyC } from "./pretty";
+import {
+  Parser,
+  Stream,
+  any3,
+  any4,
+  bind,
+  char,
+  either,
+  lazy,
+  many,
+  many1,
+  map,
+  optional,
+  pure,
+  spaces,
+  str,
+  whitespace,
+} from "./parser";
+import { result } from "./parser_test";
 
 describe("shifting", () => {
   test("ensure we only shift free variables", () => {
@@ -213,93 +154,543 @@ describe("substitution", () => {
   });
 });
 
-describe("evaluation", () => {
-  // (λx. x)(λz. z) -> (λz. z)
-  test("TestReduceIdentity", () => {
-    const identity = Erased.App(
-      Erased.Abs("x", Erased.Var("x", 0)),
-      Erased.Abs("z", Erased.Var("z", 0))
-    );
-    const expected: Erased.Term = Erased.Abs("z", Erased.Var("z", 0));
-
-    const actual = reduce([], identity);
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  // Test that substituting top level functions works properly.
-  test("TestSubstituteDef", () => {
-    const expected = Erased.Abs("z", Erased.Var("z", 0));
-    const actual = reduce(
-      [id],
-      Erased.App(Ref("id"), Erased.Abs("z", Erased.Var("z", 0)))
-    );
-    expect(actual).toStrictEqual(expected);
-  });
-
-  // "if" reduction
-  //
-  // top level defs (after typecheck has passed):
-  //
-  // tru = λt. λf. t
-  // fls = λt. λf. f
-  // test = λl. λm. λn. (l(m))(n)
-  //
-  // ((test(tru))(v))(w)
-  // ------------------- def "test"
-  // (((λl. λm. λn. (l(m))(n))(tru))(v))(w)
-  // -------------------------------------- E-AppAbs
-  // ((λm. λn. (tru(m))(n))(v))(w)
-  // ----------------------------- E-AppAbs
-  // (λn. (tru(v))(n))(w)
-  // -------------------- E-AppAbs
-  // (tru(v))(w)
-  // ----------- def "tru"
-  // ((λt. λf. t)(v))(w)
-  // ------------------- E-AppAbs
-  // (λf. v)(w)
-  // ---------- E-AppAbs
-  // v
-  test("TestReduceIfElse", () => {
-    // ((test(tru))(1))(2)
-    const ifElse: Erased.Term = Erased.App(
-      Erased.App(Erased.App(Erased.Ref("test"), Erased.Ref("tru")), one),
-      two
-    );
-    const expected = one;
-    const actual = reduce([tru, fls, testfn], ifElse);
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  test("should ensure redex uses up bound variable", () => {
-    // Γ = [z→2, y→1]
-    // (λx. y(x)(z))(λx. x)
-    // y(λx. x)(z)
-    // This corresponds to the nameless representation:
-    // (λx. 1(0)(2))(λx. 0)
-    // After one step of evaluation, then indices for y and z are reduced by 1
-    // as the x binder has now been used up.
-    // 0(λx. 0)(1)
-
-    let src = Erased.App(
-      Erased.Abs(
-        "x",
-        Erased.App(
-          Erased.App(Erased.Var("y", 1), Erased.Var("x", 0)),
-          Erased.Var("z", 2)
+// abstraction parses a lambda abstraction `λx t`. The binder x is separated
+// from the body by spaces.
+const abstraction = (term: () => Parser<Erased.Term>): Parser<Erased.Abs> =>
+  bind(char("λ"), (_) =>
+    bind(optional(spaces), (_) =>
+      bind(identifier, (name) =>
+        bind(spaces, (_) =>
+          bind(lazy(term), (body) => pure(Erased.Abs(name, body)))
         )
-      ),
-      Erased.Abs("x", Erased.Var("x", 0))
+      )
+    )
+  );
+
+// parenthesis is a parser that requires an opening and closing parenthesis to
+// surround the given parser.
+const parenthesis = <T>(between: Parser<T>): Parser<T> =>
+  bind(char("("), (_) => bind(between, (x) => bind(char(")"), (_) => pure(x))));
+
+// application is a parser for function application `f(x)`; `f(x)(y)`; `f (x(t))`.
+const application = (
+  term: () => Parser<Erased.Term>,
+  lhs: Erased.Term
+): Parser<Erased.Term> =>
+  // f(x) or (some term)(x)
+  bind(many(whitespace), (_) =>
+    // args: greedily parse as many as we're able to
+    bind(many1(parenthesis(lazy(term))), (ts) => {
+      const terms = [lhs, ...ts];
+      // Application is left-associative, so form the following tree of
+      // applications, i.e. f(x)(y) == (f(x))(y):
+      //      ap
+      //     /  \
+      //    ap   y
+      //   /  \
+      //  f    x
+
+      // ["f","x","y","z"]
+      //    {f x}["y","z"]
+      //    {{f x} y}["z"]
+      //     {{{f x} y} z}
+      const expr = terms.slice(2).reduce<Erased.App>(
+        (acc, t) => ({
+          _: "app",
+          left: acc,
+          right: t,
+        }),
+        {
+          _: "app",
+          left: terms[0],
+          right: terms[1],
+        }
+      );
+
+      return pure(expr);
+    })
+  );
+
+// reference parses a "variable" in the programming language.
+const reference: Parser<Erased.Term> = map(identifier, (result: string) =>
+  Ref(result)
+);
+
+export const stringLiteral: Parser<Erased.Term> = bind(str('"'), (_) =>
+  bind(many(utf8), (s) =>
+    bind(str('"'), (_) => pure({ _: "str", str: s.join("") }))
+  )
+);
+
+const term: Parser<Erased.Term> = bind(
+  any4(
+    parenthesis(lazy(() => term)),
+    abstraction(() => term),
+    reference,
+    stringLiteral
+  ),
+  (lhs) =>
+    // A term followed by another term is a function application, for
+    // example `g(x)(y)(z)`.
+    either(
+      application(() => term, lhs),
+      pure(lhs)
+    )
+);
+
+export const ts = (s: string): Stream => ({
+  src: s,
+  idx: 0,
+});
+
+export type Context = string[];
+
+export const desugar = (t: Erased.Term, ctx: Context = []): Erased.Term => {
+  switch (t._) {
+    case "app":
+      return Erased.App(desugar(t.left, ctx), desugar(t.right, ctx));
+    case "lam":
+      return Erased.Abs(t.name, desugar(t.body, ctx.concat(t.name)));
+    case "ref":
+      // At this point we're still unsure whether this node is a Var or a Ref.
+      // So look it up first and if a Var exists then use that.
+      for (let i = 0; i < ctx.length; i++) {
+        const binding = ctx[ctx.length - i - 1];
+        if (binding == t.name) {
+          return Var(binding, i);
+        }
+      }
+      return t;
+    case "var":
+      throw "unexpected var";
+    case "str": {
+      return t;
+    }
+  }
+};
+
+// parse a term of untyped lambda calculus.
+const pt = (src: string): Erased.Term => desugar(result(term(ts(src))));
+const ppt = (src: string): String => prettyC(desugar(result(term(ts(src)))));
+
+const expectEquivalent = (a: Erased.Term, b: Erased.Term) =>
+  expect(prettyC(a, true)).toBe(prettyC(b, true));
+
+describe("untyped lambda calculus parser", () => {
+  test("parse pair", () => {
+    const pair = pt("λa λb λf f(a)(b)");
+    const expected = Erased.Abs(
+      "a",
+      Erased.Abs(
+        "b",
+        Erased.Abs(
+          "f",
+          Erased.App(
+            Erased.App(Erased.Var("f", 0), Erased.Var("a", 2)),
+            Erased.Var("b", 1)
+          )
+        )
+      )
     );
+    expectEquivalent(pair, expected);
+  });
 
-    let expected = Erased.App(
-      Erased.App(Erased.Var("y", 0), Erased.Abs("x", Erased.Var("x", 0))),
-      Erased.Var("z", 1)
+  test("parse fst", () => {
+    const fst = pt("λg g(λa λb a)");
+    const expected = Erased.Abs(
+      "g",
+      Erased.App(
+        Erased.Var("g", 0),
+        Erased.Abs("a", Erased.Abs("b", Erased.Var("a", 1)))
+      )
     );
-
-    const actual = reduceOnce2([], src);
-
-    expect(actual).toStrictEqual(expected);
+    expectEquivalent(fst, expected);
   });
 });
+
+describe("runtime evaluation", () => {
+  test(`should correctly evaluate fst(pair("p")("q"))`, () => {
+    const pair = Erased.Def("pair", pt("λa λb λf f(a)(b)"));
+    const fst = Erased.Def("fst", pt("λg g(λa λb a)"));
+    const snd = Erased.Def("snd", pt("λg g(λa λb b)"));
+    let t = pt(`fst(pair("p")("q"))`);
+
+    console.log(prettyC(t));
+    let result = reduceOnce3(mockRuntime, [pair, fst, snd], t);
+
+    for (let i = 0; i < 7; i++) {
+      console.log(prettyC(result.term));
+      result = reduceOnce3(mockRuntime, [pair, fst, snd], result.term);
+    }
+
+    let expected = Erased.StringLit("p");
+    expect(result.term).toStrictEqual(expected);
+  });
+
+  test("zero cannot be reduced", () => {
+    const zero = pt("λs λz z");
+    let result = reduceOnce3(mockRuntime, [], zero);
+    expect(result.term).toStrictEqual(zero);
+  });
+
+  test("beta reduce succ(zero)", () => {
+    const t = pt("(λn λs λz s(n))(λs λz z)");
+    let result = reduceOnce3(mockRuntime, [], t);
+    expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
+  });
+
+  test("should do beta reduction (substitution) before evaluating parameters", () => {
+    const tru = Erased.Def("true", pt("λf λt t"));
+    const fls = Erased.Def("false", pt("λf λt f"));
+    const zero = Erased.Def("zero", pt("λs λz z"));
+    const succ = Erased.Def("succ", pt("λn λs λz s(n)"));
+    const iszero = Erased.Def("iszero", pt("λn n(true)(λn.x false)"));
+    const defs = [tru, fls, zero, succ, iszero];
+
+    // iszero(succ(zero))
+    const t = pt("(λn n(true)(λn.x false))(succ(zero))");
+
+    // the next evaluation step is beta reduction of n, not a reduction of the
+    // argument `succ(zero)`.
+    let result = reduceOnce3(mockRuntime, defs, t);
+    expect(prettyC(result.term)).toBe(ppt("succ(zero)(true)(λn.x false)"));
+  });
+
+  test("should evaluate parameter if there's no beta reduction to do", () => {
+    throw "not implemented";
+  });
+
+  test("should throw an undefined reference error", () => {
+    try {
+      let result = reduceOnce3(mockRuntime, [], pt("f(λx x)"));
+      throw "exception expected";
+    } catch (e) {
+      expect(e).toBe(`reference not found: f`);
+    }
+  });
+
+  test("should not reduce var", () => {
+    let result = reduceOnce3(mockRuntime, [], pt("λn n"));
+    expect(prettyC(result.term)).toBe(ppt("λn n"));
+  });
+
+  test("should not reduce string literal", () => {
+    let result = reduceOnce3(mockRuntime, [], pt(`"s"`));
+    expect(prettyC(result.term)).toBe(ppt(`"s"`));
+  });
+
+  test("should reduce string if it's being eliminated", () => {
+    const tru = Erased.Def("true", pt("λf λt t"));
+    const fls = Erased.Def("false", pt("λf λt f"));
+    let result = reduceOnce3(
+      mockRuntime,
+      [tru, fls],
+      pt(`"s"(λf λt t)(λf λt f)`)
+    );
+    expect(prettyC(result.term)).toBe(
+      ppt(`scons(byte(o)(i)(i)(i)(o)(o)(i)(i))(snil)(λf λt t)(λf λt f)`)
+    );
+  });
+
+  test("println with string literal", () => {
+    const t = pt(`println("hello")(λs λz z)`);
+    let result = reduceOnce3(mockRuntime, [], t);
+    expect(prettyC(result.term)).toBe(
+      ppt(`(λn pair(String)(Unit)("printed")(n))(λs λz z)`)
+    );
+  });
+
+  test("println with cons string", () => {
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const byte = Erased.Def(
+      "byte",
+      pt(
+        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
+      )
+    );
+    const o = Erased.Def("o", pt(`λP λo λi o`));
+    const i = Erased.Def("i", pt(`λP λo λi i`));
+
+    const pair = Erased.Def("pair", pt(`λA λB λa λb λP λpair pair(a)(b)`));
+
+    // the string "str"
+    const t = pt(
+      `println(λP λsnil λscons scons(λP λbyte byte(λP λo λi o)(λP λo λi i)(λP λo λi i)(λP λo λi i)(λP λo λi o)(λP λo λi o)(λP λo λi i)(λP λo λi i))(λP λsnil λscons scons(λP λbyte byte(λP λo λi o)(λP λo λi i)(λP λo λi i)(λP λo λi i)(λP λo λi o)(λP λo λi i)(λP λo λi o)(λP λo λi o))(λP λsnil λscons scons(λP λbyte byte(λP λo λi o)(λP λo λi i)(λP λo λi i)(λP λo λi i)(λP λo λi o)(λP λo λi o)(λP λo λi i)(λP λo λi o))(λP λsnil λscons snil))))(λs λz z)`
+    );
+    let printed = "";
+    const mr = {
+      getChar: () => "c",
+      println: (s: string) => {
+        printed = s;
+      },
+    };
+    let defs = [string, snil, scons, byte, o, i, pair];
+    reduceOnce3(mr, defs, t);
+    expect(printed).toBe("str");
+  });
+
+  test("getchar", () => {
+    const t = pt(`getchar(λs λz z)`);
+    let result = reduceOnce3(mockRuntime, [], t);
+    expect(prettyC(result.term)).toBe(
+      ppt(`(λn pair(String)(Unit)("c")(n))(λs λz z)`)
+    );
+  });
+
+  test("foldtree", () => {
+    //     λx
+    //     |
+    //     λy
+    //     |
+    //     ap
+    //    /  \
+    //   ap   x
+    //  /  \
+    // y   "s"
+    const s = Erased.StringLit("s");
+    const y = Erased.Var("y", 0);
+    const x = Erased.Var("x", 1);
+    const apys = Erased.App(y, s);
+    const apapx = Erased.App(apys, x);
+    const ly = Erased.Abs("y", apapx);
+    const lx = Erased.Abs("x", ly);
+
+    const test = foldTree<Erased.Term[]>((acc, curr) => [...acc, curr], [], lx);
+    expect(test[0]).toBe(lx);
+    expect(test[1]).toBe(ly);
+    expect(test[2]).toBe(y);
+    expect(test[3]).toBe(apys);
+    expect(test[4]).toBe(s);
+    expect(test[5]).toBe(apapx);
+    expect(test[6]).toBe(x);
+  });
+
+  test("beta reduction of recursive function", () => {
+    const zero = Erased.Def("zero", pt("λs λz z"));
+    const succ = Erased.Def("succ", pt("λn λs λz s(n)"));
+
+    // counts backwards from n and returns zero
+    const cnt = Erased.Def("cnt", pt("λn n(λx cnt(x))(zero)"));
+
+    const defs = [zero, succ, cnt];
+
+    // cnt(2)
+    let t = pt(`cnt(λs λz s(λs λz s(λs λz z)))`);
+
+    /*
+         example = cnt(2)
+                 = cnt(λs λz s(λs λz s(λs λz z)))
+                 = (λn n(λx cnt(x))(zero))(λs λz s(λs λz s(λs λz z)))
+                 = (λs λz s(λs λz s(λs λz z)))(λx cnt(x))(zero)
+                 = λz (λx cnt(x))(λs λz s(λs λz z))(zero)
+                 = (λx cnt(x))(λs λz s(λs λz z))
+                 = cnt(λs λz s(λs λz z))
+                 = (λn n(λx cnt(x))(zero))(λs λz s(λs λz z))
+                 = (λs λz s(λs λz z))(λx cnt(x))(zero)
+                 = λz (λx cnt(x))(λs λz z)(zero)
+                 = (λx cnt(x))(λs λz z)
+                 = cnt(λs λz z)
+                 = (λn n(λx cnt(x))(zero))(λs λz z)
+                 = (λs λz z)(λx cnt(x))(zero)
+                 = zero
+    */
+    let result = reduceOnce3(mockRuntime, defs, t);
+
+    for (let i = 0; i < 17; i++) {
+      console.log(prettyC(result.term));
+      result = reduceOnce3(mockRuntime, defs, result.term);
+    }
+
+    expect(result.term).toStrictEqual(pt("λs λz z"));
+  });
+
+  test("concatenate two empty strings", () => {
+    const cat = Erased.Def(
+      "cat",
+      pt(
+        `λas λbs as(λerased String)(bs)(λas.head λas.tail scons(as.head)(cat(as.tail)(bs)))`
+      )
+    );
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const defs = [cat, string, snil, scons];
+    const t = pt(`cat(snil)(snil)`);
+    let result = reduceOnce3(mockRuntime, defs, t);
+    console.log(prettyC(result.term));
+    for (let i = 1; i < 7; i++) {
+      result = reduceOnce3(mockRuntime, defs, result.term);
+      console.log(prettyC(result.term));
+    }
+    expect(prettyC(result.term)).toBe(ppt(`snil`));
+  });
+
+  test(`concatenate an empty string and a non-empty string`, () => {
+    const cat = Erased.Def(
+      "cat",
+      pt(
+        `λas λbs as(λerased String)(bs)(λas.head λas.tail scons(as.head)(cat(as.tail)(bs)))`
+      )
+    );
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const defs = [cat, string, snil, scons];
+    const t = pt(`cat(snil)("a")`);
+    let result = reduceOnce3(mockRuntime, defs, t);
+    console.log(prettyC(result.term));
+    for (let i = 1; i < 7; i++) {
+      result = reduceOnce3(mockRuntime, defs, result.term);
+      console.log(prettyC(result.term));
+    }
+    expect(prettyC(result.term)).toBe(ppt(`"a"`));
+  });
+
+  test("convert a nil string to string literal", () => {
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const byte = Erased.Def(
+      "byte",
+      pt(
+        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
+      )
+    );
+    const o = Erased.Def("o", pt(`λP λo λi o`));
+    const i = Erased.Def("i", pt(`λP λo λi i`));
+    const t = pt(`snil`);
+    let result = reduce(mockRuntime, [string, snil, scons, byte, o, i], t);
+    const literal = consStringToLiteral(result as Erased.Abs);
+    expect(literal).toBe("");
+  });
+
+  test("convert a cons string to string literal", () => {
+    const string = Erased.Def("String", pt(`λx x`));
+    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+    const scons = Erased.Def(
+      "scons",
+      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+    );
+    const byte = Erased.Def(
+      "byte",
+      pt(
+        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
+      )
+    );
+    const o = Erased.Def("o", pt(`λP λo λi o`));
+    const i = Erased.Def("i", pt(`λP λo λi i`));
+
+    // 01110011 = 115 = "s"
+    const t = pt(
+      `scons(byte(o)(i)(i)(i)(o)(o)(i)(i))(scons(byte(o)(i)(i)(i)(o)(i)(o)(o))(scons(byte(o)(i)(i)(i)(o)(o)(i)(o))(snil)))`
+    );
+    let result = reduce(mockRuntime, [string, snil, scons, byte, o, i], t);
+    const literal = consStringToLiteral(result as Erased.Abs);
+    expect(literal).toBe("str");
+  });
+});
+
+// describe("evaluation", () => {
+//   // (λx. x)(λz. z) -> (λz. z)
+//   test("TestReduceIdentity", () => {
+//     const identity = Erased.App(
+//       Erased.Abs("x", Erased.Var("x", 0)),
+//       Erased.Abs("z", Erased.Var("z", 0))
+//     );
+//     const expected: Erased.Term = Erased.Abs("z", Erased.Var("z", 0));
+
+//     const actual = reduce([], identity);
+
+//     expect(actual).toStrictEqual(expected);
+//   });
+
+//   // Test that substituting top level functions works properly.
+//   test("TestSubstituteDef", () => {
+//     const expected = Erased.Abs("z", Erased.Var("z", 0));
+//     const actual = reduce(
+//       [id],
+//       Erased.App(Ref("id"), Erased.Abs("z", Erased.Var("z", 0)))
+//     );
+//     expect(actual).toStrictEqual(expected);
+//   });
+
+//   // "if" reduction
+//   //
+//   // top level defs (after typecheck has passed):
+//   //
+//   // tru = λt. λf. t
+//   // fls = λt. λf. f
+//   // test = λl. λm. λn. (l(m))(n)
+//   //
+//   // ((test(tru))(v))(w)
+//   // ------------------- def "test"
+//   // (((λl. λm. λn. (l(m))(n))(tru))(v))(w)
+//   // -------------------------------------- E-AppAbs
+//   // ((λm. λn. (tru(m))(n))(v))(w)
+//   // ----------------------------- E-AppAbs
+//   // (λn. (tru(v))(n))(w)
+//   // -------------------- E-AppAbs
+//   // (tru(v))(w)
+//   // ----------- def "tru"
+//   // ((λt. λf. t)(v))(w)
+//   // ------------------- E-AppAbs
+//   // (λf. v)(w)
+//   // ---------- E-AppAbs
+//   // v
+//   test("TestReduceIfElse", () => {
+//     // ((test(tru))(1))(2)
+//     const ifElse: Erased.Term = Erased.App(
+//       Erased.App(Erased.App(Erased.Ref("test"), Erased.Ref("tru")), one),
+//       two
+//     );
+//     const expected = one;
+//     const actual = reduce([tru, fls, testfn], ifElse);
+
+//     expect(actual).toStrictEqual(expected);
+//   });
+
+//   test("should ensure redex uses up bound variable", () => {
+//     // Γ = [z→2, y→1]
+//     // (λx. y(x)(z))(λx. x)
+//     // y(λx. x)(z)
+//     // This corresponds to the nameless representation:
+//     // (λx. 1(0)(2))(λx. 0)
+//     // After one step of evaluation, then indices for y and z are reduced by 1
+//     // as the x binder has now been used up.
+//     // 0(λx. 0)(1)
+
+//     let src = Erased.App(
+//       Erased.Abs(
+//         "x",
+//         Erased.App(
+//           Erased.App(Erased.Var("y", 1), Erased.Var("x", 0)),
+//           Erased.Var("z", 2)
+//         )
+//       ),
+//       Erased.Abs("x", Erased.Var("x", 0))
+//     );
+
+//     let expected = Erased.App(
+//       Erased.App(Erased.Var("y", 0), Erased.Abs("x", Erased.Var("x", 0))),
+//       Erased.Var("z", 1)
+//     );
+
+//     const actual = reduceOnce2([], src);
+
+//     expect(actual).toStrictEqual(expected);
+//   });
+// });

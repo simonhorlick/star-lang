@@ -27,6 +27,8 @@ import {
   AbsI,
   Identifier,
   If,
+  Hole,
+  Let,
 } from "./ast";
 import { addTermToCtx, identifier, shift } from "./check";
 import { pretty } from "./pretty";
@@ -183,14 +185,17 @@ export const buildType = (
     // back to the source text.
     wrapOrigin(
       processPars(
-        parameters.reduce<Term>((acc, paramN) => Abs(paramN.name, acc), self),
+        parameters.reduceRight<Term>(
+          (acc, paramN) => Abs(paramN.name, acc),
+          self
+        ),
         []
       ),
       name
     ),
     // Ensure that type-constructors such as Maybe have type arguments here.
     // Maybe does not have type * - instead it has type A->*.
-    parameters.reduce<Term>(
+    parameters.reduceRight<Term>(
       (acc, curr) => Pi(curr.name, curr.type, acc),
       Star()
     )
@@ -255,6 +260,21 @@ export const desugarTerm = (
           Branch(b.constructor, desugarTerm(b.term, undefined, adts, ctx))
         )
       );
+    case "let":
+      // the type of the newly created bound variable is required when adding it
+      // to the context, so we must defer processing this let statement to the
+      // typechecking stage.
+      return Let(
+        t.name,
+        desugarTerm(t.expr, undefined, adts, ctx),
+        desugarTerm(
+          t.body,
+          undefined,
+          adts,
+          addTermToCtx(ctx, identifier(t.name), Star())
+        )
+      );
+
     case "if":
       /*
         func F:Bool->* = λb if b then Bool else Nat
@@ -308,39 +328,10 @@ export const desugarTerm = (
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
     case "err":
-      throw "unexpected parse error";
+      throw "desugarTerm: unexpected parse error";
+    case "rel":
+      throw "desugarTerm: unexpected Rel";
   }
-};
-
-// stringLiteralToTerm expands the given string literal into calls to scons
-// of the utf-8 bytes in the string literal.
-export const stringLiteralToTerm = (str: string) =>
-  stringToUtf8ByteArray(str).reduceRight<Term>(
-    (acc, curr) => App(App(Ref("scons"), byteFromNumber(curr)), acc),
-    Ref("snil")
-  );
-
-const byteFromNumber = (num: number): Term => {
-  // 0 0 0 0 0 0 0 1 = 0x01
-  // 0 0 0 0 0 0 1 0 = 0x02
-  // 0 0 0 0 0 1 0 0 = 0x04
-  // 0 0 0 0 1 0 0 0 = 0x08
-  // 0 0 0 1 0 0 0 0 = 0x10
-  // 0 0 1 0 0 0 0 0 = 0x20
-  // 0 1 0 0 0 0 0 0 = 0x40
-  // 1 0 0 0 0 0 0 0 = 0x80
-  const b7 = (num & 0x01) == 0 ? Ref("z") : Ref("o");
-  const b6 = (num & 0x02) == 0 ? Ref("z") : Ref("o");
-  const b5 = (num & 0x04) == 0 ? Ref("z") : Ref("o");
-  const b4 = (num & 0x08) == 0 ? Ref("z") : Ref("o");
-  const b3 = (num & 0x10) == 0 ? Ref("z") : Ref("o");
-  const b2 = (num & 0x20) == 0 ? Ref("z") : Ref("o");
-  const b1 = (num & 0x40) == 0 ? Ref("z") : Ref("o");
-  const b0 = (num & 0x80) == 0 ? Ref("z") : Ref("o");
-  return App(
-    App(App(App(App(App(App(App(Ref("byte"), b0), b1), b2), b3), b4), b5), b6),
-    b7
-  );
 };
 
 export const desugar = (def: Def, adts: Map<string, ADT>): Def => {
@@ -392,6 +383,13 @@ export const processPars = (t: Term, ctx: Context): Term => {
           Branch(branch.constructor, processPars(branch.term, ctx))
         )
       );
+    case "let":
+      return Let(
+        t.name,
+        processPars(t.expr, ctx),
+        processPars(t.body, addTermToCtx(ctx, identifier(t.name), Star()))
+      );
+
     case "if":
       return If(
         processPars(t.condition, ctx),
@@ -407,7 +405,9 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "str":
       return t;
     case "err":
-      throw "unexpected parse error";
+      throw "processPars: unexpected parse error";
+    case "rel":
+      throw "processPars: unexpected Rel";
   }
 };
 
@@ -419,7 +419,7 @@ export const GenerateConstructorType = (
   // nil : (T *) → List(T)
   // cons : (T *) → (head T) → (tail List(T)) → List(T)
 
-  // The type and all params. i.e. List(T), or Pair(A,B)
+  // The type and all params. i.e. List(T), or Pair(A)(B)
   const apps = params.reduce<Term>(
     (acc, curr) => App(acc, Par(curr.name)),
     Ref(typeName)
@@ -434,7 +434,7 @@ export const GenerateConstructorType = (
 
   // Prepend type parameters, for example
   // (T *) → (head T) → (tail List(T)) → List(T)
-  const typeParams = params.reduce<Term>(
+  const typeParams = params.reduceRight<Term>(
     (acc, curr) => Pi(curr.name, curr.type, acc),
     prependConstructorArgs
   );

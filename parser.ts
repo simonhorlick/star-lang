@@ -53,13 +53,13 @@ export type Parser<T> = (s: Stream) => Result<T>;
 
 // pure is a parser that succeeds without consuming any of the input string, and
 // returns the single result x.
-export const pure =
-  <A>(x: A): Parser<A> =>
-  (s: Stream): Result<A> => ({
+export function pure<A>(x: A): Parser<A> {
+  return (s: Stream): Result<A> => ({
     _: "outputvalue",
     stream: s,
     value: x,
   });
+}
 
 // bind allows sequencing/chaining of parsers. If the first parser succeeds, the
 // resulting value is passed to f, however if the parser fails the error is
@@ -68,9 +68,8 @@ export const pure =
 //
 //   bind(p1, (v1) => bind(p2, (v2) => ...))
 //
-export const bind =
-  <A, B>(p: Parser<A>, f: (v: A) => Parser<B>): Parser<B> =>
-  (input: Stream) => {
+export function bind<A, B>(p: Parser<A>, f: (v: A) => Parser<B>): Parser<B> {
+  return (input: Stream) => {
     const parsed = p(input);
     if (parsed._ == "outputvalue") {
       return f(parsed.value)(parsed.stream);
@@ -78,40 +77,43 @@ export const bind =
       return parsed;
     }
   };
+}
 
 // seq sequences two parsers one after another and returns both of their
 // results.
-export const seq = <P, Q>(p: Parser<P>, q: Parser<Q>): Parser<[P, Q]> =>
-  bind(p, (x) => bind(q, (y) => pure([x, y])));
+export function seq<P, Q>(p: Parser<P>, q: Parser<Q>): Parser<[P, Q]> {
+  return bind(p, (x) => bind(q, (y) => pure([x, y])));
+}
 
 // seq3 is the same as seq. This is so typescript can infer the type arguments.
-export const seq3 = <P, Q, R>(
+export function seq3<P, Q, R>(
   p: Parser<P>,
   q: Parser<Q>,
   r: Parser<R>
-): Parser<[P, Q, R]> =>
-  bind(p, (x) => bind(q, (y) => bind(r, (z) => pure([x, y, z]))));
+): Parser<[P, Q, R]> {
+  return bind(p, (x) => bind(q, (y) => bind(r, (z) => pure([x, y, z]))));
+}
 
 // zero constructs a parser that always fails with the message err.
-export const zero =
-  <T>(err: string): Parser<T> =>
-  (s: Stream) => ({
+export function zero<T>(err: string): Parser<T> {
+  return (s: Stream) => ({
     _: "parseerror",
     stream: s,
     error: err,
     idx: s.idx,
   });
+}
 
 // error constructs a parser that always fails and returns an error message
 // indicating what it expected.
-export const error =
-  <T>(expected: string): Parser<T> =>
-  (s: Stream) => ({
+export function error<T>(expected: string): Parser<T> {
+  return (s: Stream) => ({
     _: "parseerror",
     stream: s,
     error: `expected "${expected}"; got "${s.src[s.idx]}"`,
     idx: s.idx,
   });
+}
 
 // advance increments returns the stream s incremented by n characters.
 export const advance = (n: number, s: Stream): Stream => ({
@@ -127,8 +129,8 @@ export const pos = (n: number, s: Stream): Stream => ({
 
 // item reads a single character from the stream and advances the stream by one
 // character.
-export const item: Parser<string> = (cs) =>
-  cs.idx < cs.src.length
+export const item: Parser<string> = (cs: Stream) => {
+  return cs.idx < cs.src.length
     ? {
         _: "outputvalue",
         stream: advance(1, cs),
@@ -138,89 +140,101 @@ export const item: Parser<string> = (cs) =>
         _: "parseerror",
         stream: cs,
         error: "EOF",
-        idx: cs.idx,
+        // idx: cs.idx,
       };
+};
 
 // reads a single character then checks whether it satisfies the given
 // predicate.
-export const sat = (p: (x: string) => boolean) =>
-  bind(item, (x) => (p(x) ? pure(x) : zero<string>("not satisfied")));
+export function sat(p: (x: string) => boolean): Parser<string> {
+  return bind(item, (x) => (p(x) ? pure(x) : zero<string>("not satisfied")));
+}
 
 export const digit = sat((x) => x >= "0" && x <= "9");
 export const lower = sat((x) => x >= "a" && x <= "z");
 export const upper = sat((x) => x >= "A" && x <= "Z");
 
 // char matches a single character.
-export const char = (c: string): Parser<string> =>
-  bind(item, (x) => (x === c ? pure(x) : error(c)));
+export function char(c: string): Parser<string> {
+  return bind(item, (x) => (x === c ? pure(x) : error(c)));
+}
 
 // str returns a Parser that matches on the provided string.
-export const str = (st: string): Parser<string> =>
-  st == ""
+export function str(st: string): Parser<string> {
+  return st == ""
     ? pure("")
     : orFail(
         `expected ${st}`,
         bind(char(st[0]), (x) => bind(str(st.substring(1)), (y) => pure(x + y)))
       );
+}
 
 // identity is a parser that does the same as parser.
-const identity = <T>(parser: Parser<T>): Parser<T> => {
+function identity<T>(parser: Parser<T>): Parser<T> {
   return (s: Stream) => {
     return parser(s);
   };
-};
+}
 
 // either is successful if p1 or p2 are successful.
-export const either =
-  <A, B>(p1: Parser<A>, p2: Parser<B>): Parser<A | B> =>
-  (input): Result<A | B> => {
+export function either<A, B>(p1: Parser<A>, p2: Parser<B>): Parser<A | B> {
+  return (input): Result<A | B> => {
     const left = p1(input);
     if (left._ == "outputvalue") {
       return left;
     }
     return p2(input);
   };
+}
 
 // alpha is a Parser that matches a single upper, or lower case character.
 export const alpha = either(lower, upper);
 
 // any succeeds if any of the given parsers succeed.
-export const any = <T>(...ps: Parser<T>[]): Parser<T> =>
-  ps.reduce((p1, p2) => either(p1, p2));
+export function any<T>(...ps: Parser<T>[]): Parser<T> {
+  return ps.reduce((p1, p2) => either(p1, p2));
+}
 
 // see any
-export const any3 = <A, B, C>(p1: Parser<A>, p2: Parser<B>, p3: Parser<C>) =>
-  either(p1, either(p2, p3));
+export function any3<A, B, C>(p1: Parser<A>, p2: Parser<B>, p3: Parser<C>) {
+  return either(p1, either(p2, p3));
+}
 
 // see any
-export const any4 = <A, B, C, D>(
+export function any4<A, B, C, D>(
   p1: Parser<A>,
   p2: Parser<B>,
   p3: Parser<C>,
   p4: Parser<D>
-) => either(p1, either(p2, either(p3, p4)));
+) {
+  return either(p1, either(p2, either(p3, p4)));
+}
 
 // see any
-export const any5 = <A, B, C, D, E>(
+export function any5<A, B, C, D, E>(
   p1: Parser<A>,
   p2: Parser<B>,
   p3: Parser<C>,
   p4: Parser<D>,
   p5: Parser<E>
-) => either(p1, either(p2, either(p3, either(p4, p5))));
+) {
+  return either(p1, either(p2, either(p3, either(p4, p5))));
+}
 
 // see any
-export const any6 = <A, B, C, D, E, F>(
+export function any6<A, B, C, D, E, F>(
   p1: Parser<A>,
   p2: Parser<B>,
   p3: Parser<C>,
   p4: Parser<D>,
   p5: Parser<E>,
   p6: Parser<F>
-) => either(p1, either(p2, either(p3, either(p4, either(p5, p6)))));
+) {
+  return either(p1, either(p2, either(p3, either(p4, either(p5, p6)))));
+}
 
 // see any
-export const any7 = <A, B, C, D, E, F, G>(
+export function any7<A, B, C, D, E, F, G>(
   p1: Parser<A>,
   p2: Parser<B>,
   p3: Parser<C>,
@@ -228,10 +242,15 @@ export const any7 = <A, B, C, D, E, F, G>(
   p5: Parser<E>,
   p6: Parser<F>,
   p7: Parser<G>
-) => either(p1, either(p2, either(p3, either(p4, either(p5, either(p6, p7))))));
+) {
+  return either(
+    p1,
+    either(p2, either(p3, either(p4, either(p5, either(p6, p7)))))
+  );
+}
 
 // see any
-export const any8 = <A, B, C, D, E, F, G, H>(
+export function any8<A, B, C, D, E, F, G, H>(
   p1: Parser<A>,
   p2: Parser<B>,
   p3: Parser<C>,
@@ -240,14 +259,15 @@ export const any8 = <A, B, C, D, E, F, G, H>(
   p6: Parser<F>,
   p7: Parser<G>,
   p8: Parser<H>
-) =>
-  either(
+) {
+  return either(
     p1,
     either(p2, either(p3, either(p4, either(p5, either(p6, either(p7, p8))))))
   );
+}
 
 // see any
-export const any9 = <A, B, C, D, E, F, G, H, I>(
+export function any9<A, B, C, D, E, F, G, H, I>(
   p1: Parser<A>,
   p2: Parser<B>,
   p3: Parser<C>,
@@ -257,17 +277,18 @@ export const any9 = <A, B, C, D, E, F, G, H, I>(
   p7: Parser<G>,
   p8: Parser<H>,
   p9: Parser<I>
-) =>
-  either(
+) {
+  return either(
     p1,
     either(
       p2,
       either(p3, either(p4, either(p5, either(p6, either(p7, either(p8, p9))))))
     )
   );
+}
 
 // see any
-export const any10 = <A, B, C, D, E, F, G, H, I, J>(
+export function any10<A, B, C, D, E, F, G, H, I, J>(
   p1: Parser<A>,
   p2: Parser<B>,
   p3: Parser<C>,
@@ -278,8 +299,8 @@ export const any10 = <A, B, C, D, E, F, G, H, I, J>(
   p8: Parser<H>,
   p9: Parser<I>,
   p10: Parser<J>
-) =>
-  either(
+) {
+  return either(
     p1,
     either(
       p2,
@@ -292,54 +313,59 @@ export const any10 = <A, B, C, D, E, F, G, H, I, J>(
       )
     )
   );
+}
 
 // optional returns a parser that attempts to use the supplied parser, but
 // if it fails it doesn't return a parse error and instead allows the parsing to
 // continue.
-export const optional = <T>(parser: Parser<T>): Parser<T | null> =>
-  either(parser, pure(null));
+export function optional<T>(parser: Parser<T>): Parser<T | null> {
+  return either(parser, pure(null));
+}
 
 // Parses as many times as possible, but at least once.
-export const many1 = <A>(p: Parser<A>): Parser<A[]> =>
-  // Run the parser once initially and fail immediately if it's not possible.
-  bind(p, (x) =>
+export function many1<A>(p: Parser<A>): Parser<A[]> {
+  return bind(p, (x) =>
     // Then parse as many times as possible.
     bind(many(p), (xs) =>
       // Combine all the values into a list.
       pure([x, ...xs])
     )
   );
+}
 
 // Parses as many times as possible, including zero.
-export const many = <T>(parser: Parser<T>) =>
-  // Either return at least one element from the parser, or return an empty
-  // list.
-  either(many1(parser), pure<T[]>([]));
+export function many<T>(parser: Parser<T>) {
+  return either(many1(parser), pure<T[]>([]));
+}
 
 // join1 runs the first parser and the separator many times. Requires at least
 // one element.
-export const join1 = <T, S>(parser: Parser<T>, separator: Parser<S>) =>
-  // Parse the first element.
-  bind(parser, (x) =>
+export function join1<T, S>(parser: Parser<T>, separator: Parser<S>) {
+  return bind(parser, (x) =>
     // Then parse the separator followed by another element, many times.
     bind(many(bind(separator, (_) => bind(parser, (x) => pure(x)))), (xs) =>
       pure([x].concat(xs))
     )
   );
+}
 
 // join runs the first parser and the separator many times.
-export const join = <T, S>(parser: Parser<T>, separator: Parser<S>) =>
-  // Either return at least one element from the parser, or return an empty
-  // list.
-  either(join1(parser, separator), pure<T[]>([]));
+export function join<T, S>(parser: Parser<T>, separator: Parser<S>) {
+  return either(join1(parser, separator), pure<T[]>([]));
+}
 
 // oneOf matches a single character from any of the characters in the string.
-export const oneOf = (str: string): Parser<string> =>
-  any(...str.split("").map(char));
+export function oneOf(str: string): Parser<string> {
+  return any(...str.split("").map(char));
+}
 
 // If the parser succeeds, run it's matched value through the function.
-export const map = <S, T>(parser: Parser<T>, f: (t: T) => S) =>
-  bind(parser, (x) => pure(f(x)));
+export function map<S, T>(parser: Parser<T>, f: (t: T) => S) {
+  return bind(parser, (x) => pure(f(x)));
+}
+
+// skip the input while p is true.
+export const skip = <T>(p: Parser<T>): Parser<T[]> => many(p);
 
 // line matches until either a newline character is encountered, or EOF.
 export const line: Parser<string> = bind(
@@ -364,31 +390,36 @@ export const newline = char("\n");
 export const spaces = many1(either(whitespace, newline));
 
 // spc is a parser that allows optional leading and trailing whitespace.
-export const spc = <T>(between: Parser<T>): Parser<T> =>
-  bind(optional(spaces), (_) =>
+export function spc<T>(between: Parser<T>): Parser<T> {
+  return bind(optional(spaces), (_) =>
     bind(between, (x) => bind(optional(spaces), (_) => pure(x)))
   );
+}
 
 // spc1 is a parser that requires leading and trailing whitespace.
-export const spc1 = <T>(between: Parser<T>): Parser<T> =>
-  bind(spaces, (_) => bind(between, (x) => bind(spaces, (_) => pure(x))));
+export function spc1<T>(between: Parser<T>): Parser<T> {
+  return bind(spaces, (_) =>
+    bind(between, (x) => bind(spaces, (_) => pure(x)))
+  );
+}
 
 // orFail raises a specific parse error if the parser is unsuccessful.
-const orFail = <A>(msg: string, p: Parser<A>): Parser<A> =>
-  either(p, zero<A>(msg));
+function orFail<A>(msg: string, p: Parser<A>): Parser<A> {
+  return either(p, zero<A>(msg));
+}
 
 // lazy is a parser that takes a parser generator and generates the parser at
 // parse-time rather than when constructing the parsers. This allows for
 // recursive parsers to be defined.
-export const lazy =
-  <T>(g: () => Parser<T>): Parser<T> =>
-  (input): Result<T> =>
+export function lazy<T>(g: () => Parser<T>): Parser<T> {
+  return (input): Result<T> =>
     // Create this parser lazily at parse-time.
     g()(input);
+}
 
 // consumeAll raises a parse error if the parser doesn't consume all of its
 // input.
-export const consumeAll = <T>(parser: Parser<T>): Parser<T> => {
+export function consumeAll<T>(parser: Parser<T>): Parser<T> {
   return function (input) {
     const result = parser(input);
 
@@ -401,7 +432,7 @@ export const consumeAll = <T>(parser: Parser<T>): Parser<T> => {
 
     return result;
   };
-};
+}
 
 // Loc is a location in a source file.
 type Loc = {

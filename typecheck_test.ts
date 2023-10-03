@@ -1,5 +1,15 @@
 import { describe, expect, test } from "@jest/globals";
-import { ADT, Context, Def, Identifier, Par, Self, Term, Type } from "./ast";
+import {
+  ADT,
+  Context,
+  Def,
+  Identifier,
+  Par,
+  Self,
+  Term,
+  Type,
+  parseFile,
+} from "./ast";
 import {
   addTermToCtx,
   typecheck,
@@ -33,8 +43,11 @@ import {
   succ,
   tru,
   zero,
+  pair,
+  ppair,
 } from "./test_defs";
 import { whnf } from "./equal";
+import { build } from "./build";
 
 const logFull = (x: any) => {
   const util = require("util");
@@ -728,7 +741,7 @@ describe("typechecker", () => {
     if (reduced._ == "typecheckerror") {
       throw reduced.msg;
     }
-    expect(pretty(reduced)).toBe("λP. λfalse. λtrue. false");
+    expect(pretty(reduced)).toBe("λP λfalse λtrue false");
   });
 
   test("simple parameterised types", () => {
@@ -1063,111 +1076,49 @@ describe("typechecker", () => {
     );
   });
 
-  //   test("indexed types", () => {
-  //     // Vector
-  //     /*
-  //       // Vector is a ordered container of elements of type A with exactly n
-  //       // elements.
-  //       type Vector<n Nat, A *> =
-  //         vnil : Vector(0, A) |
-  //         vcons(head A, tail Vector(k, A)) : Vector(k+1, A)
+  test("pair checks", () => {
+    ensure(typecheck(defs([pair, ppair]), adts([]), [], ppair.term, ppair.typ));
+  });
 
-  //       This creates the following functions (note that A and n are inferred from
-  //       the context, or from annotations, they are not supplied as arguments):
-  //         vnil : (A *) → Vector<0,A> // n is not free so shouldn't be exposed
-  //         vcons : (k Nat) → (A *) → A → Vector<k,A> → Vector<k+1,A>
+  // // FIXME: this test blows the stack because the return type of snd is
+  // // incorrect. This should return a valid typecheck error.
+  // test("ensure wrong type fails", () => {
+  //   const src = `
+  //   type Bool = false | true
+  //   type Nat = zero | succ(x Nat)
+  //   type Pair(A *, B *) = pair(a A, b B)
 
-  //       Example values of this type:
-  //         vnil(String) : Vector<0, String> // on it's own it requires an annotation
-  //         vnil(String) : Vector<1, String> // typecheck error 1 != 0
-  //         vnil(λx.Nat) : Vector<0, λx.Nat> // typecheck error λx.Nat is not of type *
-  //         vcons("a", vnil(String)) : Vector<1, String>
-  //         vcons(2, String, "a", vcons(1, String, "b", vcons(0, String, "c", vnil(String)))) : Vector<3, String>
+  //   func snd:(Pair(Bool)(Nat))->Bool = λp case p of
+  //   pair -> p.b
+  //   `;
+  //   const t = build(src);
+  //   if (t._ == "parseerror") throw `parse failed: ${t.error}`;
+  //   if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
+  // });
 
-  //         // 1 cannot be used as an argument to vcons(String, Vector<2, String>)
-  //         vcons(2, String, 1, vcons(1, String, "b", vcons(0, String, "c", vnil(String))))
+  test("type constructor with multiple arguments", () => {
+    const src = `
+    type Bool = false | true
+    type Pair(A *, B *) = pair(a A, b B)
+    func ex:Pair(Bool)(Bool) = pair(Bool)(Bool)(true)(true)    
+    `;
+    const t = build(src);
+    if (t._ == "parseerror") throw `parse failed: ${t.error}`;
+    if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
+  });
 
-  //       You can eliminate a Vector using a case statement:
-  //         case v of
-  //           vnil => "n"
-  //           vcons => "c"
-  //           : String
-
-  //       Alternative presentations:
-  //  3)   type Vector<T *, n Nat> =
-  //         vnil : Vector<T, 0> |
-  //         vcons(head T, tail Vector<T, n>) : Vector<T, n+1>
-
-  //  4)   type Vector<T *, n Nat> =
-  //         vnil : Vector<T, 0> |
-  //         vcons : (head T) → (tail Vector<T, n>) → Vector<T, n+1>
-
-  //  2)   type Vector<T *> ~ (n Nat) =
-  //         vnil ~ (n=0) |
-  //         vcons(head T, tail Vector<T, n>) ~ (n=n+1)
-
-  //     */
-  //   });
-
-  //   test("identity type", () => {
-  //     // Identity
-  //     /*
-  //       type Name<Parameters...> =
-  //         c1(args...) : Name<Parameters...> |
-  //         c2(args...) : Name<Parameters...> |
-  //         ... |
-  //         cn(args...) : Name<Parameters...>
-  //      */
-  //     /*
-  //  2)   type Identity<T *, a T, b T> =
-  //         refl(a T) : Identity<T, a, a>
-
-  //       This creates the following function:
-  //         refl : (T *) → (a T) → Identity<T, a, a> // b is already specified so no need to expose it? (identify unbound variables in the codomain and make sure they have arguments in the constructor?)
-
-  //       The parser generates:
-  //         Identity =
-  //           (T) (a) (b)
-  //           ιe.
-  //           ΠP:((b T)→Identity(T)(a)(b)→*).
-  //           P(a)(refl<T><a>) →
-  //           P(b)(e)
-  //         refl =
-  //           <T> <a>
-  //           <P> (equal)
-  //           equal
-
-  //       Example values of this type:
-  //         refl(Bool, true) : Identity<Bool, true, true> // true == true
-  //         refl(Nat, 2) : Identity<Nat, 1+1, 2>
-
-  //         func doubleNegation(b Bool) Identity<Bool, not(not(b)), b> =
-  //           case b of
-  //             true => refl(true)
-  //             false => refl(false)
-
-  //         func even(n Nat) Bool =
-  //           case n of
-  //             zero => true
-  //             succ => case n.x of {
-  //               zero => false
-  //               succ => even(n.x)
-  //             }
-  //             : Bool
-  //           : Bool
-
-  //         func requiresEvenNumber(n Nat, proof Identity<Bool, even(n), true>) = n
-  //         requiresEvenNumber(2, refl(Bool, even(2))) // can this simplify to true?
-  //         requiresEvenNumber(1, refl(Bool, even(1))) // type error "1 is not even"
-
-  //       The constructor refl will create a value that identifies a type with
-  //       itself. This will only pass the typechecker if the types are the same.
-
-  //       Alternative presentations:
-  //  1)   type Identity<T *, a T> ~ (b T) =
-  //         refl ~ (b=a)
-  //     */
-  //   });
+  test("let statements should typecheck", () => {
+    const src = `
+    type Bool = false | true
+    // the typechecker should infer the expression of the let statement as Bool
+    // then with [x:Bool] check that the body of the let statement is of type
+    // Bool.
+    func ex:Bool->Bool = λb let x = b in x
+    `;
+    const t = build(src);
+    if (t._ == "parseerror") throw `parse failed: ${t.error}`;
+    if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
+  });
 
   describe("type equality", () => {
     const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));

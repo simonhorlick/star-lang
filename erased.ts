@@ -42,6 +42,19 @@ export const Abs = (name: string, body: Term): Abs => ({
   body: body,
 });
 
+// VAbs is a lambda abstraction that is fully normalised.
+export type VAbs = {
+  _: "vlam";
+  name: string; // name of the binder
+  body: Term; // the body of the abstraction
+};
+
+export const VAbs = (name: string, body: Term): VAbs => ({
+  _: "vlam",
+  name: name,
+  body: body,
+});
+
 // App is a function application.
 export type App = {
   _: "app";
@@ -55,7 +68,20 @@ export const App = (left: Term, right: Term): App => ({
   right: right,
 });
 
-export type Term = Abs | App | Var | Ref | StringLit;
+// VApp is a function application.
+export type VApp = {
+  _: "vapp";
+  left: Term;
+  right: Term;
+};
+
+export const VApp = (left: Term, right: Term): VApp => ({
+  _: "vapp",
+  left: left,
+  right: right,
+});
+
+export type Term = Abs | App | Var | Ref | StringLit; //  | VAbs | VApp
 
 // A top-level definition.
 export type Def = {

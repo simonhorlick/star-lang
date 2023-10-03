@@ -1,7 +1,14 @@
 // build is a library for orchestrating builds of source files for this language.
 
 import { parseFile, ADT, Def, ASTNode, File } from "./ast";
-import { TypecheckError, identifier, logFull, typecheck } from "./check";
+import {
+  TypecheckError,
+  identifier,
+  logFull,
+  strip,
+  stripAST,
+  typecheck,
+} from "./check";
 import { typecheckErrorDiagnostic } from "./inspect";
 import { FatalParseError, parseErrorDiagnostic } from "./parser";
 import { processADTs, desugar } from "./process";
@@ -26,7 +33,8 @@ export type BuildResult = {
 };
 
 export const build = (
-  src: string
+  src: string,
+  stripDefs: boolean = true
 ): BuildResult | FatalParseError | TypecheckError => {
   const t = parseFile({ src, idx: 0 });
 
@@ -36,7 +44,7 @@ export const build = (
     return t;
   }
 
-  logFull(t.value.content);
+  // logFull(t.value.content);
 
   // generate syntax nodes for ADTs, etc
   const f = processADTs(t.value);
@@ -47,9 +55,12 @@ export const build = (
   for (const adt of adtList) {
     adts.set(identifier(adt.name), adt);
   }
-  const defs = (f.content.filter((c) => c._ == "def") as Def[]).map((def) =>
-    desugar(def, adts)
-  );
+  const defs = (f.content.filter((c) => c._ == "def") as Def[])
+    .map((def) => {
+      if (stripDefs) return stripAST(def) as Def;
+      else return def;
+    })
+    .map((def) => desugar(def, adts));
   const nondefs = f.content.filter((c) => c._ != "def") as Def[];
 
   let defsMap: Map<string, Def> = new Map();

@@ -24,6 +24,8 @@ import {
   If,
   Hole,
   Ref,
+  Let,
+  Rel,
 } from "./ast";
 import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -31,7 +33,7 @@ import { desugarTerm } from "./process";
 
 var _ = require("lodash");
 
-const verbose = true;
+const verbose = false;
 
 export const logFull = (x: any) => {
   const util = require("util");
@@ -395,6 +397,32 @@ const check = (
 
       return check(defs, adts, ctx, desugared, type, os, oe);
     }
+    case "let": {
+      // A let statement desugars to a lambda.
+      //
+      //   let x = t1 in t2 => (λx:T1 t2)(t1)
+      //
+      // the typechecker should infer the expression of the let statement as Bool
+      // then with [x:Bool] check that the body of the let statement is of type
+      // Bool.
+      //
+      //   func ex:Bool->Bool = λb let x = b in x
+      //
+
+      const expressionType = infer(defs, adts, ctx, term.expr, os, oe);
+      if (expressionType._ == "typecheckerror") {
+        return expressionType;
+      }
+
+      // let x = t1 in t2 => (λx:T1 t2)(t1)
+      // Annotate the lambda with the expected type and check it.
+      const desugared = App(
+        Ann(AbsI(term.name, term.body), Pi("", expressionType.type, type)),
+        term.expr
+      );
+
+      return check(defs, adts, ctx, desugared, type, os, oe);
+    }
     case "self": {
       // What's the type of a self-type?
       if (type._ != "star") {
@@ -461,7 +489,9 @@ const check = (
   if (ty1._ == "typecheckerror") {
     return ty1;
   }
-  console.log("inferred " + pretty(ty1.term) + " => " + pretty(ty1.type));
+  if (verbose) {
+    console.log("inferred " + pretty(ty1.term) + " => " + pretty(ty1.type));
+  }
 
   // TODO: Fill hole from type. Say type=Maybe(Bool) and ty1.type=Maybe(▨0) then
   // we can substitute all ▨0 in ty1 with Bool.
@@ -583,12 +613,16 @@ export function shift(d: number, c: number, t: Term): Term {
         shift(d, c, t.name),
         t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term))) // TODO: Is this correct? Do we need to shift here?
       );
+    case "let":
+      return Let(t.name, shift(d, c, t.expr), shift(d, c + 1, t.body));
     case "if":
       return If(
         shift(d, c, t.condition),
         shift(d, c, t.trueBranch),
         shift(d, c, t.falseBranch)
       );
+    case "rel":
+      return Rel(shift(d, c, t.term), t.uses);
     case "err":
       throw "unexpected parse error";
   }
@@ -640,8 +674,16 @@ export function subst(
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
     case "case":
       throw "subst: unexpected case";
+    case "let":
+      return Let(
+        t.name,
+        subst(j, s, c, t.expr, name),
+        subst(j, s, c + 1, t.body, name)
+      );
     case "if":
       throw "subst: unexpected if";
+    case "rel":
+      return Rel(subst(j, s, c, t.term, name), t.uses);
     case "err":
       throw "subst: unexpected parse error";
   }
@@ -688,8 +730,12 @@ export function substHole(j: number, s: Term, t: Term): Term {
       return Origin(t.start, t.end, substHole(j, s, t.child));
     case "case":
       throw "substHole: unexpected case";
+    case "let":
+      throw "substHole: unexpected let";
     case "if":
       throw "substHole: unexpected if";
+    case "rel":
+      return Rel(substHole(j, s, t.term), t.uses);
     case "err":
       throw "substHole: unexpected parse error";
   }
@@ -743,6 +789,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
             aeq(branch.term, t2.branches[i].term)
         )
       );
+    case "let":
+      return t2._ == "let" && aeq(t1.expr, t2.expr) && aeq(t1.body, t2.body);
     case "if":
       throw "aeq: unexpected if";
     case "int":
@@ -751,6 +799,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
       return t2._ == "str" && t2.str == t1.str;
     case "err":
       throw "aeq: unexpected parse error";
+    case "rel":
+      throw "aeq: unexpected rel";
   }
 };
 
@@ -853,6 +903,10 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "case":
       // FIXME: Improve the types here.
       throw "unexpected case at typecheck";
+    case "let":
+      throw "unexpected let at typecheck";
+    case "rel":
+      throw "unexpected rel at typecheck";
     case "if":
       throw "unexpected if at typecheck";
     case "orig":
@@ -925,8 +979,12 @@ export function strip(t: Term): Term {
           Branch(strip(b.constructor) as Identifier, strip(b.term))
         )
       );
+    case "let":
+      return Let(strip(t.name) as Identifier, strip(t.expr), strip(t.body));
     case "if":
       return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
+    case "rel":
+      throw "strip: unexpected rel";
   }
 }
 
@@ -957,6 +1015,8 @@ export function serialise(t: Term, d: number = 0): string {
       return `Identifier(${t.name})`;
     case "orig":
       return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
+    case "rel":
+      return `Rel(${serialise(t.term, d + 1)}, ${t.uses})`;
     case "case":
       return `Case(${serialise(t.name, d + 1)},[${t.branches
         .map(
@@ -967,6 +1027,12 @@ export function serialise(t: Term, d: number = 0): string {
             )})`
         )
         .join(",")}])`;
+    case "let":
+      return `Let(${serialise(t.name)}, ${serialise(
+        t.expr,
+        d + 1
+      )}, ${serialise(t.body, d + 1)})`;
+
     case "if":
       return `If(${serialise(t.condition)}, ${serialise(
         t.trueBranch
@@ -979,6 +1045,60 @@ export function serialise(t: Term, d: number = 0): string {
       return `"${t.str}"`;
     case "err":
       return `ParseError(${t.msg})`;
+  }
+}
+
+export function tree(t: Term, prefix: string, typ?: Term): string {
+  switch (t._) {
+    case "var":
+      return `${prefix}${t.name}`;
+    case "lam":
+      return `${prefix}λ${identifier(t.name)}\n${tree(t.body, prefix + "  ")}`;
+    case "self":
+      return `${prefix}TODO`;
+    case "app":
+      const ann = typ ? `:${pretty(typ)}` : "";
+      return `${prefix}ap${ann}\n${tree(t.left, prefix + "  ")}\n${tree(
+        t.right,
+        prefix + "  "
+      )}`;
+    case "ann":
+      return tree(t.term, prefix, t.typ);
+    // return `${prefix}ann(typ=${pretty(t.typ)})\n${tree(
+    //   t.term,
+    //   prefix + "  "
+    // )}`;
+    case "pi":
+      return `${prefix}Π${t.name}\n${tree(t.from, prefix + "  ")}\n${tree(
+        t.to,
+        prefix + "  "
+      )}`;
+    case "par":
+      return `${prefix}TODO`;
+    case "star":
+      return `${prefix}*`;
+    case "ref":
+      return `${prefix}${t.name}`;
+    case "id":
+      return `${prefix}${t.name}`;
+    case "orig":
+      return tree(t.child, prefix);
+    case "case":
+      return `${prefix}TODO`;
+    case "let":
+      return `${prefix}TODO`;
+    case "if":
+      return `${prefix}TODO`;
+    case "hole":
+      return `${prefix}TODO`;
+    case "int":
+      return `${prefix}${t.num}`;
+    case "str":
+      return `${prefix}"${t.str}"`;
+    case "rel":
+      return `${prefix}Rel(${t.uses})${tree(t.term, prefix + "  ")}`;
+    case "err":
+      return `${prefix}ParseError(${t.msg})`;
   }
 }
 

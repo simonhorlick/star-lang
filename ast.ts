@@ -37,6 +37,11 @@ import {
   any10,
   any9,
   FatalParseError,
+  error,
+  skip,
+  sat,
+  lower,
+  upper,
 } from "./parser";
 
 // ParseError is a syntax node that allows partial parse trees to be
@@ -210,6 +215,19 @@ export const Ann = (term: Term, type: Type): Ann => ({
   typ: type,
 });
 
+// Runtime relevance.
+export type Rel = {
+  _: "rel";
+  term: Term;
+  uses: number;
+};
+
+export const Rel = (term: Term, uses: number): Rel => ({
+  _: "rel",
+  term: term,
+  uses: uses,
+});
+
 export type Term =
   | Abs
   | App
@@ -221,12 +239,14 @@ export type Term =
   | Star
   | Self
   | Case
+  | Let
   | If
   | Origin
   | Identifier
   | Hole
   | IntLit
   | StringLit
+  | Rel
   | ParseError;
 export type Type = Term;
 
@@ -307,6 +327,24 @@ export const Case = (name: Term, branches: Branch[]): Case => ({
   _: "case",
   name: name,
   branches: branches,
+});
+
+export type Let = {
+  _: "let";
+  name: Origin | Identifier;
+  expr: Term;
+  body: Term;
+};
+
+export const Let = (
+  name: Origin | Identifier,
+  expr: Term,
+  body: Term
+): Let => ({
+  _: "let",
+  name: name,
+  expr: expr,
+  body: body,
 });
 
 export type If = {
@@ -476,8 +514,15 @@ export const par: Parser<Term> = block(
 
 // parenthesis is a parser that requires an opening and closing parenthesis to
 // surround the given parser.
-export const parenthesis = <T>(between: Parser<T>): Parser<T> =>
-  bind(char("("), (_) => bind(between, (x) => bind(char(")"), (_) => pure(x))));
+export const parenthesis = <T>(between: Parser<T>): Parser<T | ParseError> =>
+  bind(char("("), (_) =>
+    bind(between, (x) =>
+      either(
+        bind(char(")"), (_) => pure(x)),
+        pure(ParseError("missing close parenthesis"))
+      )
+    )
+  );
 
 export const arrow: (type: () => Parser<Type>) => (s: Stream) => Result<Pi> = (
   type
@@ -601,6 +646,22 @@ export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
   )
 );
 
+// let b = f(x) in ...
+export const letStatement: Parser<Let | ParseError> = bind(str("let"), (_) =>
+  orFail(
+    "let statment not well formed",
+    bind(spc1(block(identifier2)), (id) =>
+      bind(str("="), (_) =>
+        bind(term, (expr) =>
+          bind(str("in"), (_) =>
+            bind(term, (body) => pure(Let(id, expr, body)))
+          )
+        )
+      )
+    )
+  )
+);
+
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
 export const ifStatement: Parser<If | ParseError> = bind(str("if"), (_) =>
@@ -661,20 +722,42 @@ export const listLiteral: Parser<Term> =
     )
   );
 
+// resync is a parser that advances the stream until the
+// next sync character is observed
+export const resync = skip(sat((c) => `()"`.indexOf(c) == -1));
+
+// utf8 parses a string literal containing utf8 characters and escape
+// sequences.
+// TODO: Implement escape sequences.
+export const utf8 = sat((c) => c != '"');
+
 export const stringLiteral: Parser<Term> = bind(str('"'), (_) =>
-  bind(many(alpha), (s) =>
-    bind(str('"'), (_) => pure({ _: "str", str: s.join("") }))
+  either(
+    bind(many(utf8), (s) =>
+      bind(str('"'), (_) => pure({ _: "str", str: s.join("") }))
+    ),
+    // if there's a parse error within the string, we need to skip forward to
+    // the next sync character.
+    bind(resync, (_) =>
+      // if the next sync character is an end-of-string character then skip that
+      // too.
+      bind(optional(char(`"`)), (_) =>
+        pure(ParseError("failed to parse string literal"))
+      )
+    )
   )
 );
 
 export const subterm: Parser<Term> = bind(
-  any9(
+  any10(
     // parenthesis `(T)`
     block(parenthesis(lazy(() => term))),
     // abstraction `λx t`
     block(abstraction(() => term)),
     // a case destructuring `case x of ...`
     block(caseStatement),
+    // a let statement `let x = ...`
+    block(letStatement),
     // an if-then-else block
     block(ifStatement),
     // the type of types `*`
@@ -760,7 +843,13 @@ export const argument: Parser<Argument> = bind(identifier, (name) =>
 // argumentList parses a list of arguments, i.e. `(a A, ..., z Z)`.
 export const argumentList: Parser<Argument[]> = bind(
   parenthesis(join(argument, spc(char(",")))),
-  (args) => pure(args)
+  (args) => {
+    if (Array.isArray(args)) {
+      return pure(args);
+    } else {
+      return error(args.msg);
+    }
+  }
 );
 
 // name(arg1 ArgType1, ..., ArgN ArgTypeN)
