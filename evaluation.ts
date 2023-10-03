@@ -279,6 +279,8 @@ const byteFromNumber = (num: number): Erased.Term => {
   );
 };
 
+const trace = false;
+
 //
 //
 // Definition : A lambda expression is in normal form if it contains no β-redexes, so that it cannot be further reduced using the β-rule. An expression in normal form has no more function applications to evaluate.
@@ -331,9 +333,11 @@ export function reduceOnce3(
     // λx M → λx M'
     const Mprime = reduceOnce3(rt, defs, M);
     if (prettyC(term.body) != prettyC(Mprime.term)) {
-      console.log(`${prettyC(M)} → ${prettyC(Mprime.term)}
+      if (trace) {
+        console.log(`${prettyC(M)} → ${prettyC(Mprime.term)}
 ------------ xi (optimise code, e.g., by inlining)
 ${prettyC(term)} → ${prettyC(Erased.Abs(term.name, Mprime.term))}`);
+      }
 
       if (Mprime._ == "nf") {
         return NormalForm(Erased.Abs(term.name, Mprime.term));
@@ -368,9 +372,11 @@ ${prettyC(term)} → ${prettyC(Erased.Abs(term.name, Mprime.term))}`);
     // ------------------  beta (apply a function)
     // (λx M)N → M[x ↦ N]
     if (M._ == "lam") {
-      console.log(`
+      if (trace) {
+        console.log(`
 ------------------  beta (apply a function)
 (${prettyC(term)} → ${prettyC(termSubstTop2(N, M.body))}`);
+      }
       return Redex(termSubstTop2(N, M.body));
     }
 
@@ -379,9 +385,11 @@ ${prettyC(term)} → ${prettyC(Erased.Abs(term.name, Mprime.term))}`);
     // M(N) → M'(N)
     const Mprime = reduceOnce3(rt, defs, M);
     if (prettyC(M) != prettyC(Mprime.term)) {
-      console.log(`${prettyC(M)} → ${prettyC(Mprime.term)}
+      if (trace) {
+        console.log(`${prettyC(M)} → ${prettyC(Mprime.term)}
 ------------ nu (evaluate to get a closure that can be applied)
 ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(Mprime.term, N))}`);
+      }
       return Redex(Erased.App(Mprime.term, N));
     }
 
@@ -392,9 +400,11 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(Mprime.term, N))}`);
     // TODO: How do we know whether this rule applies? Surely it needs to be
     // known as part of the term.
     if (prettyC(N) != prettyC(Nprime.term)) {
-      console.log(`${prettyC(N)} → ${prettyC(Nprime.term)}
+      if (trace) {
+        console.log(`${prettyC(N)} → ${prettyC(Nprime.term)}
 ------------ mu (evaluate an actual parameter)
 ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}`);
+      }
       return Redex(Erased.App(M, Nprime.term));
     }
 
@@ -507,7 +517,9 @@ export function reduce(
   let normalForm = false;
   let prev: Erased.Term = t;
   while (!normalForm) {
-    console.log(prettyC(t, false));
+    if (trace) {
+      console.log(prettyC(t, false));
+    }
     const result = reduceOnce3(rt, defs, t);
     normalForm = result._ == "nf";
 
