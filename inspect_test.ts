@@ -6,10 +6,16 @@ import { ADT, ASTNode, Context, Def, parseFile, Term, Type } from "./ast";
 import { stripAST, TypecheckError } from "./check";
 import { indexToLineCol, printLine } from "./parser";
 import { desugar, processADTs } from "./process";
-import { inspect, inspectASTNodes } from "./inspect";
+import {
+  hover,
+  HoverInfo,
+  hoverMessage,
+  inspect,
+  inspectASTNodes,
+  Range,
+} from "./inspect";
 import { pretty, printCtx } from "./pretty";
 import { build, BuildResult } from "./build";
-import { File } from "./ast";
 
 export const printDiagnostic = (src: string, err: TypecheckError) => {
   const lc = indexToLineCol(src, err.start);
@@ -20,61 +26,6 @@ export const printDiagnostic = (src: string, err: TypecheckError) => {
     `  ${line}\n` +
     `  ${" ".repeat(lc.col)}^`
   );
-};
-
-type HoverInfo = {
-  msg: string;
-};
-
-type Range = { start: number; end: number };
-
-const hover = (
-  src: string,
-  f: File,
-  defs: Map<string, Def>
-): Map<Range, HoverInfo> => {
-  let hoverInfo = new Map<Range, HoverInfo>();
-
-  for (const node of f.content) {
-    if (node._ == "def") {
-      const def = node;
-      const spans = inspect(def, defs);
-      for (const [k, v] of spans) {
-        switch (v.term._) {
-          case "lam":
-            break;
-          default:
-            hoverInfo.set(
-              { start: k.start, end: k.end },
-              { msg: `${v.term._}(${pretty(v.type)})` }
-            );
-        }
-        // const msg = `${k.start}-${k.end} is a ${v.term._} with type ${pretty(
-        //   v.type
-        // )}; ctx at this location is ${printCtx(v.ctx)}`;
-        // console.debug(
-        //   printDiagnostic(src, TypecheckError(msg, k.start, k.end))
-        // );
-        // console.log(
-        //   `[{ start: ${k.start}, end: ${k.end} }, { msg: "${`${
-        //     v.term._
-        //   }(${pretty(v.type)})`}" }],`
-        // );
-      }
-    } else {
-      const spans = inspectASTNodes(node);
-      for (const [k, v] of spans) {
-        hoverInfo.set({ start: k.start, end: k.end }, { msg: "" });
-
-        // const msg = `${k.start}-${k.end} is a ${v.term._}`;
-        // console.debug(
-        //   printDiagnostic(src, TypecheckError(msg, k.start, k.end))
-        // );
-      }
-    }
-  }
-
-  return hoverInfo;
 };
 
 const ensureBuild = (src: string): BuildResult => {
@@ -121,5 +72,10 @@ describe("inspect", () => {
       [{ start: 49, end: 53 }, { msg: "ref(★)" }],
     ]);
     expect(hover(src, result.file, result.defs)).toEqual(expected);
+
+    expect(hoverMessage(src, result.file, result.defs, 70)).toEqual({
+      range: { start: 70, end: 71 },
+      msg: "var(Bool)",
+    });
   });
 });
