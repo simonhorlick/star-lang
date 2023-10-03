@@ -407,11 +407,31 @@ describe("runtime evaluation", () => {
       "scons",
       pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
     );
-    const t = pt(`println(λP λsnil λscons snil)(λs λz z)`);
-    let result = reduceOnce3(mockRuntime, [string, snil, scons], t);
-    expect(prettyC(result.term)).toBe(
-      ppt(`(λn pair(String)(Unit)("printed")(n))(λs λz z)`)
+    const byte = Erased.Def(
+      "byte",
+      pt(
+        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
+      )
     );
+    const o = Erased.Def("o", pt(`λP λo λi o`));
+    const i = Erased.Def("i", pt(`λP λo λi i`));
+
+    const pair = Erased.Def("pair", pt(`λA λB λa λb λP λpair pair(a)(b)`));
+
+    // the string "str"
+    const t = pt(
+      `println(λP λsnil λscons scons(λP λbyte byte(λP λo λi o)(λP λo λi i)(λP λo λi i)(λP λo λi i)(λP λo λi o)(λP λo λi o)(λP λo λi i)(λP λo λi i))(λP λsnil λscons scons(λP λbyte byte(λP λo λi o)(λP λo λi i)(λP λo λi i)(λP λo λi i)(λP λo λi o)(λP λo λi i)(λP λo λi o)(λP λo λi o))(λP λsnil λscons scons(λP λbyte byte(λP λo λi o)(λP λo λi i)(λP λo λi i)(λP λo λi i)(λP λo λi o)(λP λo λi o)(λP λo λi i)(λP λo λi o))(λP λsnil λscons snil))))(λs λz z)`
+    );
+    let printed = "";
+    const mr = {
+      getChar: () => "c",
+      println: (s: string) => {
+        printed = s;
+      },
+    };
+    let defs = [string, snil, scons, byte, o, i, pair];
+    reduceOnce3(mr, defs, t);
+    expect(printed).toBe("str");
   });
 
   test("getchar", () => {
