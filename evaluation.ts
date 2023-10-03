@@ -535,6 +535,9 @@ export function reduce(
 
 // Takes a runtime cons-string term and converts it to a javascript string literal.
 export function consStringToLiteral(P: any): string {
+  // quick hack for if it's not actually a cons-string.
+  if (P._ == "str") return P.str;
+
   const snil = P.body;
   const scons = snil.body;
   const _ = scons.body;
