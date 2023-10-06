@@ -624,7 +624,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "rel":
       return Rel(shift(d, c, t.term), t.uses);
     case "err":
-      throw "unexpected parse error";
+      return t;
   }
 }
 
@@ -902,18 +902,18 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       return t;
     case "case":
       // FIXME: Improve the types here.
-      throw "unexpected case at typecheck";
+      throw "dbgCheckIndices: unexpected case";
     case "let":
-      throw "unexpected let at typecheck";
+      throw "dbgCheckIndices: unexpected let";
     case "rel":
-      throw "unexpected rel at typecheck";
+      throw "dbgCheckIndices: unexpected rel";
     case "if":
-      throw "unexpected if at typecheck";
+      throw "dbgCheckIndices: unexpected if";
     case "orig":
       dbgCheckIndices(ctx, depth, t.child);
       return t;
     case "err":
-      throw "unexpected parse error";
+      throw "dbgCheckIndices: unexpected parse error";
   }
 };
 

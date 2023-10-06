@@ -342,6 +342,26 @@ else
     );
   });
 
+  test("should parse case with empty branch", () => {
+    const src = `case n of
+      zero -> 
+      succ -> zero`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe(
+      "Case(Par(n),[Branch(Identifier(zero), ParseError(expected term)),Branch(Identifier(succ), Ref(zero))])"
+    );
+  });
+
+  test("should parse case with empty final branch", () => {
+    const src = `case n of
+      zero -> zero
+      succ -> `;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe(
+      "Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term))])"
+    );
+  });
+
   test("should parse empty string literal", () => {
     const src = `""`;
     const ast = strip(result(term(ts(src))));

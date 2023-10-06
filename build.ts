@@ -30,21 +30,20 @@ export type BuildResult = {
   _: "buildresult";
   file: File;
   defs: Map<string, Def>;
+  checkerErrors: TypecheckError[];
 };
 
-export const build = (
-  src: string,
-  stripDefs: boolean = true
-): BuildResult | FatalParseError | TypecheckError => {
+// build takes a source file as a string, attempts to parse the file then
+// typechecks each top level definition. It will always return something. In
+// the case of a parse error an error node will be present in the parse tree.
+// If there are any typecheck failures they will be returned in the result.
+export const build = (src: string, stripDefs: boolean = true): BuildResult => {
   const t = parseFile({ src, idx: 0 });
 
-  // TODO: Expose any parse errors to the user.
-
-  if (t._ != "outputvalue") {
-    return t;
+  if (t._ == "parseerror") {
+    // parsing should never fail
+    throw "unexpected parse error";
   }
-
-  // logFull(t.value.content);
 
   // generate syntax nodes for ADTs, etc
   const f = processADTs(t.value);
@@ -89,13 +88,10 @@ export const build = (
     }
   }
 
-  if (checkerErrors.length > 0) {
-    return checkerErrors[0];
-  }
-
   return {
     _: "buildresult",
     file: { _: "file", content: [...nondefs, ...checkedMap.values()] },
     defs: checkedMap,
+    checkerErrors: checkerErrors,
   };
 };

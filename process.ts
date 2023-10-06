@@ -328,7 +328,7 @@ export const desugarTerm = (
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
     case "err":
-      throw "desugarTerm: unexpected parse error";
+      return t;
     case "rel":
       throw "desugarTerm: unexpected Rel";
   }

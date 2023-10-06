@@ -7,6 +7,8 @@ import { stripAST, TypecheckError } from "./check";
 import { indexToLineCol, printLine } from "./parser";
 import { desugar, processADTs } from "./process";
 import {
+  complete,
+  CompletionInfo,
   hover,
   HoverInfo,
   hoverMessage,
@@ -26,6 +28,34 @@ export const printDiagnostic = (src: string, err: TypecheckError) => {
     `  ${line}\n` +
     `  ${" ".repeat(lc.col)}^`
   );
+};
+
+export const printMultilineDiagnostic = (
+  src: string,
+  err: TypecheckError
+): string => {
+  const lc = indexToLineCol(src, err.start);
+  const ec = indexToLineCol(src, err.end);
+
+  let msg = `at line ${lc.line} col ${lc.col}: ${err.msg}\n`;
+  for (let i = lc.line; i <= ec.line; i++) {
+    const line = printLine(src, i);
+    msg += `${line}\n`;
+    if (i == lc.line) {
+      msg += `${" ".repeat(lc.col)}^`;
+      if (ec.line > lc.line) {
+        msg += `${"-".repeat(line.length - lc.col - 1)}\n`;
+      } else {
+        msg += `${"-".repeat(ec.col - lc.col - 1)}\n`;
+      }
+    } else if (i == ec.line) {
+      msg += `${"-".repeat(ec.col)}^\n`;
+    } else {
+      msg += `${"-".repeat(line.length)}\n`;
+    }
+  }
+
+  return msg;
 };
 
 const ensureBuild = (src: string): BuildResult => {
@@ -77,5 +107,50 @@ describe("inspect", () => {
       range: { start: 70, end: 71 },
       msg: "var(Bool)",
     });
+  });
+
+  test("should return a list of available completions for partial def", () => {
+    const src = `
+    type Nat = zero | succ(x Nat)
+    func prev:Nat->Nat = λn
+      case n of
+        zero -> zero
+        succ -> `;
+    const result = build(src, false);
+    expect(result.defs.size).toBe(4);
+  });
+
+  test("should return a list of available completions", () => {
+    const src = `
+    type Nat = zero | succ(x Nat)
+    func prev:Nat->Nat = λn
+      case n of
+        zero -> zero
+        succ -> n
+    func f:Nat = zero`;
+    const result = build(src, false);
+
+    for (let err of result.checkerErrors) {
+      console.error(printDiagnostic(src, err));
+    }
+
+    console.log(
+      "finding completions at location: " +
+        printDiagnostic(src, TypecheckError("", 116, 117))
+    );
+
+    // in the succ branch of the case
+    expect(complete(src, result.file, result.defs, 116)).toStrictEqual([
+      {
+        kind: 1,
+        label: "n",
+        sortText: "0",
+      },
+      {
+        kind: 1,
+        label: "n.x",
+        sortText: "0",
+      },
+    ]);
   });
 });

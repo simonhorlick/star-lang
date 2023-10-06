@@ -886,16 +886,14 @@ const parseNewline: Parser<Newline> = map(newline, () => ({ _: "nl" }));
 
 // parseFile is a parser for a source file.
 export const parseFile: Parser<File> = map(
-  consumeAll(
-    many(
-      any6(
-        parseWhitespace,
-        parseNewline,
-        parsePackage,
-        definition,
-        adt,
-        parseLineComment
-      )
+  many(
+    any6(
+      parseWhitespace,
+      parseNewline,
+      parsePackage,
+      definition,
+      adt,
+      parseLineComment
     )
   ),
   (r) => ({ _: "file", content: r })
