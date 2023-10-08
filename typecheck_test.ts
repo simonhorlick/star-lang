@@ -1103,8 +1103,7 @@ describe("typechecker", () => {
     func ex:Pair(Bool)(Bool) = pair(Bool)(Bool)(true)(true)    
     `;
     const t = build(src);
-    if (t._ == "parseerror") throw `parse failed: ${t.error}`;
-    if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
+    if (t.checkerErrors.length != 0) throw `check failed`;
   });
 
   test("let statements should typecheck", () => {
@@ -1116,8 +1115,7 @@ describe("typechecker", () => {
     func ex:Bool->Bool = λb let x = b in x
     `;
     const t = build(src);
-    if (t._ == "parseerror") throw `parse failed: ${t.error}`;
-    if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
+    if (t.checkerErrors.length != 0) throw `check failed`;
   });
 
   describe("type equality", () => {
