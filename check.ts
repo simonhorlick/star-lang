@@ -256,7 +256,7 @@ export const infer = (
       // Without loss of generality we can assume that other definitions
       // typecheck because if we use a definition that later fails to check
       // the compilation will fail with a typecheck error.
-      return Result(term, match.typ, []);
+      return Result(term, match.term.typ, []);
     case "orig":
       const tc = infer(defs, adts, ctx, term.child, term.start, term.end);
       if (tc._ == "typecheckerror") {
@@ -936,7 +936,7 @@ export function stripAST(t: ASTNode): ASTNode {
     case "com":
       return t;
     case "def":
-      return Def(t.name, strip(t.term), strip(t.typ));
+      return Def(t.name, strip(t.term) as Ann);
     case "nl":
       return t;
     case "orig2":

@@ -2,11 +2,18 @@ import { describe, expect, test } from "@jest/globals";
 
 var util = require("util");
 
-import { TypecheckError, identifier, serialise } from "./check";
-import { indexToLineCol, printLine } from "./parser";
-import { complete, hover, HoverInfo, hoverMessage, Range } from "./inspect";
-import { build, BuildResult } from "./build";
-import { ASTNode } from "./ast";
+import { TypecheckError, identifier, serialise } from "../check";
+import { indexToLineCol, printLine } from "../parser";
+import {
+  complete,
+  hover,
+  HoverInfo,
+  hoverMessage,
+  printMultilineDiagnostic,
+  Range,
+} from "./inspect";
+import { build, BuildResult } from "../build";
+import { ASTNode } from "../ast";
 
 export const printDiagnostic = (src: string, err: TypecheckError) => {
   const lc = indexToLineCol(src, err.start);
@@ -23,6 +30,15 @@ const ensureBuild = (src: string): BuildResult => {
   const result = build(src, false);
   if (result.checkerErrors.length) throw "build failed";
   return result;
+};
+
+const debugPrintTokens = (src: string, br: BuildResult) => {
+  const hoverInfo = hover(src, br.file, br.defs, undefined);
+  for (const [k, v] of hoverInfo) {
+    console.debug(
+      printMultilineDiagnostic(src, TypecheckError(v.msg, k.start, k.end))
+    );
+  }
 };
 
 describe("inspect", () => {
@@ -65,6 +81,20 @@ describe("inspect", () => {
     expect(hover(src, result.file, result.defs, undefined)).toEqual(expected);
 
     expect(hoverMessage(src, result.file, result.defs, 70)).toEqual({
+      range: { start: 70, end: 71 },
+      msg: "var(Bool)",
+    });
+  });
+
+  test("should display the type when hovering a function definition", () => {
+    const src = `
+    type Nat = zero | succ(x Nat)
+    func f:Nat = zero
+    `;
+    const result = ensureBuild(src);
+    debugPrintTokens(src, result);
+    // the type of f
+    expect(hoverMessage(src, result.file, result.defs, 37)).toEqual({
       range: { start: 70, end: 71 },
       msg: "var(Bool)",
     });

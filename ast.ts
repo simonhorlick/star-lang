@@ -371,14 +371,12 @@ export const If = (
 export type Def = {
   _: "def";
   name: string;
-  term: Term;
-  typ: Type;
+  term: Ann;
 };
 
-export const Def = (name: string, term: Term, type: Type): Def => ({
+export const Def = (name: string, term: Ann): Def => ({
   _: "def",
   name: name,
-  typ: type,
   term: term,
 });
 
@@ -851,7 +849,7 @@ export const definition: Parser<ParseError | Def> = bind(str("func"), (_) =>
             bind(orFail("expected =", char("=")), (_) =>
               bind(many(either(whitespace, newline)), (_) =>
                 bind(orFail("expected term", term), (tm) =>
-                  pure(Def(name, tm, typ))
+                  pure(Def(name, Ann(tm, typ)))
                 )
               )
             )

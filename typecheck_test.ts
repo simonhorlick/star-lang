@@ -135,7 +135,7 @@ describe("typechecker", () => {
     test("should check that a lambda has a pi type", () => {
       const result = ensure(
         typecheck(
-          defs([Def("A", Abs("x", Var("x", 0)), Star())]),
+          defs([Def("A", Ann(Abs("x", Var("x", 0)), Star()))]),
           adts(),
           [],
           Abs("a", Var("a", 0)),
@@ -160,8 +160,8 @@ describe("typechecker", () => {
       ensure(
         typecheck(
           defs([
-            Def("A", Abs("x", Var("x", 0)), Star()),
-            Def("B", Abs("x", Var("x", 0)), Star()),
+            Def("A", Ann(Abs("x", Var("x", 0)), Star())),
+            Def("B", Ann(Abs("x", Var("x", 0)), Star())),
           ]),
           adts(),
           [],
@@ -196,14 +196,13 @@ describe("typechecker", () => {
         typecheck(
           defs([
             // A:★
-            Def("A", Abs("x", Var("x", 0)), Star()),
+            Def("A", Ann(Abs("x", Var("x", 0)), Star())),
             // B:★
-            Def("B", Abs("x", Var("x", 0)), Star()),
+            Def("B", Ann(Abs("x", Var("x", 0)), Star())),
             // f:A->B
             Def(
               "f",
-              Abs("a", Abs("x", Var("x", 0))),
-              Pi("", Ref("A"), Ref("B"))
+              Ann(Abs("a", Abs("x", Var("x", 0))), Pi("", Ref("A"), Ref("B")))
             ),
           ]),
           adts(),
@@ -238,8 +237,8 @@ describe("typechecker", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
       const result = typecheck(
         defs([
-          Def("A", Abs("x", Abs("y", Var("y", 0))), Star()),
-          Def("B", Abs("x", Abs("y", Var("x", 1))), Star()),
+          Def("A", Ann(Abs("x", Abs("y", Var("y", 0))), Star())),
+          Def("B", Ann(Abs("x", Abs("y", Var("x", 1))), Star())),
         ]),
         adts(),
         ctx,
@@ -257,8 +256,8 @@ describe("typechecker", () => {
       ensure(
         typecheck(
           defs([
-            Def("A", Abs("x", Var("x", 0)), Star()),
-            Def("B", Abs("x", Var("x", 0)), Star()),
+            Def("A", Ann(Abs("x", Var("x", 0)), Star())),
+            Def("B", Ann(Abs("x", Var("x", 0)), Star())),
           ]),
           adts(),
           ctx,
@@ -340,7 +339,9 @@ describe("typechecker", () => {
     );
     ensure(
       typecheck(
-        defs([Def("T", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))]),
+        defs([
+          Def("T", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))),
+        ]),
         adts(),
         [],
         double,
@@ -361,152 +362,168 @@ describe("typechecker", () => {
   // and = λp. λq. Πc:*. (p -> q -> c) -> c
   let and = Def(
     "and",
-    Abs(
-      "p",
+    Ann(
       Abs(
-        "q",
-        Pi(
-          "c",
-          Star(),
+        "p",
+        Abs(
+          "q",
           Pi(
-            "",
-            Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
-            Var("c", 1)
+            "c",
+            Star(),
+            Pi(
+              "",
+              Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
+              Var("c", 1)
+            )
           )
         )
-      )
-    ),
-    Pi("", Star(), Pi("", Star(), Star()))
+      ),
+      Pi("", Star(), Pi("", Star(), Star()))
+    )
   );
 
   test("should check type-level and function", () => {
-    ensure(typecheck(defs(), adts(), [], and.term, and.typ));
+    ensure(infer(defs(), adts(), [], and.term, 0, 0));
   });
 
   // conj : Πp:*. Πq:*. p -> q -> and p q
   // conj = λp. λq. λx. λy. λc. λf. f x y
   let conj = Def(
     "conj",
-    Abs(
-      "p",
+    Ann(
       Abs(
-        "q",
+        "p",
         Abs(
-          "x",
+          "q",
           Abs(
-            "y",
-            Abs("c", Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2))))
+            "x",
+            Abs(
+              "y",
+              Abs(
+                "c",
+                Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
+              )
+            )
           )
         )
-      )
-    ),
-    Pi(
-      "p",
-      Star(),
+      ),
       Pi(
-        "q",
+        "p",
         Star(),
         Pi(
-          "",
-          Var("p", 1),
-          Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
+          "q",
+          Star(),
+          Pi(
+            "",
+            Var("p", 1),
+            Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
+          )
         )
       )
     )
   );
 
   test("should check type-level conjunction function", () => {
-    ensure(typecheck(defs([and]), adts(), [], conj.term, conj.typ));
+    ensure(infer(defs([and]), adts(), [], conj.term, 0, 0));
   });
 
   // proj1 : Πp:*. Πq:*. and p q → p
   // proj1 : λp. λq. λa. a p (λx. λy. x)
   let proj1 = Def(
     "proj1",
-    Abs(
-      "p",
+    Ann(
       Abs(
-        "q",
+        "p",
         Abs(
-          "a",
-          App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
+          "q",
+          Abs(
+            "a",
+            App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
+          )
         )
-      )
-    ),
-    Pi(
-      "p",
-      Star(),
+      ),
       Pi(
-        "q",
+        "p",
         Star(),
-        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
+        Pi(
+          "q",
+          Star(),
+          Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
+        )
       )
     )
   );
 
   test("proj1 checks", () => {
-    ensure(typecheck(defs([and]), adts(), [], proj1.term, proj1.typ));
+    ensure(infer(defs([and]), adts(), [], proj1.term, 0, 0));
   });
 
   // proj2 : Πp:*. Πq:*. and p q → q
   // proj2 = λp.   λq. λa. a q (λx. λy. y)
   let proj2 = Def(
     "proj2",
-    Abs(
-      "p",
+    Ann(
       Abs(
-        "q",
+        "p",
         Abs(
-          "a",
-          App(App(Var("a", 0), Var("q", 1)), Abs("x", Abs("y", Var("y", 0))))
+          "q",
+          Abs(
+            "a",
+            App(App(Var("a", 0), Var("q", 1)), Abs("x", Abs("y", Var("y", 0))))
+          )
         )
-      )
-    ),
-    Pi(
-      "p",
-      Star(),
+      ),
       Pi(
-        "q",
+        "p",
         Star(),
-        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
+        Pi(
+          "q",
+          Star(),
+          Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
+        )
       )
     )
   );
 
   test("proj2 checks", () => {
-    ensure(typecheck(defs([and]), adts(), [], proj2.term, proj2.typ));
+    ensure(infer(defs([and]), adts(), [], proj2.term, 0, 0));
   });
 
   // and_commutes : Πp:*. Πq:*. and p q → and q p
   // and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
   const andCommutes = Def(
     "and_commutes",
-    Abs(
-      "p",
+    Ann(
       Abs(
-        "q",
+        "p",
         Abs(
-          "a",
-          App(
+          "q",
+          Abs(
+            "a",
             App(
-              App(App(Ref("conj"), Var("q", 1)), Var("p", 2)),
-              App(App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)), Var("a", 0))
-            ),
-            App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+              App(
+                App(App(Ref("conj"), Var("q", 1)), Var("p", 2)),
+                App(
+                  App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)),
+                  Var("a", 0)
+                )
+              ),
+              App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+            )
           )
         )
-      )
-    ),
-    Pi(
-      "p",
-      Star(),
+      ),
       Pi(
-        "q",
+        "p",
         Star(),
         Pi(
-          "",
-          App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
-          App(App(Ref("and"), Var("q", 1)), Var("p", 2))
+          "q",
+          Star(),
+          Pi(
+            "",
+            App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
+            App(App(Ref("and"), Var("q", 1)), Var("p", 2))
+          )
         )
       )
     )
@@ -517,13 +534,7 @@ describe("typechecker", () => {
     // Logically, if we have an and(p,q) we can project out the components p,q
     // and construct an element of and(q,p) as desired.
     ensure(
-      typecheck(
-        defs([and, conj, proj1, proj2]),
-        adts(),
-        [],
-        andCommutes.term,
-        andCommutes.typ
-      )
+      infer(defs([and, conj, proj1, proj2]), adts(), [], andCommutes.term, 0, 0)
     );
   });
 
@@ -805,11 +816,11 @@ describe("typechecker", () => {
         (A)
         (P) (null) (just) null
     */
-    expect(pretty(mnull.typ)).toBe(
+    expect(pretty(mnull.term.typ)).toBe(
       pretty(Pi("A", Star(), App(Ref("Maybe"), Var("A", 0))))
     );
 
-    expect(pretty(mnull.term)).toBe(
+    expect(pretty(mnull.term.term)).toBe(
       pretty(Abs("A", Abs("P", Abs("null", Abs("just", Var("null", 1))))))
     );
 
@@ -818,7 +829,7 @@ describe("typechecker", () => {
         (A) (value)
         (P) (null) (just) just(value)
       */
-    expect(pretty(just.typ)).toBe(
+    expect(pretty(just.term.typ)).toBe(
       pretty(
         Pi(
           "A",
@@ -828,7 +839,7 @@ describe("typechecker", () => {
       )
     );
 
-    expect(pretty(just.term)).toBe(
+    expect(pretty(just.term.term)).toBe(
       pretty(
         Abs(
           "A",
@@ -875,19 +886,33 @@ describe("typechecker", () => {
       caseExp,
       caseExp
     );
-    expect(reduced).toStrictEqual(tru.term);
+    expect(reduced).toStrictEqual(tru.term.term);
   });
 
   test("null checks", () => {
-    console.log(`checking ${pretty(mnull.term)} has type ${pretty(mnull.typ)}`);
+    console.log(
+      `checking ${pretty(mnull.term.term)} has type ${pretty(mnull.term.typ)}`
+    );
     ensure(
-      typecheck(defs([maybe, mnull, just]), adts(), [], mnull.term, mnull.typ)
+      typecheck(
+        defs([maybe, mnull, just]),
+        adts(),
+        [],
+        mnull.term.term,
+        mnull.term.typ
+      )
     );
   });
 
   test("just checks", () => {
     ensure(
-      typecheck(defs([maybe, mnull, just]), adts(), [], just.term, just.typ)
+      typecheck(
+        defs([maybe, mnull, just]),
+        adts(),
+        [],
+        just.term.term,
+        just.term.typ
+      )
     );
   });
 
@@ -992,11 +1017,11 @@ describe("typechecker", () => {
         <P> (nil) (cons) nil
       */
 
-    expect(pretty(nil.typ)).toBe(
+    expect(pretty(nil.term.typ)).toBe(
       pretty(Pi("A", Star(), App(Ref("List"), Var("A", 0))))
     );
 
-    expect(pretty(nil.term)).toBe(
+    expect(pretty(nil.term.term)).toBe(
       pretty(Abs("A", Abs("P", Abs("nil", Abs("cons", Var("nil", 1))))))
     );
 
@@ -1005,7 +1030,7 @@ describe("typechecker", () => {
         <T> (head) (tail)
         <P> (nil) (cons) cons(head)(tail)
     */
-    expect(pretty(cons.term)).toBe(
+    expect(pretty(cons.term.term)).toBe(
       pretty(
         Abs(
           "A",
@@ -1029,7 +1054,7 @@ describe("typechecker", () => {
       )
     );
 
-    expect(pretty(cons.typ)).toBe(
+    expect(pretty(cons.term.typ)).toBe(
       pretty(
         Pi(
           "A",
@@ -1049,17 +1074,15 @@ describe("typechecker", () => {
   });
 
   test("nil checks", () => {
-    ensure(typecheck(defs([list, nil, cons]), adts([]), [], nil.term, nil.typ));
+    ensure(infer(defs([list, nil, cons]), adts([]), [], nil.term, 0, 0));
   });
 
   test("cons checks", () => {
-    ensure(
-      typecheck(defs([list, nil, cons]), adts([]), [], cons.term, cons.typ)
-    );
+    ensure(infer(defs([list, nil, cons]), adts([]), [], cons.term, 0, 0));
   });
 
   test("pair checks", () => {
-    ensure(typecheck(defs([pair, ppair]), adts([]), [], ppair.term, ppair.typ));
+    ensure(infer(defs([pair, ppair]), adts([]), [], ppair.term, 0, 0));
   });
 
   // // FIXME: this test blows the stack because the return type of snd is
@@ -1101,7 +1124,10 @@ describe("typechecker", () => {
   });
 
   describe("type equality", () => {
-    const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
+    const id = Def(
+      "id",
+      Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))
+    );
 
     const Nat: Term = Ref("Nat");
     const Bool: Term = Ref("Bool");
@@ -1111,8 +1137,8 @@ describe("typechecker", () => {
     const Id: Term = Abs("A", Var("A", 0));
 
     const ds = defs([
-      Def("Nat", id.term, Star()),
-      Def("Bool", id.term, Star()),
+      Def("Nat", Ann(id.term, Star())),
+      Def("Bool", Ann(id.term, Star())),
     ]);
 
     // The type Nat→Bool.
@@ -1286,7 +1312,7 @@ describe("evaluation", () => {
   });
 
   // λx. x
-  const id = Def("id", Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")));
+  const id = Def("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
 
   // Test that substituting top level functions works properly.
   test("TestSubstituteDef", () => {

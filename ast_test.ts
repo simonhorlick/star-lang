@@ -49,9 +49,7 @@ export function serialiseAST(n: ASTNode): string {
     case "com":
       return `Com(${n.text})`;
     case "def":
-      return `Def(name=${n.name}, term=${serialise(n.term)}, typ=${serialise(
-        n.typ
-      )})`;
+      return `Def(name=${n.name}, term=${serialise(n.term)})`;
     case "adt":
       return `ADT(${id(n.name)})`;
     case "err":
@@ -325,8 +323,8 @@ else
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.typ)).toBe("App(Ref(List), Ref(Nat))");
-    expect(serialise(ast.term)).toBe("Ref(zero)");
+    expect(serialise(ast.term.typ)).toBe("App(Ref(List), Ref(Nat))");
+    expect(serialise(ast.term.term)).toBe("Ref(zero)");
   });
 
   test("should parse case", () => {
@@ -397,10 +395,10 @@ else
     }
 
     expect(serialiseAST(stripAST(ast.value.content[0]))).toBe(
-      `Def(name=abc, term=Abs("n", Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term))])), typ=Pi("", Ref(Bool), Ref(Bool)))`
+      `Def(name=abc, term=Ann(Abs("n", Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term))])), Pi("", Ref(Bool), Ref(Bool))))`
     );
     expect(serialiseAST(stripAST(ast.value.content[1]))).toBe(
-      `Def(name=def, term=Ref(zero), typ=Ref(Nat))`
+      `Def(name=def, term=Ann(Ref(zero), Ref(Nat)))`
     );
   });
 
@@ -439,8 +437,8 @@ f         unc zz:Bool = false`)
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.typ)).toBe("Ref(String)");
-    expect(serialise(ast.term)).toBe('""');
+    expect(serialise(ast.term.typ)).toBe("Ref(String)");
+    expect(serialise(ast.term.term)).toBe('""');
   });
 
   test("should parse let expression", () => {
@@ -478,6 +476,8 @@ f         unc zz:Bool = false`)
     const src = `loadsofstuffherethenfunc x:Nat = zero`;
     // skip all the junk then parse a definition.
     const ast = stripAST(result(bind(resync, (_) => definition)(ts(src))));
-    expect(serialiseAST(ast)).toBe(`Def(name=x, term=Ref(zero), typ=Ref(Nat))`);
+    expect(serialiseAST(ast)).toBe(
+      `Def(name=x, term=Ann(Ref(zero), Ref(Nat)))`
+    );
   });
 });

@@ -35,9 +35,6 @@ describe("pretty", () => {
     )
   );
 
-  // fst: Nat = λn:Nat. λm:Nat. n
-  const fst = Def("fst", Abs("n", Abs("m", Ref("n"))), Ref("Nat"));
-
   const id = Erased.App(Erased.Abs("x", Erased.Ref("x")), Erased.Ref("y"));
 
   test("λt λf t", () => expect(prettyC(tru.term)).toBe("λt λf t"));

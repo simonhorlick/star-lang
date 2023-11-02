@@ -1,15 +1,16 @@
 // build is a library for orchestrating builds of source files for this language.
 
-import { parseFile, ADT, Def, ASTNode, File, Type } from "./ast";
+import { parseFile, ADT, Def, ASTNode, File, Type, Ann } from "./ast";
 import {
   TypecheckError,
   identifier,
+  infer,
   logFull,
   strip,
   stripAST,
   typecheck,
 } from "./check";
-import { typecheckErrorDiagnostic, foldTree } from "./inspect";
+import { typecheckErrorDiagnostic, foldTree } from "./inspect/inspect";
 import { FatalParseError, parseErrorDiagnostic } from "./parser";
 import { processADTs, desugar } from "./process";
 
@@ -72,20 +73,12 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
   let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
     // console.log(`\n# checking definition ${def.name}`);
-    const result = typecheck(
-      defsMap,
-      adts,
-      [],
-      def.term,
-      def.typ,
-      0,
-      src.length
-    );
+    const result = infer(defsMap, adts, [], def.term, 0, src.length);
     if (result._ == "typecheckerror") {
       // console.error(typecheckErrorDiagnostic(src, result));
       checkerErrors.push(result);
     } else {
-      checkedMap.set(def.name, Def(def.name, result.term, result.type));
+      checkedMap.set(def.name, Def(def.name, Ann(result.term, result.type)));
     }
   }
 

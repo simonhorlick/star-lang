@@ -17,7 +17,7 @@ import {
   Identifier,
   Let,
   Hole,
-} from "./ast";
+} from "../ast";
 import {
   addTermToCtx,
   identifier,
@@ -27,11 +27,11 @@ import {
   shift,
   strip,
   TypecheckError,
-} from "./check";
-import { whnf } from "./equal";
-import { indexToLineCol, printLine } from "./parser";
-import { pretty, printCtx } from "./pretty";
-import { File } from "./ast";
+} from "../check";
+import { whnf } from "../equal";
+import { indexToLineCol, printLine } from "../parser";
+import { pretty, printCtx } from "../pretty";
+import { File } from "../ast";
 
 export const printMultilineDiagnostic = (
   src: string,
@@ -308,7 +308,7 @@ export const inspect = (
         if (start != undefined && end != undefined) {
           spans.set(
             { start: start, end: end },
-            { term: t, type: ref.typ, ctx: ctx }
+            { term: t, type: ref.term.typ, ctx: ctx }
           );
         }
         return t;
@@ -375,8 +375,7 @@ export const inspect = (
     }
   };
 
-  traverse(def.term, def.typ, undefined, undefined, [], defs);
-  traverse(def.typ, undefined, undefined, undefined, [], defs);
+  traverse(def.term, undefined, undefined, undefined, [], defs);
   return spans;
 };
 

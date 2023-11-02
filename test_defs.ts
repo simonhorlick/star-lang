@@ -1,4 +1,4 @@
-import { App, Def, Identifier, Par, Ref, Star } from "./ast";
+import { Ann, App, Def, Identifier, Par, Ref, Star } from "./ast";
 import {
   GenerateConstructorTerm,
   GenerateConstructorType,
@@ -14,14 +14,18 @@ export const bool = buildType(Identifier("Bool"), [], boolConstructors);
 
 export const fls = Def(
   "false",
-  GenerateConstructorTerm([], boolConstructors, 0),
-  GenerateConstructorType("Bool", [], boolConstructors[0])
+  Ann(
+    GenerateConstructorTerm([], boolConstructors, 0),
+    GenerateConstructorType("Bool", [], boolConstructors[0])
+  )
 );
 
 export const tru = Def(
   "true",
-  GenerateConstructorTerm([], boolConstructors, 1),
-  GenerateConstructorType("Bool", [], boolConstructors[1])
+  Ann(
+    GenerateConstructorTerm([], boolConstructors, 1),
+    GenerateConstructorType("Bool", [], boolConstructors[1])
+  )
 );
 
 const natConstructors = [
@@ -33,14 +37,18 @@ export const nat = buildType(Identifier("Nat"), [], natConstructors);
 
 export const zero = Def(
   "zero",
-  GenerateConstructorTerm([], natConstructors, 0),
-  GenerateConstructorType("Nat", [], natConstructors[0])
+  Ann(
+    GenerateConstructorTerm([], natConstructors, 0),
+    GenerateConstructorType("Nat", [], natConstructors[0])
+  )
 );
 
 export const succ = Def(
   "succ",
-  GenerateConstructorTerm([], natConstructors, 1),
-  GenerateConstructorType("Nat", [], natConstructors[1])
+  Ann(
+    GenerateConstructorTerm([], natConstructors, 1),
+    GenerateConstructorType("Nat", [], natConstructors[1])
+  )
 );
 
 const listParams = [{ name: "A", type: Star() }];
@@ -66,14 +74,18 @@ export const list = buildType(Identifier("List"), listParams, listConstructors);
 
 export const nil = Def(
   "nil",
-  GenerateConstructorTerm(listParams, listConstructors, 0),
-  GenerateConstructorType("List", listParams, listConstructors[0])
+  Ann(
+    GenerateConstructorTerm(listParams, listConstructors, 0),
+    GenerateConstructorType("List", listParams, listConstructors[0])
+  )
 );
 
 export const cons = Def(
   "cons",
-  GenerateConstructorTerm(listParams, listConstructors, 1),
-  GenerateConstructorType("List", listParams, listConstructors[1])
+  Ann(
+    GenerateConstructorTerm(listParams, listConstructors, 1),
+    GenerateConstructorType("List", listParams, listConstructors[1])
+  )
 );
 
 const maybeParams = [{ name: "A", type: Star() }];
@@ -99,14 +111,18 @@ export const maybe = buildType(
 
 export const mnull = Def(
   "null",
-  GenerateConstructorTerm(maybeParams, maybeConstructors, 0),
-  GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
+  Ann(
+    GenerateConstructorTerm(maybeParams, maybeConstructors, 0),
+    GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
+  )
 );
 
 export const just = Def(
   "just",
-  GenerateConstructorTerm(maybeParams, maybeConstructors, 1),
-  GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
+  Ann(
+    GenerateConstructorTerm(maybeParams, maybeConstructors, 1),
+    GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
+  )
 );
 
 const pairParams = [
@@ -133,6 +149,8 @@ const pairConstructors = [
 export const pair = buildType(Identifier("Pair"), pairParams, pairConstructors);
 export const ppair = Def(
   "pair",
-  GenerateConstructorTerm(pairParams, pairConstructors, 0),
-  GenerateConstructorType("Pair", pairParams, pairConstructors[0])
+  Ann(
+    GenerateConstructorTerm(pairParams, pairConstructors, 0),
+    GenerateConstructorType("Pair", pairParams, pairConstructors[0])
+  )
 );

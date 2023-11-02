@@ -54,14 +54,16 @@ const processNode = (n: ASTNode): ASTNode[] => {
           identifier(con.name),
           // This is used for tooling to be able to provide jump-to-definition
           // for type constructors.
-          wrapOrigin(
-            GenerateConstructorTerm(n.params, n.constructors, i),
-            con.name
-          ),
-          GenerateConstructorType(
-            identifier(n.name),
-            n.params,
-            n.constructors[i]
+          Ann(
+            wrapOrigin(
+              GenerateConstructorTerm(n.params, n.constructors, i),
+              con.name
+            ),
+            GenerateConstructorType(
+              identifier(n.name),
+              n.params,
+              n.constructors[i]
+            )
           )
         );
       });
@@ -183,21 +185,23 @@ export const buildType = (
     // types. `name` contains the source location where the constructor was
     // defined, so any refs that mention this constructor can follow this origin
     // back to the source text.
-    wrapOrigin(
-      processPars(
-        parameters.reduceRight<Term>(
-          (acc, paramN) => Abs(paramN.name, acc),
-          self
+    Ann(
+      wrapOrigin(
+        processPars(
+          parameters.reduceRight<Term>(
+            (acc, paramN) => Abs(paramN.name, acc),
+            self
+          ),
+          []
         ),
-        []
+        name
       ),
-      name
-    ),
-    // Ensure that type-constructors such as Maybe have type arguments here.
-    // Maybe does not have type * - instead it has type A->*.
-    parameters.reduceRight<Term>(
-      (acc, curr) => Pi(curr.name, curr.type, acc),
-      Star()
+      // Ensure that type-constructors such as Maybe have type arguments here.
+      // Maybe does not have type * - instead it has type A->*.
+      parameters.reduceRight<Term>(
+        (acc, curr) => Pi(curr.name, curr.type, acc),
+        Star()
+      )
     )
   );
 };
@@ -335,11 +339,7 @@ export const desugarTerm = (
 };
 
 export const desugar = (def: Def, adts: Map<string, ADT>): Def => {
-  return Def(
-    def.name,
-    desugarTerm(def.term, undefined, adts, []),
-    desugarTerm(def.typ, undefined, adts, [])
-  );
+  return Def(def.name, desugarTerm(def.term, undefined, adts, []) as Ann);
 };
 
 // processPars removes all Par nodes from the tree t.
