@@ -50,9 +50,10 @@ zero branch no such argument is available, so n.x in that branch would result in
 a compile error.
 
 ```
-func prev:Nat->Nat = λn case n of
-  zero -> zero
-  succ -> n.x
+func prev:Nat->Nat = λn
+  case n of
+  | zero -> zero
+  | succ -> n.x
 ```
 
 ### Literals

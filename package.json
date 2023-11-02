@@ -4,8 +4,7 @@
   "description": "",
   "main": "index.ts",
   "scripts": {
-    "test": "./node_modules/.bin/tsc",
-    "postinstall": "./node_modules/.bin/tsc"
+    "test": "./node_modules/.bin/tsc"
   },
   "author": "Simon Horlick",
   "license": "MIT",

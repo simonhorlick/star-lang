@@ -5,6 +5,7 @@ import {
   App,
   application,
   arrow,
+  ASTNode,
   Def,
   definition,
   identifier,
@@ -14,16 +15,18 @@ import {
   Par,
   parenthesis,
   ParseError,
+  parseFile,
   parseLineComment,
   parsePackage,
   Pi,
   Ref,
   reference,
+  resync,
   stringLiteral,
   term,
   type,
 } from "./ast";
-import { logFull, serialise, strip, stripAST } from "./check";
+import { logFull, serialise, strip, stripAST, identifier as id } from "./check";
 import {
   bind,
   char,
@@ -38,6 +41,28 @@ import {
   whitespace,
 } from "./parser";
 import { result, ts } from "./parser_test";
+
+export function serialiseAST(n: ASTNode): string {
+  switch (n._) {
+    case "pkg":
+      return `Pkg(${n.name})`;
+    case "com":
+      return `Com(${n.text})`;
+    case "def":
+      return `Def(name=${n.name}, term=${serialise(n.term)}, typ=${serialise(
+        n.typ
+      )})`;
+    case "adt":
+      return `ADT(${id(n.name)})`;
+    case "err":
+      return `Err(${n.msg})`;
+    case "orig2":
+      return serialiseAST(n.child);
+    case "sp":
+    case "nl":
+      return "";
+  }
+}
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
 
@@ -306,8 +331,8 @@ else
 
   test("should parse case", () => {
     const src = `case n of
-      zero -> true
-      succ -> false`;
+    |  zero -> true
+    |  succ -> false`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       "Case(Par(n),[Branch(Identifier(zero), Ref(true)),Branch(Identifier(succ), Ref(false))])"
@@ -316,8 +341,8 @@ else
 
   test("should parse case with annotation", () => {
     const src = `(case n of
-      zero -> true
-      succ -> false
+    |  zero -> true
+    |  succ -> false
     ):Bool`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
@@ -326,26 +351,23 @@ else
   });
 
   test("should parse nested case", () => {
-    const src = `(case n of
-      zero -> (case m of
-          zero -> false
-          succ -> true
-        ):Bool
-      succ -> (case m of
-          zero -> false
-          succ -> lt(n.x)(m.x)
-        ):Bool
-      ):Bool`;
+    const src = `case n of
+    | zero -> (case m of
+      | zero -> false
+      | succ -> true)
+    | succ -> (case m of
+      | zero -> false
+      | succ -> lt(n.x)(m.x))`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      "Ann(Case(Par(n),[Branch(Identifier(zero), Ann(Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), Ref(true))]), Ref(Bool))),Branch(Identifier(succ), Ann(Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), App(App(Ref(lt), Ref(n.x)), Ref(m.x)))]), Ref(Bool)))]), Ref(Bool))"
+      "Case(Par(n),[Branch(Identifier(zero), Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), Ref(true))])),Branch(Identifier(succ), Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), App(App(Ref(lt), Ref(n.x)), Ref(m.x)))]))])"
     );
   });
 
   test("should parse case with empty branch", () => {
     const src = `case n of
-      zero -> 
-      succ -> zero`;
+    | zero -> 
+    | succ -> zero`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       "Case(Par(n),[Branch(Identifier(zero), ParseError(expected term)),Branch(Identifier(succ), Ref(zero))])"
@@ -354,12 +376,50 @@ else
 
   test("should parse case with empty final branch", () => {
     const src = `case n of
-      zero -> zero
-      succ -> `;
+    | zero -> zero
+    | succ -> `;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       "Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term))])"
     );
+  });
+
+  test("should parse definition containing partial case", () => {
+    const ast = parseFile(
+      ts(`func abc:Bool->Bool = λn case n of
+    | zero -> zero
+    | succ -> 
+    func def:Nat = zero
+    `)
+    );
+    if (ast._ != "outputvalue") {
+      throw `unexpected ${ast._}`;
+    }
+
+    expect(serialiseAST(stripAST(ast.value.content[0]))).toBe(
+      `Def(name=abc, term=Abs("n", Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term))])), typ=Pi("", Ref(Bool), Ref(Bool)))`
+    );
+    expect(serialiseAST(stripAST(ast.value.content[1]))).toBe(
+      `Def(name=def, term=Ref(zero), typ=Ref(Nat))`
+    );
+  });
+
+  /*
+   */
+  test("should parse definitions following error node", () => {
+    const ast = parseFile(
+      ts(`type Bool = false | true
+          func not:Bool->Bool = err if b then false else true
+f         unc zz:Bool = false`)
+    );
+    if (ast._ != "outputvalue") {
+      throw `unexpected ${ast._}`;
+    }
+
+    // expect(serialiseAST(stripAST(ast.value.content[0]))).toBe(
+    //   ``
+    // );
+    expect(serialiseAST(stripAST(ast.value.content[1]))).toBe(``);
   });
 
   test("should parse empty string literal", () => {
@@ -404,5 +464,20 @@ else
     expect(serialise(ast)).toBe(
       `App(Ref(elimIO), App(Ref(println), ParseError(failed to parse string literal)))`
     );
+  });
+
+  test("should skip unparsable areas", () => {
+    const src = `######)one`;
+    // resync should skip past all the hashes and successfully parse a closing
+    // parenthesis.
+    const r = result(bind(resync, (_) => char(")"))(ts(src)));
+    expect(r).toBe(`)`);
+  });
+
+  test("should resync to next keyword", () => {
+    const src = `loadsofstuffherethenfunc x:Nat = zero`;
+    // skip all the junk then parse a definition.
+    const ast = stripAST(result(bind(resync, (_) => definition)(ts(src))));
+    expect(serialiseAST(ast)).toBe(`Def(name=x, term=Ref(zero), typ=Ref(Nat))`);
   });
 });

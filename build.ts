@@ -1,6 +1,6 @@
 // build is a library for orchestrating builds of source files for this language.
 
-import { parseFile, ADT, Def, ASTNode, File } from "./ast";
+import { parseFile, ADT, Def, ASTNode, File, Type } from "./ast";
 import {
   TypecheckError,
   identifier,
@@ -9,7 +9,7 @@ import {
   stripAST,
   typecheck,
 } from "./check";
-import { typecheckErrorDiagnostic } from "./inspect";
+import { typecheckErrorDiagnostic, foldTree } from "./inspect";
 import { FatalParseError, parseErrorDiagnostic } from "./parser";
 import { processADTs, desugar } from "./process";
 
@@ -31,6 +31,7 @@ export type BuildResult = {
   file: File;
   defs: Map<string, Def>;
   checkerErrors: TypecheckError[];
+  parseErrors: TypecheckError[];
 };
 
 // build takes a source file as a string, attempts to parse the file then
@@ -70,7 +71,7 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
 
   let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
-    console.log(`\n# checking definition ${def.name}`);
+    // console.log(`\n# checking definition ${def.name}`);
     const result = typecheck(
       defsMap,
       adts,
@@ -81,11 +82,29 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
       src.length
     );
     if (result._ == "typecheckerror") {
-      console.error(typecheckErrorDiagnostic(src, result));
+      // console.error(typecheckErrorDiagnostic(src, result));
       checkerErrors.push(result);
     } else {
       checkedMap.set(def.name, Def(def.name, result.term, result.type));
     }
+  }
+
+  const parseErrors: TypecheckError[] = [];
+  for (const def of defs) {
+    // FIXME: need source locations.
+    const errs = foldTree(
+      (acc, curr) =>
+        curr._ == "err"
+          ? acc.concat({
+              msg: curr.msg,
+              start: 0,
+              end: 0,
+            } as TypecheckError)
+          : acc,
+      [] as TypecheckError[],
+      def.term
+    );
+    parseErrors.push(...errs);
   }
 
   return {
@@ -93,5 +112,6 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
     file: { _: "file", content: [...nondefs, ...checkedMap.values()] },
     defs: checkedMap,
     checkerErrors: checkerErrors,
+    parseErrors: parseErrors,
   };
 };

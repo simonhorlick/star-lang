@@ -42,6 +42,8 @@ import {
   sat,
   lower,
   upper,
+  zero,
+  until,
 } from "./parser";
 
 // ParseError is a syntax node that allows partial parse trees to be
@@ -405,12 +407,22 @@ export const orFail = <A>(
   p: Parser<A | ParseError>
 ): Parser<A | ParseError> => either(p, pure(ParseError(`${msg}`)));
 
+const reserved = new Set(["func", "import"]);
+
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
-export const identifier: Parser<string> = bind(alpha, (a) =>
-  bind(many(any(alpha, digit, oneOf("_."))), (b) =>
-    pure(a + (b?.join("") ?? ""))
-  )
+export const identifier: Parser<string> = bind(
+  bind(alpha, (a) =>
+    bind(many(any(alpha, digit, oneOf("_."))), (b) =>
+      pure(a + (b?.join("") ?? ""))
+    )
+  ),
+  (ident: string) => {
+    if (reserved.has(ident)) {
+      return zero("reserved keyword");
+    }
+    return pure(ident);
+  }
 );
 
 // identifier2 parses a letter from the alphabet followed by letters, numbers and
@@ -617,13 +629,32 @@ export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
     })
   );
 
-//  true -> false
+// resync is a parser that advances the stream until the
+// next sync character or keyword is observed.
+export const resync = skip(
+  until(either(str("func"), oneOf(`()"`))) // until fails iff the nested parser is successful.
+);
+
+// skip forward and return a parse error in this position.
+const resync2 = (msg: string): Parser<Term> =>
+  block(map(resync, (_) => ParseError(msg)));
+
+// | true -> false
 const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
-  bind(block(identifier2), (id) =>
-    bind(many(whitespace), (_) =>
-      bind(either(str("->"), str("=>")), (_) =>
+  bind(str("|"), (_) =>
+    bind(optional(spaces), (_) =>
+      bind(block(identifier2), (id) =>
         bind(many(whitespace), (_) =>
-          bind(orFail("expected term", term), (t) => pure(Branch(id, t)))
+          bind(either(str("->"), str("=>")), (_) =>
+            bind(many(whitespace), (_) =>
+              bind(
+                // Attempt to parse a term, if we fail try to sync and return a
+                // parse error.
+                either(term, resync2("expected term")),
+                (t) => pure(Branch(id, t))
+              )
+            )
+          )
         )
       )
     )
@@ -631,8 +662,8 @@ const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
 );
 
 // case b of
-//  true -> false
-//  false -> true
+// | true -> false
+// | false -> true
 export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
   orFail(
     "case statment not well formed",
@@ -721,10 +752,6 @@ export const listLiteral: Parser<Term> =
       )
     )
   );
-
-// resync is a parser that advances the stream until the
-// next sync character is observed
-export const resync = skip(sat((c) => `()"`.indexOf(c) == -1));
 
 // utf8 parses a string literal containing utf8 characters and escape
 // sequences.

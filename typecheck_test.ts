@@ -1,19 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
+import { ADT, Context, Def, Self, Term } from "./ast";
 import {
-  ADT,
-  Context,
-  Def,
-  Identifier,
-  Par,
-  Self,
-  Term,
-  Type,
-  parseFile,
-} from "./ast";
-import {
-  addTermToCtx,
   typecheck,
-  dbgCheckIndices,
   equate,
   infer,
   shift,
@@ -24,12 +12,6 @@ import {
 } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
-import {
-  buildConstructor,
-  buildType,
-  GenerateConstructorTerm,
-  GenerateConstructorType,
-} from "./process";
 import {
   bool,
   cons,

@@ -481,6 +481,8 @@ const check = (
         domain.holes.concat(ebody.holes)
       );
     }
+    case "err":
+      return Result(term, type, []);
   }
 
   // If there's a type, and one of the other rules doesn't apply, then check
@@ -798,7 +800,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
     case "str":
       return t2._ == "str" && t2.str == t1.str;
     case "err":
-      throw "aeq: unexpected parse error";
+      // throw "aeq: unexpected parse error";
+      return true;
     case "rel":
       throw "aeq: unexpected rel";
   }

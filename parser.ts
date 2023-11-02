@@ -169,6 +169,26 @@ export function str(st: string): Parser<string> {
       );
 }
 
+// until returns a Parser that fails if the provided parser succeeds and
+// succeeds otherwise. This parser does not advance the stream.
+export const until =
+  <T>(st: Parser<T>): Parser<string> =>
+  (s: Stream): Result<string> => {
+    const p1 = st(s);
+    // The stream matches.
+    if (p1._ == "outputvalue") {
+      // Return failure, do not advance the stream.
+      return {
+        _: "parseerror",
+        stream: s,
+        error: `encountered ${st}`,
+      };
+    } else {
+      // No match so return success and advance by 1 character.
+      return item(s);
+    }
+  };
+
 // identity is a parser that does the same as parser.
 function identity<T>(parser: Parser<T>): Parser<T> {
   return (s: Stream) => {

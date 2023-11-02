@@ -2,22 +2,11 @@ import { describe, expect, test } from "@jest/globals";
 
 var util = require("util");
 
-import { ADT, ASTNode, Context, Def, parseFile, Term, Type } from "./ast";
-import { stripAST, TypecheckError } from "./check";
+import { TypecheckError, identifier, serialise } from "./check";
 import { indexToLineCol, printLine } from "./parser";
-import { desugar, processADTs } from "./process";
-import {
-  complete,
-  CompletionInfo,
-  hover,
-  HoverInfo,
-  hoverMessage,
-  inspect,
-  inspectASTNodes,
-  Range,
-} from "./inspect";
-import { pretty, printCtx } from "./pretty";
+import { complete, hover, HoverInfo, hoverMessage, Range } from "./inspect";
 import { build, BuildResult } from "./build";
+import { ASTNode } from "./ast";
 
 export const printDiagnostic = (src: string, err: TypecheckError) => {
   const lc = indexToLineCol(src, err.start);
@@ -30,37 +19,9 @@ export const printDiagnostic = (src: string, err: TypecheckError) => {
   );
 };
 
-export const printMultilineDiagnostic = (
-  src: string,
-  err: TypecheckError
-): string => {
-  const lc = indexToLineCol(src, err.start);
-  const ec = indexToLineCol(src, err.end);
-
-  let msg = `at line ${lc.line} col ${lc.col}: ${err.msg}\n`;
-  for (let i = lc.line; i <= ec.line; i++) {
-    const line = printLine(src, i);
-    msg += `${line}\n`;
-    if (i == lc.line) {
-      msg += `${" ".repeat(lc.col)}^`;
-      if (ec.line > lc.line) {
-        msg += `${"-".repeat(line.length - lc.col - 1)}\n`;
-      } else {
-        msg += `${"-".repeat(ec.col - lc.col - 1)}\n`;
-      }
-    } else if (i == ec.line) {
-      msg += `${"-".repeat(ec.col)}^\n`;
-    } else {
-      msg += `${"-".repeat(line.length)}\n`;
-    }
-  }
-
-  return msg;
-};
-
 const ensureBuild = (src: string): BuildResult => {
   const result = build(src, false);
-  if (result._ != "buildresult") throw "build failed";
+  if (result.checkerErrors.length) throw "build failed";
   return result;
 };
 
@@ -70,7 +31,7 @@ describe("inspect", () => {
     const expected = new Map<Range, HoverInfo>([
       [{ start: 0, end: 10 }, { msg: "" }],
     ]);
-    expect(hover("", result.file, result.defs)).toEqual(expected);
+    expect(hover("", result.file, result.defs, 5)).toEqual(expected);
   });
 
   test("should display the type when hovering a function definition", () => {
@@ -83,8 +44,8 @@ describe("inspect", () => {
     type Bool = false | true
     func not:Bool->Bool = λb
       case b of
-        false -> true
-        true -> false
+      | false -> true
+      | true -> false
     `;
     const result = ensureBuild(src);
     const expected = new Map<Range, HoverInfo>([
@@ -101,7 +62,7 @@ describe("inspect", () => {
       // the other Bool in the type signature
       [{ start: 49, end: 53 }, { msg: "ref(★)" }],
     ]);
-    expect(hover(src, result.file, result.defs)).toEqual(expected);
+    expect(hover(src, result.file, result.defs, undefined)).toEqual(expected);
 
     expect(hoverMessage(src, result.file, result.defs, 70)).toEqual({
       range: { start: 70, end: 71 },
@@ -114,20 +75,22 @@ describe("inspect", () => {
     type Nat = zero | succ(x Nat)
     func prev:Nat->Nat = λn
       case n of
-        zero -> zero
-        succ -> `;
+      | zero -> zero
+      | succ -> x`;
     const result = build(src, false);
-    expect(result.defs.size).toBe(4);
+    expect(result.defs.size).toBe(3);
   });
 
   test("should return a list of available completions", () => {
-    const src = `
+    const srcWithToken = `
     type Nat = zero | succ(x Nat)
     func prev:Nat->Nat = λn
       case n of
-        zero -> zero
-        succ -> n
+      | zero -> zero
+      | succ -> $HERE$
     func f:Nat = zero`;
+    const src = srcWithToken.replace("$HERE$", "");
+    const tokenLocation = srcWithToken.indexOf("$HERE$");
     const result = build(src, false);
 
     for (let err of result.checkerErrors) {
@@ -136,11 +99,16 @@ describe("inspect", () => {
 
     console.log(
       "finding completions at location: " +
-        printDiagnostic(src, TypecheckError("", 116, 117))
+        printDiagnostic(
+          src,
+          TypecheckError("", tokenLocation, tokenLocation + 1)
+        )
     );
 
     // in the succ branch of the case
-    expect(complete(src, result.file, result.defs, 116)).toStrictEqual([
+    expect(
+      complete(src, result.file, result.defs, tokenLocation)
+    ).toStrictEqual([
       {
         kind: 1,
         label: "n",

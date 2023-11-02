@@ -16,6 +16,7 @@ import {
   Origin,
   Identifier,
   Let,
+  Hole,
 } from "./ast";
 import {
   addTermToCtx,
@@ -31,7 +32,34 @@ import { whnf } from "./equal";
 import { indexToLineCol, printLine } from "./parser";
 import { pretty, printCtx } from "./pretty";
 import { File } from "./ast";
-import { printDiagnostic, printMultilineDiagnostic } from "./inspect_test";
+
+export const printMultilineDiagnostic = (
+  src: string,
+  err: TypecheckError
+): string => {
+  const lc = indexToLineCol(src, err.start);
+  const ec = indexToLineCol(src, err.end);
+
+  let msg = `at line ${lc.line} col ${lc.col}: ${err.msg}\n`;
+  for (let i = lc.line; i <= ec.line; i++) {
+    const line = printLine(src, i);
+    msg += `${line}\n`;
+    if (i == lc.line) {
+      msg += `${" ".repeat(lc.col)}^`;
+      if (ec.line > lc.line) {
+        msg += `${"-".repeat(Math.max(0, line.length - lc.col - 1))}\n`;
+      } else {
+        msg += `${"-".repeat(ec.col - lc.col - 1)}\n`;
+      }
+    } else if (i == ec.line) {
+      msg += `${"-".repeat(ec.col)}^\n`;
+    } else {
+      msg += `${"-".repeat(line.length)}\n`;
+    }
+  }
+
+  return msg;
+};
 
 export const typecheckErrorDiagnostic = (src: string, err: TypecheckError) => {
   const startlc = indexToLineCol(src, err.start);
@@ -83,9 +111,9 @@ export const inspectASTNodes = (n: ASTNode) => {
 // pre-order traversal of the term tree - visit the node itself, followed by
 // any child nodes.
 export const foldTree = <A>(
-  f: (acc: A, curr: Term) => A,
-  init: A,
-  t: Term
+  f: (acc: A, curr: Term) => A, // returns the new accumulator
+  init: A, // initial value of the accumulator
+  t: Term // the starting term
 ): A => {
   const x = f(init, t);
   switch (t._) {
@@ -185,9 +213,10 @@ export const inspect = (
     // }
 
     switch (t._) {
-      case "ann":
+      case "ann": {
         return traverse(t.term, t.typ, undefined, undefined, ctx, defs);
-      case "app":
+      }
+      case "app": {
         // for applications we add a span for the function indicating its
         // function type and a span for the argument so we can inspect the
         // argument type
@@ -195,7 +224,8 @@ export const inspect = (
           traverse(t.left, undefined, undefined, undefined, ctx, defs),
           traverse(t.right, undefined, undefined, undefined, ctx, defs)
         );
-      case "lam":
+      }
+      case "lam": {
         // the type of a lambda abstraction is a pi type.
         if (ty == undefined) {
           throw "inspect: type not present";
@@ -226,11 +256,14 @@ export const inspect = (
             defs
           )
         );
-      case "par":
+      }
+      case "par": {
         throw "inspect: unexpected par";
-      case "let":
+      }
+      case "let": {
         throw "inspect: unexpected let";
-      case "pi":
+      }
+      case "pi": {
         return Pi(
           t.name,
           traverse(t.from, undefined, undefined, undefined, ctx, defs),
@@ -243,7 +276,8 @@ export const inspect = (
             defs
           )
         );
-      case "self":
+      }
+      case "self": {
         return Self(
           t.name,
           traverse(
@@ -255,11 +289,14 @@ export const inspect = (
             defs
           )
         );
-      case "case":
+      }
+      case "case": {
         throw "inspect: unexpected case";
-      case "if":
+      }
+      case "if": {
         throw "inspect: unexpected if";
-      case "ref":
+      }
+      case "ref": {
         // TODO: For defs like true, the type is the expanded version. We
         // usually want a pi type so we can find the types of the arguments,
         // however it doesn't make sense to say true has a pi type when it's
@@ -275,9 +312,11 @@ export const inspect = (
           );
         }
         return t;
-      case "star":
+      }
+      case "star": {
         return t;
-      case "id":
+      }
+      case "id": {
         if (start != undefined && end != undefined && ty != undefined) {
           spans.set(
             { start: start, end: end },
@@ -285,7 +324,8 @@ export const inspect = (
           );
         }
         return t;
-      case "var":
+      }
+      case "var": {
         for (let i = 0; i < ctx.length; i++) {
           const binding = ctx[ctx.length - i - 1];
           if (binding.name == t.name) {
@@ -299,22 +339,39 @@ export const inspect = (
           }
         }
         return t;
-      case "orig":
+      }
+      case "orig": {
+        // If an offset is specified, only traverse into nodes that overlap
+        // that offset.
         if (offset != undefined && offset >= t.start && offset < t.end) {
+          return traverse(t.child, ty, t.start, t.end, ctx, defs);
+        } else if (offset == undefined) {
           return traverse(t.child, ty, t.start, t.end, ctx, defs);
         } else {
           return t;
         }
-      case "rel":
+      }
+      case "rel": {
         return traverse(t.term, ty, undefined, undefined, ctx, defs);
-      case "hole":
+      }
+      case "hole": {
         return t;
-      case "int":
+      }
+      case "int": {
         return t;
-      case "str":
+      }
+      case "str": {
         return t;
-      case "err":
+      }
+      case "err": {
+        if (start != undefined && end != undefined) {
+          spans.set(
+            { start: start, end: end },
+            { term: t, type: ty == undefined ? Hole(0) : ty, ctx: ctx }
+          );
+        }
         return t;
+      }
     }
   };
 
@@ -338,14 +395,15 @@ export type Range = { start: number; end: number };
 export const hover = (
   src: string,
   f: File,
-  defs: Map<string, Def>
+  defs: Map<string, Def>,
+  offset: number | undefined
 ): Map<Range, HoverInfo> => {
   let hoverInfo = new Map<Range, HoverInfo>();
 
   for (const node of f.content) {
     if (node._ == "def") {
       const def = node;
-      const spans = inspect(def, defs);
+      const spans = inspect(def, defs, offset);
       for (const [k, v] of spans) {
         switch (v.term._) {
           case "lam":
@@ -390,16 +448,17 @@ export const hoverMessage = (
   defs: Map<string, Def>,
   offset: number
 ): { range: { start: number; end: number }; msg: string } | null => {
-  const hoverInfo = hover(src, f, defs);
+  const hoverInfo = hover(src, f, defs, offset);
 
-  const overlappingSpans = [...hoverInfo].filter(
-    ([k, v]) => k.start <= offset && k.end > offset
-  );
+  // const overlappingSpans = [...hoverInfo].filter(
+  //   ([k, v]) => k.start <= offset && k.end > offset
+  // );
+  const overlappingSpans = [...hoverInfo];
 
   // find the shortest node that overlaps this offset
   overlappingSpans.sort(([a], [b]) => a.end - a.start - (b.end - b.start));
 
-  console.log(`the following nodes overlap ${offset}:`);
+  // console.log(`the following nodes overlap ${offset}:`);
   for (const span of overlappingSpans) {
     console.log(`  span(${span[0].start}-${span[0].end}): ${span[1].msg}`);
   }
@@ -417,99 +476,37 @@ export const complete = (
   defs: Map<string, Def>,
   offset: number
 ): CompletionInfo[] => {
-  let completionInfo = new Map<Range, CompletionInfo>();
+  let completionList: CompletionInfo[] = [];
 
   for (const node of f.content) {
     if (node._ == "def") {
       const def = node;
-      console.log(`inspecting ${def.name}`);
-
       const spans = inspect(def, defs, offset);
 
-      // type Ctx = {
-      //   start: number;
-      //   end: number;
-      //   spans: Map<Range, CompletionInfo>;
-      // };
-
-      // FIXME: This is wrong, we don't want to fold the whole tree - we want
-      // to quickly find out what's at a certain offset, by trimming subtrees
-      // as we traverse. How do we find out what's in the context at that
-      // offset?
-
-      // const spans = foldTree<Ctx>(
-      //   (acc, curr) => {
-      //     // if (acc.start != 0 && acc.end != 0) {
-      //     console.log(
-      //       printDiagnostic(
-      //         src,
-      //         TypecheckError(
-      //           `${acc.start}-${acc.end}: ${curr._}: ${pretty(curr)}`,
-      //           acc.start,
-      //           acc.end
-      //         )
-      //       )
-      //     );
-      //     // }
-
-      //     if (curr._ == "orig") {
-      //       return { spans: acc.spans, start: curr.start, end: curr.end };
-      //     } else if (curr._ == "lam") {
-      //       let copy = new Map(acc.spans);
-      //       if (acc.start != 0 && acc.end != 0) {
-      //         copy.set(
-      //           { start: acc.start, end: acc.end },
-      //           {
-      //             label: `${identifier(curr.name)}`,
-      //             kind: 1,
-      //             sortText: "0",
-      //           }
-      //         );
-      //       }
-      //       return { spans: copy, start: 0, end: 0 };
-      //     } else {
-      //       // console.log(`${acc.start}-${acc.end}: ${curr._}: ${pretty(curr)}`);
-      //       return { spans: acc.spans, start: 0, end: 0 };
-      //     }
-      //   },
-      //   { start: 0, end: 0, spans: new Map<Range, CompletionInfo>() },
-      //   def.term
-      // );
-
       for (const [k, v] of spans) {
-        console.log(
-          printMultilineDiagnostic(
-            src,
-            TypecheckError(
-              `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
-              k.start,
-              k.end
-            )
-          )
-        );
+        if (!(k.start <= offset && k.end > offset)) {
+          continue;
+        }
+        // console.log(
+        //   printMultilineDiagnostic(
+        //     src,
+        //     TypecheckError(
+        //       `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
+        //       k.start,
+        //       k.end
+        //     )
+        //   )
+        // );
 
-        completionInfo.set(k, {
-          label: `${pretty(v.term)}`,
-          kind: 1,
-          sortText: "0",
-        });
+        for (const binding of v.ctx) {
+          completionList.push({
+            label: binding.name,
+            kind: 1,
+            sortText: "0",
+          });
+        }
       }
     }
-  }
-
-  const overlappingSpans = [...completionInfo].filter(
-    ([k, v]) => k.start <= offset && k.end > offset
-  );
-
-  console.log(`the following nodes overlap ${offset}:`);
-  for (const span of overlappingSpans) {
-    console.log(`  span(${span[0].start}-${span[0].end}): ${span[1].label}`);
-  }
-
-  let completionList: CompletionInfo[] = [];
-
-  for (const span of overlappingSpans) {
-    completionList.push(span[1]);
   }
 
   return completionList;
