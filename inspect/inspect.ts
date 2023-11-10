@@ -181,6 +181,160 @@ export const foldTree = <A>(
   }
 };
 
+export type TermAndCtx = {
+  term: Term;
+  start?: number;
+  end?: number;
+};
+
+// pre-order traversal of the term tree - visit the node itself, followed by
+// any child nodes.
+export const foldTreeCtx = <A>(
+  f: (acc: A, curr: TermAndCtx) => A, // returns the new accumulator
+  init: A, // initial value of the accumulator
+  initVal: Term // the starting term
+): A => {
+  const doFold = (
+    init: A, // initial value of the accumulator
+    ctx: TermAndCtx // the starting term
+  ): A => {
+    const x = f(init, ctx);
+    const t = ctx.term;
+    switch (t._) {
+      case "app": {
+        const left = doFold(x, {
+          term: t.left,
+          start: undefined,
+          end: undefined,
+        });
+        const rght = doFold(left, {
+          term: t.right,
+          start: undefined,
+          end: undefined,
+        });
+        return rght;
+      }
+      case "lam": {
+        const curr = doFold(x, {
+          term: t.name,
+          start: undefined,
+          end: undefined,
+        });
+        const body = doFold(curr, {
+          term: t.body,
+          start: undefined,
+          end: undefined,
+        });
+        return body;
+      }
+      case "ann": {
+        const tm = doFold(x, {
+          term: t.term,
+          start: undefined,
+          end: undefined,
+        });
+        const typ = doFold(tm, {
+          term: t.typ,
+          start: undefined,
+          end: undefined,
+        });
+        return typ;
+      }
+      case "case": {
+        const name = doFold(x, {
+          term: t.name,
+          start: undefined,
+          end: undefined,
+        });
+        let prev = name;
+        for (const b of t.branches) {
+          const ctr = doFold(prev, {
+            term: b.constructor,
+            start: undefined,
+            end: undefined,
+          });
+          prev = doFold(ctr, {
+            term: b.term,
+            start: undefined,
+            end: undefined,
+          });
+        }
+        return prev;
+      }
+      case "if": {
+        const cond = doFold(x, {
+          term: t.condition,
+          start: undefined,
+          end: undefined,
+        });
+        const fls = doFold(cond, {
+          term: t.falseBranch,
+          start: undefined,
+          end: undefined,
+        });
+        const tru = doFold(fls, {
+          term: t.trueBranch,
+          start: undefined,
+          end: undefined,
+        });
+        return tru;
+      }
+      case "let": {
+        const name = doFold(x, {
+          term: t.name,
+          start: undefined,
+          end: undefined,
+        });
+        const expr = doFold(name, {
+          term: t.expr,
+          start: undefined,
+          end: undefined,
+        });
+        const body = doFold(expr, {
+          term: t.body,
+          start: undefined,
+          end: undefined,
+        });
+        return body;
+      }
+      case "orig": {
+        return doFold(x, { term: t.child, start: t.start, end: t.end });
+      }
+      case "pi": {
+        const frm = doFold(x, {
+          term: t.from,
+          start: undefined,
+          end: undefined,
+        });
+        const to = doFold(frm, {
+          term: t.to,
+          start: undefined,
+          end: undefined,
+        });
+        return to;
+      }
+      case "rel": {
+        return doFold(x, { term: t.term, start: undefined, end: undefined });
+      }
+      case "self": {
+        return doFold(x, { term: t.body, start: undefined, end: undefined });
+      }
+      case "id":
+      case "int":
+      case "par":
+      case "hole":
+      case "err":
+      case "star":
+      case "ref":
+      case "str":
+      case "var": {
+        return x;
+      }
+    }
+  };
+  return doFold(init, { term: initVal, start: undefined, end: undefined });
+};
+
 export const inspect = (
   def: Def,
   defs: Map<string, Def>,
@@ -214,7 +368,10 @@ export const inspect = (
 
     switch (t._) {
       case "ann": {
-        return traverse(t.term, t.typ, undefined, undefined, ctx, defs);
+        return Ann(
+          traverse(t.term, t.typ, undefined, undefined, ctx, defs),
+          traverse(t.typ, undefined, undefined, undefined, ctx, defs)
+        );
       }
       case "app": {
         // for applications we add a span for the function indicating its
@@ -228,7 +385,9 @@ export const inspect = (
       case "lam": {
         // the type of a lambda abstraction is a pi type.
         if (ty == undefined) {
-          throw "inspect: type not present";
+          // this can happen if a lambda is part of a type in an annotation.
+          // throw "inspect: type not present";
+          return t;
         }
         const typ = whnf(true, [], defs, ty, t);
         if (typ._ == "typecheckerror") {

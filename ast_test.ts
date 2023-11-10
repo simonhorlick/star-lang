@@ -441,6 +441,14 @@ f         unc zz:Bool = false`)
     expect(serialise(ast.term.term)).toBe('""');
   });
 
+  test("should include origins for type annotations of definitions", () => {
+    const ast = result(definition(ts('func abc:String = ""')));
+    if (ast._ != "def") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialise(ast.term.typ)).toBe("Origin(15, 21, Ref(String))");
+  });
+
   test("should parse let expression", () => {
     const ast = strip(result(term(ts("let g = f(x) in h(g)(g)"))));
     expect(serialise(ast)).toBe(

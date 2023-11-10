@@ -231,6 +231,7 @@ export const infer = (
       // return Result(App(fTypeElaborated, et2), typ);
     }
     case "ann": {
+      // Check the annotation is actually a type.
       let typ = check(defs, adts, ctx, term.typ, Star(), os, oe);
       if (typ._ == "typecheckerror") {
         return typ;
@@ -241,7 +242,13 @@ export const infer = (
         return ty;
       }
 
-      return Result(ty.term, ty.type, typ.holes.concat(ty.holes));
+      // Keep the Ann node with the elaborated term and type, the result type is
+      // simplified and origins are removed.
+      return Result(
+        Ann(ty.term, typ.term),
+        ty.type,
+        typ.holes.concat(ty.holes)
+      );
     }
     case "ref":
       const match = defs.get(term.name);

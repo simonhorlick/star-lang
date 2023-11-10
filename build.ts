@@ -78,7 +78,10 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
       // console.error(typecheckErrorDiagnostic(src, result));
       checkerErrors.push(result);
     } else {
-      checkedMap.set(def.name, Def(def.name, Ann(result.term, result.type)));
+      if (result.term._ != "ann") {
+        throw "expected annotated term for definition body";
+      }
+      checkedMap.set(def.name, Def(def.name, result.term));
     }
   }
 

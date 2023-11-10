@@ -665,7 +665,7 @@ const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
 export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
   orFail(
     "case statment not well formed",
-    bind(spc1(block(par)), (id) =>
+    bind(spc1(par), (id) =>
       bind(str("of"), (_) =>
         bind(newline, (_) =>
           bind(many1(caseBranch), (branches) => pure(Case(id, branches)))
@@ -788,7 +788,7 @@ export const subterm: Parser<Term> = bind(
     // the type of types `*`
     block(star),
     // a reference for example `t`
-    block(reference),
+    reference,
     // a list literal, for example `[1,2,3]`
     block(listLiteral),
     // an integer literal, for example `123`

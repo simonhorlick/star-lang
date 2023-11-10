@@ -1,5 +1,7 @@
 import { Context, Term } from "./ast";
+import { identifier } from "./check";
 import * as Erased from "./erased";
+import { foldTree } from "./inspect/inspect";
 
 export function printCtx(ctx: Context, indices: boolean = false): string {
   return (
@@ -119,3 +121,119 @@ export function prettyC(term: Erased.Term, indices: boolean = false): string {
       return `"${term.str}"`;
   }
 }
+
+let count: number = 1;
+const idMap: WeakMap<Record<string, unknown> | Array<unknown>, number> =
+  new WeakMap<Record<string, unknown> | Array<unknown>, number>();
+
+function uid(object: Term): string {
+  const objectId = idMap.get(object);
+  if (objectId === undefined) {
+    count += 1;
+    idMap.set(object, count);
+    return `${object._}_${count}`;
+  }
+  return `${object._}_${objectId}`;
+}
+
+export const printNodeAsDotGraph = (term: Term): string => {
+  let output = ``;
+  output += `digraph prof {`;
+  output += `  fontname="Helvetica,Arial,sans-serif"`;
+  output += `  node [fontname="Helvetica,Arial,sans-serif"]`;
+  output += `  edge [fontname="Helvetica,Arial,sans-serif"]`;
+  output += `  node [style=filled];`;
+
+  output += foldTree(
+    (acc, curr) => {
+      // add this AST node to the graph
+      let node = "";
+      // add any edges to the child AST nodes
+      let edges = "";
+      switch (curr._) {
+        case "ann":
+          node = `  "${uid(curr)}" [label="ann"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.term)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.typ)}";\n`;
+          break;
+        case "app":
+          node = `  "${uid(curr)}" [label="@"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.left)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.right)}";\n`;
+          break;
+        case "case":
+          node = `  "${uid(curr)}" [label="case ${curr.name}"];\n`;
+          for (const branch of curr.branches) {
+            edges += `  "${uid(curr)}" -> "${uid(branch.term)}";\n`;
+          }
+          break;
+        case "err":
+          node = `  "${uid(curr)}" [label="err ${curr.msg}"];\n`;
+          break;
+        case "hole":
+          node = `  "${uid(curr)}" [label="hole ${curr.id}"];\n`;
+          break;
+        case "id":
+          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+          break;
+        case "int":
+          node = `  "${uid(curr)}" [label="${curr.num}"];\n`;
+          break;
+        case "str":
+          node = `  "${uid(curr)}" [label="${curr.str}"];\n`;
+          break;
+        case "var":
+          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+          break;
+        case "star":
+          node = `  "${uid(curr)}" [label="★"];\n`;
+          break;
+        case "par":
+          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+          break;
+        case "ref":
+          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+          break;
+        case "if":
+          node = `  "${uid(curr)}" [label="if"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.condition)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.falseBranch)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.trueBranch)}";\n`;
+          break;
+        case "lam":
+          node = `  "${uid(curr)}" [label="λ${identifier(curr.name)}"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
+          break;
+        case "let":
+          node = `  "${uid(curr)}" [label="let ${identifier(curr.name)}"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.expr)}";\n`;
+          break;
+        case "orig":
+          node = `  "${uid(curr)}" [label="orig ${curr.start}-${curr.end}"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.child)}";\n`;
+          break;
+        case "pi":
+          node = `  "${uid(curr)}" [label="Π${curr.name}"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.from)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.to)}";\n`;
+          break;
+        case "rel":
+          node = `  "${uid(curr)}" [label="rel ${curr.uses}"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.term)}";\n`;
+          break;
+        case "self":
+          node = `  "${uid(curr)}" [label="ι${curr.name}"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
+          break;
+      }
+      return acc + node + edges;
+    },
+    "",
+    term
+  );
+
+  output += `}`;
+
+  return output;
+};
