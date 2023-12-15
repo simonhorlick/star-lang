@@ -1,4 +1,4 @@
-import { describe, expect, test } from "@jest/globals";
+import { describe, expect, test } from "vitest";
 import { ADT, Context, Def, Self, Term } from "./ast";
 import {
   typecheck,

@@ -1,4 +1,4 @@
-import { describe, test } from "@jest/globals";
+import { describe, test } from "vitest";
 import { Ann, App, Hole, Ref } from "./ast";
 import { Result, TypecheckError, fill, infer } from "./check";
 import { adts, defs } from "./typecheck_test";

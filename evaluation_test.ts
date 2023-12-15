@@ -1,4 +1,4 @@
-import { describe, expect, test } from "@jest/globals";
+import { describe, expect, test } from "vitest";
 import { Ref, Var, identifier, identifier2, utf8 } from "./ast";
 import * as Erased from "./erased";
 import {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "@jest/globals";
+import { describe, test } from "vitest";
 import { build } from "./build";
 import { identifier, logFull, serialise, stripAST, tree } from "./check";
 import { pretty } from "./pretty";
