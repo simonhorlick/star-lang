@@ -224,7 +224,7 @@ export const infer = (
       // that further stages can use it.
 
       return Result(
-        App(Ann(fTypeElaborated, fType.type), Ann(et2, arg.type)),
+        App(Ann(fTypeElaborated, strip(fType.type)), Ann(et2, arg.type)),
         typ,
         arg.holes.concat(fType.holes)
       );
