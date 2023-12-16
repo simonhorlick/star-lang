@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import { Abs, App, Def, Ref, Var, Star, Pi } from "./ast";
-import { pretty, prettyC } from "./pretty";
+import { Var } from "./ast";
+import { prettyC } from "./pretty";
 import * as Erased from "./erased";
 
 describe("pretty", () => {
