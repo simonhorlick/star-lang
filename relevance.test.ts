@@ -1,9 +1,6 @@
 import { describe, test } from "vitest";
-import { build } from "./build";
-import { identifier2str, logFull, serialise, stripAST, tree } from "./check";
-import { pretty } from "./pretty";
-import { ADT, Def, parseFile } from "./ast";
-import { relevance, simplify } from "./relevance";
+import { ADT, Def, parseFile, identifier2str, stripAST } from "./ast";
+import { relevance } from "./relevance";
 import { desugar, processADTs } from "./process";
 
 const preCheck = (src: string) => {
