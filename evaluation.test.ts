@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { Ref, Var, identifier, identifier2, utf8 } from "./ast";
+import { Ref, Var, identifier, utf8 } from "./ast";
 import * as Erased from "./erased";
 import {
   consStringToLiteral,
@@ -13,8 +13,8 @@ import {
 import { prettyC } from "./pretty";
 import {
   Parser,
+  Result,
   Stream,
-  any3,
   any4,
   bind,
   char,
@@ -24,12 +24,21 @@ import {
   many1,
   map,
   optional,
+  parseErrorDiagnostic,
   pure,
   spaces,
   str,
   whitespace,
 } from "./parser";
-import { result } from "./parser.test";
+
+export const result = <T>(x: Result<T>) => {
+  if (x._ == "parseerror") {
+    const msg = parseErrorDiagnostic(x);
+    throw msg;
+  } else {
+    return x.value;
+  }
+};
 
 describe("shifting", () => {
   test("ensure we only shift free variables", () => {
