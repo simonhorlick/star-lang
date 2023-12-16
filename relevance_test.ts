@@ -1,6 +1,6 @@
 import { describe, test } from "vitest";
 import { build } from "./build";
-import { identifier, logFull, serialise, stripAST, tree } from "./check";
+import { identifier2str, logFull, serialise, stripAST, tree } from "./check";
 import { pretty } from "./pretty";
 import { ADT, Def, parseFile } from "./ast";
 import { relevance, simplify } from "./relevance";
@@ -24,7 +24,7 @@ const preCheck = (src: string) => {
   const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
   const adts = new Map<string, ADT>();
   for (const adt of adtList) {
-    adts.set(identifier(adt.name), adt);
+    adts.set(identifier2str(adt.name), adt);
   }
   const defs = (f.content.filter((c) => c._ == "def") as Def[])
     .map((def) => {

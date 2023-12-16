@@ -1,5 +1,5 @@
 import { Term } from "./ast";
-import { identifier } from "./check";
+import { identifier2str } from "./check";
 import * as Erased from "./erased";
 import { prettyC } from "./pretty";
 import { stringToUtf8ByteArray, utf8ByteArrayToString } from "./strings";
@@ -18,7 +18,7 @@ export function erase(term: Term): Erased.Term {
     case "var":
       return Erased.Var(term.name, term.index);
     case "lam":
-      return Erased.Abs(identifier(term.name), erase(term.body));
+      return Erased.Abs(identifier2str(term.name), erase(term.body));
     case "app":
       return Erased.App(erase(term.left), erase(term.right));
     case "ann":

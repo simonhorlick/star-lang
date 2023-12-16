@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 var util = require("util");
 
-import { TypecheckError, identifier, serialise } from "../check";
+import { TypecheckError, identifier2str, serialise } from "../check";
 import { indexToLineCol, printLine } from "../parser";
 import {
   complete,

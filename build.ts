@@ -3,7 +3,7 @@
 import { parseFile, ADT, Def, ASTNode, File, Type, Ann } from "./ast";
 import {
   TypecheckError,
-  identifier,
+  identifier2str,
   infer,
   logFull,
   strip,
@@ -54,7 +54,7 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
   const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
   const adts = new Map<string, ADT>();
   for (const adt of adtList) {
-    adts.set(identifier(adt.name), adt);
+    adts.set(identifier2str(adt.name), adt);
   }
   const defs = (f.content.filter((c) => c._ == "def") as Def[])
     .map((def) => {

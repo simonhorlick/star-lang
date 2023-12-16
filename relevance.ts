@@ -14,7 +14,7 @@ import {
   Self,
   Term,
 } from "./ast";
-import { identifier } from "./check";
+import { identifier2str } from "./check";
 
 // const addBinder = (env: number[]) = env
 const head = (l: number[]) => l[0];

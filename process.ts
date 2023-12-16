@@ -30,7 +30,7 @@ import {
   Hole,
   Let,
 } from "./ast";
-import { addTermToCtx, identifier, shift } from "./check";
+import { addTermToCtx, identifier2str, shift } from "./check";
 import { pretty } from "./pretty";
 import { stringToUtf8ByteArray } from "./strings";
 
@@ -51,7 +51,7 @@ const processNode = (n: ASTNode): ASTNode[] => {
       const td = buildType(n.name, n.params, n.constructors);
       const defs = n.constructors.map((con, i) => {
         return Def(
-          identifier(con.name),
+          identifier2str(con.name),
           // This is used for tooling to be able to provide jump-to-definition
           // for type constructors.
           Ann(
@@ -60,7 +60,7 @@ const processNode = (n: ASTNode): ASTNode[] => {
               con.name
             ),
             GenerateConstructorType(
-              identifier(n.name),
+              identifier2str(n.name),
               n.params,
               n.constructors[i]
             )
@@ -155,7 +155,7 @@ export const buildType = (
   // T(A,B,C)
   const typ = parameters.reduce<Term>(
     (acc, paramN) => App(acc, Par(paramN.name)),
-    Ref(identifier(name))
+    Ref(identifier2str(name))
   );
 
   const self = // ιt.
@@ -170,7 +170,7 @@ export const buildType = (
           (acc, constructorN) =>
             buildTypeArgSignature(
               parameters,
-              identifier(constructorN.name),
+              identifier2str(constructorN.name),
               constructorN.args,
               acc
             ),
@@ -180,7 +180,7 @@ export const buildType = (
     );
 
   return Def(
-    identifier(name),
+    identifier2str(name),
     // This is used for tooling to be able to provide jump-to-definition for
     // types. `name` contains the source location where the constructor was
     // defined, so any refs that mention this constructor can follow this origin
@@ -235,7 +235,7 @@ export const desugarTerm = (
           t.body,
           undefined,
           adts,
-          addTermToCtx(ctx, identifier(t.name), Star())
+          addTermToCtx(ctx, identifier2str(t.name), Star())
         )
       );
     case "par":
@@ -275,7 +275,7 @@ export const desugarTerm = (
           t.body,
           undefined,
           adts,
-          addTermToCtx(ctx, identifier(t.name), Star())
+          addTermToCtx(ctx, identifier2str(t.name), Star())
         )
       );
 
@@ -353,7 +353,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
       // The type in this context is not important so just set it as *.
       return AbsI(
         t.name,
-        processPars(t.body, addTermToCtx(ctx, identifier(t.name), Star()))
+        processPars(t.body, addTermToCtx(ctx, identifier2str(t.name), Star()))
       );
     case "par":
       for (let i = 0; i < ctx.length; i++) {
@@ -387,7 +387,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
       return Let(
         t.name,
         processPars(t.expr, ctx),
-        processPars(t.body, addTermToCtx(ctx, identifier(t.name), Star()))
+        processPars(t.body, addTermToCtx(ctx, identifier2str(t.name), Star()))
       );
 
     case "if":
@@ -456,7 +456,7 @@ export const GenerateConstructorTerm = (
   // Apply all arguments to the constructor
   const apps = constructors[i].args.reduce<Term>(
     (acc, curr) => App(acc, Par(curr.name)),
-    Par(identifier(constructors[i].name))
+    Par(identifier2str(constructors[i].name))
   );
 
   // Abstract constructors
@@ -464,7 +464,7 @@ export const GenerateConstructorTerm = (
     // Passing curr.name to AbsI here will expose the source locations of the
     // type constructors to tooling, i.e. the constructor `true` would have
     // a span for `true:P(true)`.
-    (acc, curr) => Abs(identifier(curr.name), acc),
+    (acc, curr) => Abs(identifier2str(curr.name), acc),
     apps
   );
 

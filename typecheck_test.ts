@@ -8,7 +8,7 @@ import {
   subst,
   TypecheckError,
   Result,
-  identifier,
+  identifier2str,
 } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
@@ -67,7 +67,7 @@ export const defs = (defs: Def[] = []): Map<string, Def> => {
 export const adts = (adts: ADT[] = []): Map<string, ADT> => {
   const m = new Map<string, ADT>();
   for (const adt of adts) {
-    m.set(identifier(adt.name), adt);
+    m.set(identifier2str(adt.name), adt);
   }
   return m;
 };

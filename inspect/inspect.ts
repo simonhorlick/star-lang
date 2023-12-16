@@ -20,7 +20,7 @@ import {
 } from "../ast";
 import {
   addTermToCtx,
-  identifier,
+  identifier2str,
   infer,
   logFull,
   serialise,
@@ -411,7 +411,7 @@ export const inspect = (
             typ.to,
             undefined,
             undefined,
-            addTermToCtx(ctx, identifier(t.name), typ.from),
+            addTermToCtx(ctx, identifier2str(t.name), typ.from),
             defs
           )
         );

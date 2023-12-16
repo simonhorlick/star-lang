@@ -26,6 +26,8 @@ import {
   Ref,
   Let,
   Rel,
+  identifier2str,
+  strip,
 } from "./ast";
 import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -370,9 +372,9 @@ const check = (
           }
 
           var constructor: Constructor | undefined = undefined;
-          const constructorName = identifier(curr.constructor);
+          const constructorName = identifier2str(curr.constructor);
           for (const con of adtDef.constructors) {
-            if (identifier(con.name) == constructorName) {
+            if (identifier2str(con.name) == constructorName) {
               constructor = con;
             }
           }
@@ -464,7 +466,7 @@ const check = (
       let ebody = typecheck(
         defs,
         adts,
-        addTermToCtx(ctx, identifier(term.name), normalTy.from),
+        addTermToCtx(ctx, identifier2str(term.name), normalTy.from),
         term.body,
         normalTy.to,
         os,
@@ -863,17 +865,6 @@ export const equate = (
   }
 };
 
-export const identifier = (id: Term): string => {
-  switch (id._) {
-    case "id":
-      return id.name;
-    case "orig":
-      return identifier(id.child);
-    default:
-      throw `expected identifier; got ${id._}`;
-  }
-};
-
 export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
   // check the names of Var terms match what's in the context.
   switch (t._) {
@@ -882,7 +873,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       return t;
     case "lam":
       dbgCheckIndices(
-        addTermToCtx(ctx, identifier(t.name), Star()),
+        addTermToCtx(ctx, identifier2str(t.name), Star()),
         depth + 1,
         t.body
       );
@@ -926,191 +917,6 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       throw "dbgCheckIndices: unexpected parse error";
   }
 };
-
-export function stripAST(t: ASTNode): ASTNode {
-  switch (t._) {
-    case "adt":
-      return ADT(
-        t.name,
-        t.params.map((p) => Argument(p.name, strip(p.type))),
-        t.constructors.map((c) =>
-          Constructor(
-            c.name,
-            c.args.map((p) => Argument(p.name, strip(p.type)))
-          )
-        )
-      );
-    case "com":
-      return t;
-    case "def":
-      return Def(t.name, strip(t.term) as Ann);
-    case "nl":
-      return t;
-    case "orig2":
-      return t.child;
-    case "pkg":
-      return t;
-    case "sp":
-      return t;
-    case "err":
-      return t;
-  }
-}
-
-export function strip(t: Term): Term {
-  switch (t._) {
-    case "var":
-      return t;
-    case "lam":
-      return Abs(identifier(t.name), strip(t.body));
-    case "self":
-      return Self(t.name, strip(t.body));
-    case "app":
-      return App(strip(t.left), strip(t.right));
-    case "ann":
-      return Ann(strip(t.term), strip(t.typ));
-    case "pi":
-      return Pi(t.name, strip(t.from), strip(t.to));
-    case "par":
-    case "star":
-    case "ref":
-    case "id":
-    case "hole":
-    case "int":
-    case "str":
-    case "err":
-      return t;
-    case "orig":
-      return strip(t.child);
-    case "case":
-      return Case(
-        strip(t.name),
-        t.branches.map((b) =>
-          Branch(strip(b.constructor) as Identifier, strip(b.term))
-        )
-      );
-    case "let":
-      return Let(strip(t.name) as Identifier, strip(t.expr), strip(t.body));
-    case "if":
-      return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
-    case "rel":
-      throw "strip: unexpected rel";
-  }
-}
-
-export function serialise(t: Term, d: number = 0): string {
-  switch (t._) {
-    case "var":
-      return `Var(${t.name})`;
-    case "lam":
-      return `Abs("${identifier(t.name)}", ${serialise(t.body, d + 1)})`;
-    case "self":
-      return `Self("${t.name}", ${serialise(t.body, d + 1)})`;
-    case "app":
-      return `App(${serialise(t.left, d + 1)}, ${serialise(t.right, d + 1)})`;
-    case "ann":
-      return `Ann(${serialise(t.term, d + 1)}, ${serialise(t.typ, d + 1)})`;
-    case "pi":
-      return `Pi("${t.name}", ${serialise(t.from, d + 1)}, ${serialise(
-        t.to,
-        d + 1
-      )})`;
-    case "par":
-      return `Par(${t.name})`;
-    case "star":
-      return `Star`;
-    case "ref":
-      return `Ref(${t.name})`;
-    case "id":
-      return `Identifier(${t.name})`;
-    case "orig":
-      return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
-    case "rel":
-      return `Rel(${serialise(t.term, d + 1)}, ${t.uses})`;
-    case "case":
-      return `Case(${serialise(t.name, d + 1)},[${t.branches
-        .map(
-          (b) =>
-            `Branch(${serialise(b.constructor, d + 1)}, ${serialise(
-              b.term,
-              d + 1
-            )})`
-        )
-        .join(",")}])`;
-    case "let":
-      return `Let(${serialise(t.name)}, ${serialise(
-        t.expr,
-        d + 1
-      )}, ${serialise(t.body, d + 1)})`;
-
-    case "if":
-      return `If(${serialise(t.condition)}, ${serialise(
-        t.trueBranch
-      )}, ${serialise(t.falseBranch)})`;
-    case "hole":
-      return `Hole()`;
-    case "int":
-      return `${t.num}`;
-    case "str":
-      return `"${t.str}"`;
-    case "err":
-      return `ParseError(${t.msg})`;
-  }
-}
-
-export function tree(t: Term, prefix: string, typ?: Term): string {
-  switch (t._) {
-    case "var":
-      return `${prefix}${t.name}`;
-    case "lam":
-      return `${prefix}λ${identifier(t.name)}\n${tree(t.body, prefix + "  ")}`;
-    case "self":
-      return `${prefix}TODO`;
-    case "app":
-      const ann = typ ? `:${pretty(typ)}` : "";
-      return `${prefix}ap${ann}\n${tree(t.left, prefix + "  ")}\n${tree(
-        t.right,
-        prefix + "  "
-      )}`;
-    case "ann":
-      return tree(t.term, prefix, t.typ);
-    // return `${prefix}ann(typ=${pretty(t.typ)})\n${tree(
-    //   t.term,
-    //   prefix + "  "
-    // )}`;
-    case "pi":
-      return `${prefix}Π${t.name}\n${tree(t.from, prefix + "  ")}\n${tree(
-        t.to,
-        prefix + "  "
-      )}`;
-    case "par":
-      return `${prefix}TODO`;
-    case "star":
-      return `${prefix}*`;
-    case "ref":
-      return `${prefix}${t.name}`;
-    case "id":
-      return `${prefix}${t.name}`;
-    case "orig":
-      return tree(t.child, prefix);
-    case "case":
-      return `${prefix}TODO`;
-    case "let":
-      return `${prefix}TODO`;
-    case "if":
-      return `${prefix}TODO`;
-    case "hole":
-      return `${prefix}TODO`;
-    case "int":
-      return `${prefix}${t.num}`;
-    case "str":
-      return `${prefix}"${t.str}"`;
-    case "rel":
-      return `${prefix}Rel(${t.uses})${tree(t.term, prefix + "  ")}`;
-    case "err":
-      return `${prefix}ParseError(${t.msg})`;
-  }
-}
 
 // given an ast of the form App(App(App(X,y),z),w) return the leftmost ref X.
 function getTypeNameFromTypeConstructor(t: Term): Ref {

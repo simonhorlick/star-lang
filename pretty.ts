@@ -1,5 +1,4 @@
-import { Context, Term } from "./ast";
-import { identifier } from "./check";
+import { Context, Term, identifier2str } from "./ast";
 import * as Erased from "./erased";
 import { foldTree } from "./inspect/inspect";
 
@@ -201,11 +200,13 @@ export const printNodeAsDotGraph = (term: Term): string => {
           edges += `  "${uid(curr)}" -> "${uid(curr.trueBranch)}";\n`;
           break;
         case "lam":
-          node = `  "${uid(curr)}" [label="λ${identifier(curr.name)}"];\n`;
+          node = `  "${uid(curr)}" [label="λ${identifier2str(curr.name)}"];\n`;
           edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
           break;
         case "let":
-          node = `  "${uid(curr)}" [label="let ${identifier(curr.name)}"];\n`;
+          node = `  "${uid(curr)}" [label="let ${identifier2str(
+            curr.name
+          )}"];\n`;
           edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
           edges += `  "${uid(curr)}" -> "${uid(curr.expr)}";\n`;
           break;

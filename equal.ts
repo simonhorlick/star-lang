@@ -1,5 +1,5 @@
 import { App, Context, Def, Normal, Self, Term } from "./ast";
-import { TypecheckError, identifier, lookupType, substTop } from "./check";
+import { TypecheckError, identifier2str, lookupType, substTop } from "./check";
 
 var _ = require("lodash");
 
@@ -29,7 +29,7 @@ export const whnf = (
           unfold,
           ctx,
           defs,
-          substTop(t.right, nf.body, identifier(nf.name)),
+          substTop(t.right, nf.body, identifier2str(nf.name)),
           selfTerm
         );
       }

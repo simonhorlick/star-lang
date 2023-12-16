@@ -1,5 +1,3 @@
-#!/usr/bin/env ./node_modules/.bin/ts-node-script
-
 // Parser for a programming language. The parser takes as input a source file as
 // a string and, if successful, spits out an AST that describes the file.
 //

@@ -1,4 +1,4 @@
-import { describe, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { Ann, App, Hole, Ref } from "./ast";
 import { Result, TypecheckError, fill, infer } from "./check";
 import { adts, defs } from "./typecheck_test";
@@ -23,8 +23,8 @@ const ensure = (r: Result | TypecheckError): Result => {
   }
 };
 
-describe("holes", () => {
-  /*
+// describe("holes", () => {
+/*
   
   A hole is a place in the AST that's left blank for the compiler to figure
   out the contents. Generally speaking, this is allowed only when it's
@@ -81,57 +81,63 @@ describe("holes", () => {
     check them in a subsequent pass.
 */
 
-  test("cons(▨, true, nil(▨))", () => {
-    const expr = App(
-      App(App(Ref("cons"), Hole(0)), Ref("true")),
-      App(Ref("nil"), Hole(1))
-    );
+test("cons(▨, true, nil(▨))", () => {
+  const expr = App(
+    App(App(Ref("cons"), Hole(0)), Ref("true")),
+    App(Ref("nil"), Hole(1))
+  );
 
-    const result = ensure(
-      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
-    );
+  const result = ensure(
+    infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
+  );
 
-    const filled = fill(result);
-    console.log(pretty(filled.term) + ":" + pretty(filled.type));
-  });
+  const filled = fill(result);
+  expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
+    "cons(Bool)(true)(nil(Bool)):List(Bool)"
+  );
+});
 
-  test("cons(▨, true, nil(Bool))", () => {
-    const expr = App(
-      App(App(Ref("cons"), Hole(0)), Ref("true")),
-      App(Ref("nil"), Ref("Bool"))
-    );
+test("cons(▨, true, nil(Bool))", () => {
+  const expr = App(
+    App(App(Ref("cons"), Hole(0)), Ref("true")),
+    App(Ref("nil"), Ref("Bool"))
+  );
 
-    const result = ensure(
-      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
-    );
+  const result = ensure(
+    infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
+  );
 
-    const filled = fill(result);
-    console.log(pretty(filled.term) + ":" + pretty(filled.type));
-  });
+  const filled = fill(result);
+  expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
+    "cons(Bool)(true)(nil(Bool)):List(Bool)"
+  );
+});
 
-  test("unify many holes", () => {
-    // [true, true, true]
-    // cons(▨, true, cons(▨, true, cons(▨, true, nil(▨))))
-    // all the holes should have the same type
-    const expr = App(
-      App(App(Ref("cons"), Hole(0)), Ref("true")),
+test("unify many holes", () => {
+  // [true, true, true]
+  // cons(▨, true, cons(▨, true, cons(▨, true, nil(▨))))
+  // all the holes should have the same type
+  const expr = App(
+    App(App(Ref("cons"), Hole(0)), Ref("true")),
+    App(
+      App(App(Ref("cons"), Hole(1)), Ref("true")),
       App(
-        App(App(Ref("cons"), Hole(1)), Ref("true")),
-        App(
-          App(App(Ref("cons"), Hole(2)), Ref("true")),
-          App(Ref("nil"), Ref("Bool"))
-        )
+        App(App(Ref("cons"), Hole(2)), Ref("true")),
+        App(Ref("nil"), Ref("Bool"))
       )
-    );
+    )
+  );
 
-    const result = ensure(
-      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
-    );
+  const result = ensure(
+    infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
+  );
 
-    const filled = fill(result);
-    console.log(pretty(filled.term) + ":" + pretty(filled.type));
-  });
-  /*
+  const filled = fill(result);
+  expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
+    "cons(Bool)(true)(cons(Bool)(true)(cons(Bool)(true)(nil(Bool)))):List(Bool)"
+  );
+});
+/*
   Note that the constructors for Maybe are defined as:
     null : (T *) → Maybe(T)
     just : (T *) → (value T) → Maybe(T)
@@ -158,20 +164,15 @@ describe("holes", () => {
     we'll have case Hole (check Bool) so we can fill the Hole with Bool.
   */
 
-  test("null(▨):Maybe(Bool)", () => {
-    const expr = Ann(App(Ref("null"), Hole(0)), App(Ref("Maybe"), Ref("Bool")));
+test("null(▨):Maybe(Bool)", () => {
+  const expr = Ann(App(Ref("null"), Hole(0)), App(Ref("Maybe"), Ref("Bool")));
 
-    const result = ensure(
-      infer(
-        defs([maybe, mnull, just, bool, tru, fls]),
-        adts([]),
-        [],
-        expr,
-        0,
-        0
-      )
-    );
-    const filled = fill(result);
-    console.log(pretty(filled.term) + ":" + pretty(filled.type));
-  });
+  const result = ensure(
+    infer(defs([maybe, mnull, just, bool, tru, fls]), adts([]), [], expr, 0, 0)
+  );
+  const filled = fill(result);
+  expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
+    "null(Bool):Maybe(Bool)"
+  );
 });
+// });

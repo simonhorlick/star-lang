@@ -1,4 +1,3 @@
-import { addTermToCtx } from "./check";
 import {
   Parser,
   bind,
@@ -13,10 +12,7 @@ import {
   str,
   line,
   map,
-  any3,
-  any5,
   char,
-  consumeAll,
   either,
   front,
   last,
@@ -27,21 +23,15 @@ import {
   whitespace,
   join,
   join1,
-  any4,
   spaces,
   spc,
   spc1,
   any6,
-  any8,
   num,
   any10,
-  any9,
-  FatalParseError,
   error,
   skip,
   sat,
-  lower,
-  upper,
   zero,
   until,
 } from "./parser";
@@ -923,3 +913,145 @@ export const parseFile: Parser<File> = map(
   ),
   (r) => ({ _: "file", content: r })
 );
+
+export const identifier2str = (id: Term): string => {
+  switch (id._) {
+    case "id":
+      return id.name;
+    case "orig":
+      return identifier2str(id.child);
+    default:
+      throw `expected identifier; got ${id._}`;
+  }
+};
+
+export function strip(t: Term): Term {
+  switch (t._) {
+    case "var":
+      return t;
+    case "lam":
+      return Abs(identifier2str(t.name), strip(t.body));
+    case "self":
+      return Self(t.name, strip(t.body));
+    case "app":
+      return App(strip(t.left), strip(t.right));
+    case "ann":
+      return Ann(strip(t.term), strip(t.typ));
+    case "pi":
+      return Pi(t.name, strip(t.from), strip(t.to));
+    case "par":
+    case "star":
+    case "ref":
+    case "id":
+    case "hole":
+    case "int":
+    case "str":
+    case "err":
+      return t;
+    case "orig":
+      return strip(t.child);
+    case "case":
+      return Case(
+        strip(t.name),
+        t.branches.map((b) =>
+          Branch(strip(b.constructor) as Identifier, strip(b.term))
+        )
+      );
+    case "let":
+      return Let(strip(t.name) as Identifier, strip(t.expr), strip(t.body));
+    case "if":
+      return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
+    case "rel":
+      throw "strip: unexpected rel";
+  }
+}
+
+export function stripAST(t: ASTNode): ASTNode {
+  switch (t._) {
+    case "adt":
+      return ADT(
+        t.name,
+        t.params.map((p) => Argument(p.name, strip(p.type))),
+        t.constructors.map((c) =>
+          Constructor(
+            c.name,
+            c.args.map((p) => Argument(p.name, strip(p.type)))
+          )
+        )
+      );
+    case "com":
+      return t;
+    case "def":
+      return Def(t.name, strip(t.term) as Ann);
+    case "nl":
+      return t;
+    case "orig2":
+      return t.child;
+    case "pkg":
+      return t;
+    case "sp":
+      return t;
+    case "err":
+      return t;
+  }
+}
+
+export function serialise(t: Term, d: number = 0): string {
+  switch (t._) {
+    case "var":
+      return `Var(${t.name})`;
+    case "lam":
+      return `Abs("${identifier2str(t.name)}", ${serialise(t.body, d + 1)})`;
+    case "self":
+      return `Self("${t.name}", ${serialise(t.body, d + 1)})`;
+    case "app":
+      return `App(${serialise(t.left, d + 1)}, ${serialise(t.right, d + 1)})`;
+    case "ann":
+      return `Ann(${serialise(t.term, d + 1)}, ${serialise(t.typ, d + 1)})`;
+    case "pi":
+      return `Pi("${t.name}", ${serialise(t.from, d + 1)}, ${serialise(
+        t.to,
+        d + 1
+      )})`;
+    case "par":
+      return `Par(${t.name})`;
+    case "star":
+      return `Star`;
+    case "ref":
+      return `Ref(${t.name})`;
+    case "id":
+      return `Identifier(${t.name})`;
+    case "orig":
+      return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
+    case "rel":
+      return `Rel(${serialise(t.term, d + 1)}, ${t.uses})`;
+    case "case":
+      return `Case(${serialise(t.name, d + 1)},[${t.branches
+        .map(
+          (b) =>
+            `Branch(${serialise(b.constructor, d + 1)}, ${serialise(
+              b.term,
+              d + 1
+            )})`
+        )
+        .join(",")}])`;
+    case "let":
+      return `Let(${serialise(t.name)}, ${serialise(
+        t.expr,
+        d + 1
+      )}, ${serialise(t.body, d + 1)})`;
+
+    case "if":
+      return `If(${serialise(t.condition)}, ${serialise(
+        t.trueBranch
+      )}, ${serialise(t.falseBranch)})`;
+    case "hole":
+      return `Hole()`;
+    case "int":
+      return `${t.num}`;
+    case "str":
+      return `"${t.str}"`;
+    case "err":
+      return `ParseError(${t.msg})`;
+  }
+}
