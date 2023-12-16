@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ADT, Context, Def, Self, Term } from "./ast";
+import { Context, Def, Self, Term } from "./ast";
 import {
   typecheck,
   equate,
@@ -8,7 +8,8 @@ import {
   subst,
   TypecheckError,
   Result,
-  identifier2str,
+  defs,
+  adts,
 } from "./check";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";

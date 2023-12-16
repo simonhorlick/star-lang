@@ -1,17 +1,8 @@
 // build is a library for orchestrating builds of source files for this language.
 
-import { parseFile, ADT, Def, ASTNode, File, Type, Ann } from "./ast";
-import {
-  TypecheckError,
-  identifier2str,
-  infer,
-  logFull,
-  strip,
-  stripAST,
-  typecheck,
-} from "./check";
-import { typecheckErrorDiagnostic, foldTree } from "./inspect/inspect";
-import { FatalParseError, parseErrorDiagnostic } from "./parser";
+import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
+import { TypecheckError, infer } from "./check";
+import { foldTree } from "./inspect/inspect";
 import { processADTs, desugar } from "./process";
 
 // What's the MVP for this?
