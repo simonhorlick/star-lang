@@ -1,5 +1,5 @@
-import { App, Context, Def, Normal, Self, Term } from "./ast";
-import { TypecheckError, identifier2str, lookupType, substTop } from "./check";
+import { App, Context, Def, Normal, Self, Term, identifier2str } from "./ast";
+import { TypecheckError, substTop } from "./check";
 
 var _ = require("lodash");
 

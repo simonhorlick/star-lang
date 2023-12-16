@@ -56,22 +56,6 @@ const ensure = (r: Result | TypecheckError): Result => {
   }
 };
 
-export const defs = (defs: Def[] = []): Map<string, Def> => {
-  const m = new Map<string, Def>();
-  for (const d of defs) {
-    m.set(d.name, d);
-  }
-  return m;
-};
-
-export const adts = (adts: ADT[] = []): Map<string, ADT> => {
-  const m = new Map<string, ADT>();
-  for (const adt of adts) {
-    m.set(identifier2str(adt.name), adt);
-  }
-  return m;
-};
-
 describe("typechecker", () => {
   // Typing Rules
   //

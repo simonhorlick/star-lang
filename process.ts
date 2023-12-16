@@ -4,7 +4,6 @@ import {
   Star,
   Pi,
   Self,
-  Type,
   Par,
   Term,
   App,
@@ -12,12 +11,8 @@ import {
   Var,
   Ref,
   File,
-  Pkg,
-  Com,
   Def,
   ADT,
-  Space,
-  Newline,
   Argument,
   Constructor,
   Case,
@@ -27,12 +22,10 @@ import {
   AbsI,
   Identifier,
   If,
-  Hole,
   Let,
+  identifier2str,
 } from "./ast";
-import { addTermToCtx, identifier2str, shift } from "./check";
-import { pretty } from "./pretty";
-import { stringToUtf8ByteArray } from "./strings";
+import { addTermToCtx } from "./check";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 
