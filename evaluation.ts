@@ -1,5 +1,4 @@
-import { Term } from "./ast";
-import { identifier2str } from "./check";
+import { Term, identifier2str } from "./ast";
 import * as Erased from "./erased";
 import { prettyC } from "./pretty";
 import { stringToUtf8ByteArray, utf8ByteArrayToString } from "./strings";
