@@ -1,11 +1,7 @@
 import {
-  Abs,
   AbsI,
   Ann,
   App,
-  Branch,
-  Case,
-  Identifier,
   If,
   Let,
   Origin,
@@ -14,7 +10,6 @@ import {
   Self,
   Term,
 } from "./ast";
-import { identifier2str } from "./check";
 
 // const addBinder = (env: number[]) = env
 const head = (l: number[]) => l[0];
