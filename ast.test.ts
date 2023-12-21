@@ -16,6 +16,7 @@ import {
   definition,
   parseFile,
   resync,
+  pi,
 } from "./ast";
 import {
   bind,
@@ -89,11 +90,11 @@ describe("ast", () => {
 
   test("should return an error node for unparseable terms", () =>
     expect(serialise(strip(result(identifier2(ts("&")))))).toBe(
-      "ParseError(expected identifier)"
+      "ParseError(expected identifier; got &)"
     ));
 
   test("should return an error node for unparseable subtrees", () =>
-    expect(st("λn &")).toBe('Abs("n", ParseError(expected term))'));
+    expect(st("λn &")).toBe('Abs("n", ParseError(expected term; got &))'));
 
   test("should parse package", () =>
     expect(stripAST(result(parsePackage(ts(`package abc`))))).toStrictEqual({
@@ -252,17 +253,17 @@ describe("ast", () => {
 
   test("should return an error node for unparseable if statement", () =>
     expect(st("if = then y else z")).toBe(
-      "ParseError(if statment not well formed)"
+      "If(ParseError(expected term; got =), Ref(y), Ref(z))"
     ));
 
   test("should return an error node for unparseable true branch", () =>
     expect(st("if x then @ else z")).toBe(
-      "ParseError(if statment not well formed)"
+      "If(Ref(x), ParseError(expected term; got @), Ref(z))"
     ));
 
   test("should return an error node for unparseable false branch", () =>
     expect(st("if x then y else @")).toBe(
-      "ParseError(if statment not well formed)"
+      "If(Ref(x), Ref(y), ParseError(expected term; got @))"
     ));
 
   test("should parse type constructor", () =>
@@ -278,6 +279,25 @@ describe("ast", () => {
   test("should parse arrow with lots of parenthesis", () =>
     expect(st("(x)((y)(z))->(x)")).toBe(
       'Pi("", App(Ref(x), App(Ref(y), Ref(z))), Ref(x))'
+    ));
+
+  test("pi: should parse named pi types", () => {
+    const parser = pi(() => term);
+    const res = parser(ts("ΠA:* A"));
+    expect(serialise(strip(result(res)))).toBe('Pi("A", Star, Ref(A))');
+  });
+
+  test("pi: should expose ParseError for bad from annotation", () => {
+    const parser = pi(() => term);
+    const res = parser(ts("ΠA:(&) A"));
+    expect(serialise(strip(result(res)))).toBe(
+      'Pi("A", ParseError(expected term; got &), Ref(A))'
+    );
+  });
+
+  test("pi: should parse multiple named pi types", () =>
+    expect(st("ΠA:* ΠB:* Πa:A Πb:B b")).toBe(
+      'Pi("A", Star, Pi("B", Star, Pi("a", Ref(A), Pi("b", Ref(B), Ref(b)))))'
     ));
 
   test("should parse definition containing list literal", () => {
@@ -343,7 +363,7 @@ describe("ast", () => {
       | succ -> `;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      "Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term))])"
+      "Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term; got ))])"
     );
   });
 

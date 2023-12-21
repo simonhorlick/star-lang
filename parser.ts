@@ -67,7 +67,7 @@ export function pure<A>(x: A): Parser<A> {
 //   bind(p1, (v1) => bind(p2, (v2) => ...))
 //
 export function bind<A, B>(p: Parser<A>, f: (v: A) => Parser<B>): Parser<B> {
-  return (input: Stream) => {
+  return (input: Stream): Result<B> => {
     const parsed = p(input);
     if (parsed._ == "outputvalue") {
       return f(parsed.value)(parsed.stream);
@@ -94,23 +94,24 @@ export function seq3<P, Q, R>(
 
 // zero constructs a parser that always fails with the message err.
 export function zero<T>(err: string): Parser<T> {
-  return (s: Stream) => ({
+  return (s: Stream): Result<T> => ({
     _: "parseerror",
     stream: s,
     error: err,
-    idx: s.idx,
   });
 }
 
 // error constructs a parser that always fails and returns an error message
 // indicating what it expected.
 export function error<T>(expected: string): Parser<T> {
-  return (s: Stream) => ({
-    _: "parseerror",
-    stream: s,
-    error: `expected "${expected}"; got "${s.src[s.idx]}"`,
-    idx: s.idx,
-  });
+  return (s: Stream): Result<T> => {
+    // console.log(`expected "${expected}"; got "${s.src[s.idx]}"`);
+    return {
+      _: "parseerror",
+      stream: s,
+      error: `expected "${expected}"; got "${s.src[s.idx]}"`,
+    };
+  };
 }
 
 // advance increments returns the stream s incremented by n characters.
@@ -127,7 +128,7 @@ export const pos = (n: number, s: Stream): Stream => ({
 
 // item reads a single character from the stream and advances the stream by one
 // character.
-export const item: Parser<string> = (cs: Stream) => {
+export const item: Parser<string> = (cs: Stream): Result<string> => {
   return cs.idx < cs.src.length
     ? {
         _: "outputvalue",
@@ -333,6 +334,73 @@ export function any10<A, B, C, D, E, F, G, H, I, J>(
   );
 }
 
+// see any
+export function any11<A, B, C, D, E, F, G, H, I, J, K>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>,
+  p5: Parser<E>,
+  p6: Parser<F>,
+  p7: Parser<G>,
+  p8: Parser<H>,
+  p9: Parser<I>,
+  p10: Parser<J>,
+  p11: Parser<K>
+) {
+  return either(
+    p1,
+    either(
+      p2,
+      either(
+        p3,
+        either(
+          p4,
+          either(
+            p5,
+            either(p6, either(p7, either(p8, either(p9, either(p10, p11)))))
+          )
+        )
+      )
+    )
+  );
+}
+
+// see any
+export function any12<A, B, C, D, E, F, G, H, I, J, K, L>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>,
+  p5: Parser<E>,
+  p6: Parser<F>,
+  p7: Parser<G>,
+  p8: Parser<H>,
+  p9: Parser<I>,
+  p10: Parser<J>,
+  p11: Parser<K>,
+  p12: Parser<L>
+) {
+  return either(
+    p1,
+    either(
+      p2,
+      either(
+        p3,
+        either(
+          p4,
+          either(
+            p5,
+            either(
+              p6,
+              either(p7, either(p8, either(p9, either(p10, either(p11, p12)))))
+            )
+          )
+        )
+      )
+    )
+  );
+}
 // optional returns a parser that attempts to use the supplied parser, but
 // if it fails it doesn't return a parse error and instead allows the parsing to
 // continue.
@@ -412,6 +480,11 @@ export function spc<T>(between: Parser<T>): Parser<T> {
   return bind(optional(spaces), (_) =>
     bind(between, (x) => bind(optional(spaces), (_) => pure(x)))
   );
+}
+
+// lspc is a parser that allows optional leading whitespace.
+export function lspc<T>(p: Parser<T>): Parser<T> {
+  return bind(optional(spaces), (_) => p);
 }
 
 // spc1 is a parser that requires leading and trailing whitespace.

@@ -34,7 +34,11 @@ import {
   sat,
   zero,
   until,
+  any11,
+  lspc,
+  any12,
 } from "./parser";
+import { pretty } from "./pretty";
 
 // ParseError is a syntax node that allows partial parse trees to be
 // constructed.
@@ -388,14 +392,24 @@ export type File = {
   content: ASTNode[];
 };
 
+// resync is a parser that advances the stream until the
+// next sync character or keyword is observed.
+export const resync = skip(
+  until(either(str("func"), oneOf(`()" `))) // until fails iff the nested parser is successful.
+);
+
+// skip forward and return a parse error in this position.
+const resync2 = (msg: string): Parser<ParseError> =>
+  map(resync, (skipped) => ParseError(`${msg}; got ${skipped.join("")}`));
+
 // orFail returns A if the parser succeeds, or ParseError if the parser fails.
 // Either way it returns successfully.
 export const orFail = <A>(
   msg: string,
   p: Parser<A | ParseError>
-): Parser<A | ParseError> => either(p, pure(ParseError(`${msg}`)));
+): Parser<A | ParseError> => either(p, resync2(msg));
 
-const reserved = new Set(["func", "import"]);
+const reserved = new Set(["func", "import", "let", "case", "if"]);
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
@@ -566,6 +580,43 @@ const star: Parser<Star> = bind(char("*"), () => pure(Star()));
   block(reference)
 );*/
 
+const logdbg = <T>(msg: string, p: Parser<T>): Parser<T> => {
+  return (s: Stream): Result<T> => {
+    console.log(`${msg}. next char is ${s.src.substring(s.idx)}`);
+    return p(s);
+  };
+};
+
+// pi parses a pi type `Πx:T t`.
+export const pi = (term: () => Parser<Term>): Parser<Pi | ParseError> =>
+  bind(
+    char("Π"),
+    (_) =>
+      // bind(optional(spaces), (_) =>
+      bind(identifier, (name) =>
+        bind(
+          char(":"),
+          (_) =>
+            // bind(optional(spaces), (_) =>
+            bind(orFail("expected type", lazy(term)), (from) =>
+              bind(
+                orFail("expected spaces between type and body", spaces),
+                (sp): Parser<Pi | ParseError> => {
+                  if (!(sp instanceof Array) && sp._ == "err") {
+                    return pure(Pi(name, from, sp));
+                  }
+                  return bind(orFail("expected term", lazy(term)), (body) =>
+                    pure(Pi(name, from, body))
+                  );
+                }
+              )
+            )
+          // )
+        )
+      )
+    // )
+  );
+
 // abstraction parses a lambda abstraction `λx t`. The binder x is separated
 // from the body by spaces.
 export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
@@ -586,7 +637,7 @@ export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
   // f(x) or (some term)(x)
   bind(many(whitespace), (_) =>
     // args: greedily parse as many as we're able to
-    bind(many1(parenthesis(lazy(term))), (ts) => {
+    bind(many1(parenthesis(spc(lazy(term)))), (ts) => {
       const terms = [lhs, ...ts];
       // Application is left-associative, so form the following tree of
       // applications, i.e. f(x)(y) == (f(x))(y):
@@ -617,16 +668,6 @@ export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
     })
   );
 
-// resync is a parser that advances the stream until the
-// next sync character or keyword is observed.
-export const resync = skip(
-  until(either(str("func"), oneOf(`()"`))) // until fails iff the nested parser is successful.
-);
-
-// skip forward and return a parse error in this position.
-const resync2 = (msg: string): Parser<Term> =>
-  block(map(resync, (_) => ParseError(msg)));
-
 // | true -> false
 const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
   bind(str("|"), (_) =>
@@ -635,12 +676,7 @@ const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
         bind(many(whitespace), (_) =>
           bind(either(str("->"), str("=>")), (_) =>
             bind(many(whitespace), (_) =>
-              bind(
-                // Attempt to parse a term, if we fail try to sync and return a
-                // parse error.
-                either(term, resync2("expected term")),
-                (t) => pure(Branch(id, t))
-              )
+              bind(term, (t) => pure(Branch(id, t)))
             )
           )
         )
@@ -672,7 +708,7 @@ export const letStatement: Parser<Let | ParseError> = bind(str("let"), (_) =>
     bind(spc1(block(identifier2)), (id) =>
       bind(str("="), (_) =>
         bind(term, (expr) =>
-          bind(str("in"), (_) =>
+          bind(lspc(str("in")), (_) =>
             bind(term, (body) => pure(Let(id, expr, body)))
           )
         )
@@ -710,6 +746,16 @@ export const integerLiteral: Parser<IntLit> = map(num, (x) => ({
   num: x,
 }));
 
+// Transforms a (successful) ParseError node into an actual failure.
+const failOnParseError = (p: Parser<Term>): Parser<Term> =>
+  bind(p, (x) => {
+    if (x._ == "err") {
+      return zero(x.msg);
+    } else {
+      return pure(x);
+    }
+  });
+
 // listLiteral parses a literal list constructor. Examples include:
 // [] - an empty list
 // [1] - a singleton list
@@ -719,7 +765,7 @@ export const listLiteral: Parser<Term> =
   // opening bracket
   bind(str("["), (_) =>
     // elements
-    bind(join(term, spc(char(","))), (elements) =>
+    bind(join(failOnParseError(term), spc(char(","))), (elements) =>
       // closing bracket
       bind(
         orFail("expected ]", str("]")),
@@ -764,9 +810,11 @@ export const stringLiteral: Parser<Term> = bind(str('"'), (_) =>
 );
 
 export const subterm: Parser<Term> = bind(
-  any10(
+  any12(
     // parenthesis `(T)`
-    block(parenthesis(lazy(() => term))),
+    block(parenthesis(spc(lazy(() => term)))),
+    // pi `Πx:A t`
+    block(pi(() => term)),
     // abstraction `λx t`
     block(abstraction(() => term)),
     // a case destructuring `case x of ...`
@@ -784,13 +832,16 @@ export const subterm: Parser<Term> = bind(
     // an integer literal, for example `123`
     block(integerLiteral),
     // a string literal, for example `"abc"`
-    block(stringLiteral)
+    block(stringLiteral),
+    // if nothing parses then skip past these characters and present a
+    // ParseError AST node.
+    resync2("expected term")
   ),
   (lhs) =>
     // A term may be followed by a type annotation, for example `(f(x)):Y`.
     bind(
       either(
-        bind(str(":"), (_) =>
+        bind(lspc(str(":")), (_) =>
           bind(
             lazy(() => term),
             (typ) => pure(Ann(lhs, typ))
@@ -810,8 +861,10 @@ export const subterm: Parser<Term> = bind(
 // term is a parser for terms in the programming language - i.e. the expressions
 // that can be evaluated.
 export const term: Parser<Term> =
-  // Parse the actual term.
-  bind(spc(subterm), (lhs) =>
+  // Parse the actual term. Consume any leading, but not trailing, whitespace as
+  // if the next parser is requiring leading whitespace it'll already have been
+  // consumed.
+  bind(lspc(subterm), (lhs) =>
     // A term may be followed by an arrow - making it a pi type.
     either(
       bind(str("->"), (_) =>
@@ -836,7 +889,7 @@ export const definition: Parser<ParseError | Def> = bind(str("func"), (_) =>
       bind(many(whitespace), (_) =>
         bind(orFail("expected :", char(":")), (_) =>
           bind(orFail("expected type", type), (typ) =>
-            bind(orFail("expected =", char("=")), (_) =>
+            bind(orFail("expected =", lspc(char("="))), (_) =>
               bind(many(either(whitespace, newline)), (_) =>
                 bind(orFail("expected term", term), (tm) =>
                   pure(Def(name, Ann(tm, typ)))
@@ -906,7 +959,7 @@ export const parseFile: Parser<File> = map(
       parseWhitespace,
       parseNewline,
       parsePackage,
-      definition,
+      block2(definition),
       adt,
       parseLineComment
     )
