@@ -2,7 +2,7 @@
 
 import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
 import { TypecheckError, infer } from "./check";
-import { foldTree } from "./inspect/inspect";
+import { foldTree, foldTreeCtx } from "./inspect/inspect";
 import { processADTs, desugar } from "./process";
 
 // What's the MVP for this?
@@ -32,6 +32,8 @@ export type BuildResult = {
 // If there are any typecheck failures they will be returned in the result.
 export const build = (src: string, stripDefs: boolean = true): BuildResult => {
   const t = parseFile({ src, idx: 0 });
+
+  console.log(`building...`);
 
   if (t._ == "parseerror") {
     // parsing should never fail
@@ -79,15 +81,17 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
   const parseErrors: TypecheckError[] = [];
   for (const def of defs) {
     // FIXME: need source locations.
-    const errs = foldTree(
-      (acc, curr) =>
-        curr._ == "err"
-          ? acc.concat({
-              msg: curr.msg,
-              start: 0,
-              end: 0,
-            } as TypecheckError)
-          : acc,
+    console.log(`checking for parse errors in tree`);
+    const errs = foldTreeCtx(
+      (acc, curr) => {
+        if (curr.term._ !== "err") return acc;
+        console.log(`curr is ${JSON.stringify(curr)}`);
+        return acc.concat({
+          msg: curr.term.msg,
+          start: curr.start ?? 0,
+          end: curr.end ?? 0,
+        } as TypecheckError);
+      },
       [] as TypecheckError[],
       def.term
     );

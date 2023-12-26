@@ -1,30 +1,17 @@
 import { describe, expect, test } from "vitest";
 
-var util = require("util");
-
-import { TypecheckError, identifier2str, serialise } from "../check";
+import { TypecheckError } from "../check";
 import { indexToLineCol, printLine } from "../parser";
 import {
   complete,
   hover,
   HoverInfo,
   hoverMessage,
+  printDiagnostic,
   printMultilineDiagnostic,
   Range,
 } from "./inspect";
 import { build, BuildResult } from "../build";
-import { ASTNode } from "../ast";
-
-export const printDiagnostic = (src: string, err: TypecheckError) => {
-  const lc = indexToLineCol(src, err.start);
-  const ec = indexToLineCol(src, err.end);
-  const line = printLine(src, lc.line);
-  return (
-    `at line ${lc.line} col ${lc.col}: ${err.msg}\n` +
-    `  ${line}\n` +
-    `  ${" ".repeat(lc.col)}^`
-  );
-};
 
 const ensureBuild = (src: string): BuildResult => {
   const result = build(src, false);
@@ -70,9 +57,9 @@ describe("inspect", () => {
       // the b in case b
       [{ start: 70, end: 71 }, { msg: "var(Bool)" }],
       // the true in `false -> true`
-      [{ start: 92, end: 96 }, { msg: "ref(Bool)" }],
+      [{ start: 91, end: 96 }, { msg: "ref(Bool)" }],
       // the false in `true -> false`
-      [{ start: 113, end: 118 }, { msg: "ref(Bool)" }],
+      [{ start: 112, end: 118 }, { msg: "ref(Bool)" }],
       // the Bool in the type signature
       [{ start: 43, end: 47 }, { msg: "ref(★)" }],
       // the other Bool in the type signature
@@ -87,17 +74,21 @@ describe("inspect", () => {
     });
   });
 
-  // test("should display the type when hovering a function definition", () => {
-  //   const src = `
-  //   type Nat = zero | succ(x Nat)
-  //   func f:Nat = zero
-  //   `;
+  // // TODO: Implement this.
+  // test("should display the type when hovering a function definition Nat", () => {
+  //   const srcWithToken = `
+  // type Nat = zero | succ(x Nat)
+  // func f$HERE$:Nat = zero`;
+  //   const src = srcWithToken.replace("$HERE$", "");
+  //   const tokenLocation = srcWithToken.indexOf("$HERE$");
+
   //   const result = ensureBuild(src);
+
   //   debugPrintTokens(src, result);
   //   // the type of f
-  //   expect(hoverMessage(src, result.file, result.defs, 47)).toEqual({
+  //   expect(hoverMessage(src, result.file, result.defs, tokenLocation)).toEqual({
   //     range: { start: 70, end: 71 },
-  //     msg: "var(Bool)",
+  //     msg: "Nat",
   //   });
   // });
 

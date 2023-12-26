@@ -7,31 +7,20 @@ import {
   Type,
   Term,
   App,
-  Abs,
   Var,
   Def,
-  ADT,
   ASTNode,
   AbsI,
   Origin,
   Identifier,
-  Let,
   Hole,
-} from "../ast";
-import {
-  addTermToCtx,
   identifier2str,
-  infer,
-  logFull,
-  serialise,
-  shift,
-  strip,
-  TypecheckError,
-} from "../check";
+  File,
+} from "../ast";
+import { addTermToCtx, TypecheckError } from "../check";
 import { whnf } from "../equal";
 import { indexToLineCol, printLine } from "../parser";
 import { pretty, printCtx } from "../pretty";
-import { File } from "../ast";
 
 export const printMultilineDiagnostic = (
   src: string,
@@ -49,7 +38,7 @@ export const printMultilineDiagnostic = (
       if (ec.line > lc.line) {
         msg += `${"-".repeat(Math.max(0, line.length - lc.col - 1))}\n`;
       } else {
-        msg += `${"-".repeat(ec.col - lc.col - 1)}\n`;
+        msg += `${"-".repeat(Math.max(0, ec.col - lc.col - 1))}\n`;
       }
     } else if (i == ec.line) {
       msg += `${"-".repeat(ec.col)}^\n`;
@@ -204,59 +193,59 @@ export const foldTreeCtx = <A>(
       case "app": {
         const left = doFold(x, {
           term: t.left,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const rght = doFold(left, {
           term: t.right,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         return rght;
       }
       case "lam": {
         const curr = doFold(x, {
           term: t.name,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const body = doFold(curr, {
           term: t.body,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         return body;
       }
       case "ann": {
         const tm = doFold(x, {
           term: t.term,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const typ = doFold(tm, {
           term: t.typ,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         return typ;
       }
       case "case": {
         const name = doFold(x, {
           term: t.name,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         let prev = name;
         for (const b of t.branches) {
           const ctr = doFold(prev, {
             term: b.constructor,
-            start: undefined,
-            end: undefined,
+            start: ctx.start,
+            end: ctx.end,
           });
           prev = doFold(ctr, {
             term: b.term,
-            start: undefined,
-            end: undefined,
+            start: ctx.start,
+            end: ctx.end,
           });
         }
         return prev;
@@ -264,36 +253,36 @@ export const foldTreeCtx = <A>(
       case "if": {
         const cond = doFold(x, {
           term: t.condition,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const fls = doFold(cond, {
           term: t.falseBranch,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const tru = doFold(fls, {
           term: t.trueBranch,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         return tru;
       }
       case "let": {
         const name = doFold(x, {
           term: t.name,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const expr = doFold(name, {
           term: t.expr,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const body = doFold(expr, {
           term: t.body,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         return body;
       }
@@ -303,21 +292,21 @@ export const foldTreeCtx = <A>(
       case "pi": {
         const frm = doFold(x, {
           term: t.from,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         const to = doFold(frm, {
           term: t.to,
-          start: undefined,
-          end: undefined,
+          start: ctx.start,
+          end: ctx.end,
         });
         return to;
       }
       case "rel": {
-        return doFold(x, { term: t.term, start: undefined, end: undefined });
+        return doFold(x, { term: t.term, start: ctx.start, end: ctx.end });
       }
       case "self": {
-        return doFold(x, { term: t.body, start: undefined, end: undefined });
+        return doFold(x, { term: t.body, start: ctx.start, end: ctx.end });
       }
       case "id":
       case "int":
@@ -550,6 +539,17 @@ export type CompletionInfo = {
 
 export type Range = { start: number; end: number };
 
+export const printDiagnostic = (src: string, err: TypecheckError) => {
+  const lc = indexToLineCol(src, err.start);
+  const ec = indexToLineCol(src, err.end);
+  const line = printLine(src, lc.line);
+  return (
+    `at line ${lc.line} col ${lc.col}: ${err.msg}\n` +
+    `  ${line}\n` +
+    `  ${" ".repeat(lc.col)}^`
+  );
+};
+
 export const hover = (
   src: string,
   f: File,
@@ -572,12 +572,12 @@ export const hover = (
               { msg: `${v.term._}(${pretty(v.type)})` }
             );
         }
-        // const msg = `${k.start}-${k.end} is a ${v.term._} with type ${pretty(
-        //   v.type
-        // )}; ctx at this location is ${printCtx(v.ctx)}`;
-        // console.debug(
-        //   printDiagnostic(src, TypecheckError(msg, k.start, k.end))
-        // );
+        const msg = `${k.start}-${k.end} is a ${v.term._} with type ${pretty(
+          v.type
+        )}; ctx at this location is ${printCtx(v.ctx)}`;
+        console.debug(
+          printDiagnostic(src, TypecheckError(msg, k.start, k.end))
+        );
         // console.log(
         //   `[{ start: ${k.start}, end: ${k.end} }, { msg: "${`${
         //     v.term._
@@ -589,10 +589,10 @@ export const hover = (
       for (const [k, v] of spans) {
         hoverInfo.set({ start: k.start, end: k.end }, { msg: "" });
 
-        // const msg = `${k.start}-${k.end} is a ${v.term._}`;
-        // console.debug(
-        //   printDiagnostic(src, TypecheckError(msg, k.start, k.end))
-        // );
+        const msg = `${k.start}-${k.end} is a ${v.term._}`;
+        console.debug(
+          printDiagnostic(src, TypecheckError(msg, k.start, k.end))
+        );
       }
     }
   }
@@ -639,22 +639,25 @@ export const complete = (
   for (const node of f.content) {
     if (node._ == "def") {
       const def = node;
-      const spans = inspect(def, defs, offset);
+
+      // const spans = inspect(def, defs, offset);
+      const spans = inspect(def, defs);
 
       for (const [k, v] of spans) {
+        console.log(
+          printMultilineDiagnostic(
+            src,
+            TypecheckError(
+              `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
+              k.start,
+              k.end
+            )
+          )
+        );
+
         if (!(k.start <= offset && k.end > offset)) {
           continue;
         }
-        // console.log(
-        //   printMultilineDiagnostic(
-        //     src,
-        //     TypecheckError(
-        //       `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
-        //       k.start,
-        //       k.end
-        //     )
-        //   )
-        // );
 
         for (const binding of v.ctx) {
           completionList.push({

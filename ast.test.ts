@@ -380,7 +380,7 @@ describe("ast", () => {
     }
 
     expect(serialiseAST(stripAST(ast.value.content[0]))).toBe(
-      `Def(name=abc, term=Ann(Abs("n", Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term))])), Pi("", Ref(Bool), Ref(Bool))))`
+      `Def(name=abc, term=Ann(Abs("n", Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term; got ))])), Pi("", Ref(Bool), Ref(Bool))))`
     );
     expect(serialiseAST(stripAST(ast.value.content[1]))).toBe(
       `Def(name=def, term=Ann(Ref(zero), Ref(Nat)))`

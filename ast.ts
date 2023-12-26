@@ -392,6 +392,36 @@ export type File = {
   content: ASTNode[];
 };
 
+// block is a parser that adds origin information into the parse tree. It can be
+// disabled by setting origins to false in the stream.
+export const block =
+  <T extends Term>(parser: Parser<T>): Parser<Origin> =>
+  (s: Stream): Result<Origin> => {
+    const start = s.idx;
+    const result = parser(s);
+
+    if (result._ == "parseerror") {
+      return result;
+    }
+
+    return pure(Origin(start, result.stream.idx, result.value))(result.stream);
+  };
+
+// block2 is a parser that adds origin information into the parse tree. It can be
+// disabled by setting origins to false in the stream.
+export const block2 =
+  <T extends ASTNode>(parser: Parser<T>): Parser<Origin2> =>
+  (s: Stream): Result<Origin2> => {
+    const start = s.idx;
+    const result = parser(s);
+
+    if (result._ == "parseerror") {
+      return result;
+    }
+
+    return pure(Origin2(start, result.stream.idx, result.value))(result.stream);
+  };
+
 // resync is a parser that advances the stream until the
 // next sync character or keyword is observed.
 export const resync = skip(
@@ -404,10 +434,8 @@ const resync2 = (msg: string): Parser<ParseError> =>
 
 // orFail returns A if the parser succeeds, or ParseError if the parser fails.
 // Either way it returns successfully.
-export const orFail = <A>(
-  msg: string,
-  p: Parser<A | ParseError>
-): Parser<A | ParseError> => either(p, resync2(msg));
+export const orFail = <A>(msg: string, p: Parser<A>): Parser<A | Term> =>
+  either(p, block(resync2(msg)));
 
 const reserved = new Set(["func", "import", "let", "case", "if"]);
 
@@ -429,7 +457,7 @@ export const identifier: Parser<string> = bind(
 
 // identifier2 parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
-export const identifier2: Parser<Identifier | ParseError> = orFail(
+export const identifier2: Parser<Identifier | Term> = orFail(
   "expected identifier",
   bind(identifier, (id) => pure(Identifier(id)))
 );
@@ -466,36 +494,6 @@ export const Origin2 = (
   child: child,
 });
 
-// block is a parser that adds origin information into the parse tree. It can be
-// disabled by setting origins to false in the stream.
-export const block =
-  <T extends Term>(parser: Parser<T>): Parser<Origin> =>
-  (s: Stream): Result<Origin> => {
-    const start = s.idx;
-    const result = parser(s);
-
-    if (result._ == "parseerror") {
-      return result;
-    }
-
-    return pure(Origin(start, result.stream.idx, result.value))(result.stream);
-  };
-
-// block2 is a parser that adds origin information into the parse tree. It can be
-// disabled by setting origins to false in the stream.
-export const block2 =
-  <T extends ASTNode>(parser: Parser<T>): Parser<Origin2> =>
-  (s: Stream): Result<Origin2> => {
-    const start = s.idx;
-    const result = parser(s);
-
-    if (result._ == "parseerror") {
-      return result;
-    }
-
-    return pure(Origin2(start, result.stream.idx, result.value))(result.stream);
-  };
-
 // parsePackage parses a package declaration such as `package abc`.
 export const parsePackage: Parser<ASTNode> = bind(str("package"), (_) =>
   bind(many1(whitespace), (_) =>
@@ -517,8 +515,8 @@ export const parseLineComment: Parser<ASTNode> = block2(
 );
 
 // reference parses a "variable" in the programming language.
-export const reference: Parser<Term> = block(
-  map(identifier, (result: string) => Ref(result))
+export const reference: Parser<Term> = map(identifier, (result: string) =>
+  Ref(result)
 );
 
 // par parses a "variable" in the programming language.
@@ -543,7 +541,7 @@ export const arrow: (type: () => Parser<Type>) => (s: Stream) => Result<Pi> = (
 ) =>
   bind(
     // (A->B)->C
-    either(reference, parenthesis(lazy(type))),
+    either(block(reference), parenthesis(lazy(type))),
     (lhs) =>
       bind(
         many1(
@@ -675,9 +673,7 @@ const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
       bind(block(identifier2), (id) =>
         bind(many(whitespace), (_) =>
           bind(either(str("->"), str("=>")), (_) =>
-            bind(many(whitespace), (_) =>
-              bind(term, (t) => pure(Branch(id, t)))
-            )
+            bind(term, (t) => pure(Branch(id, t)))
           )
         )
       )
@@ -688,7 +684,7 @@ const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
 // case b of
 // | true -> false
 // | false -> true
-export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
+export const caseStatement: Parser<Case | Term> = bind(str("case"), (_) =>
   orFail(
     "case statment not well formed",
     bind(spc1(par), (id) =>
@@ -702,7 +698,7 @@ export const caseStatement: Parser<Case | ParseError> = bind(str("case"), (_) =>
 );
 
 // let b = f(x) in ...
-export const letStatement: Parser<Let | ParseError> = bind(str("let"), (_) =>
+export const letStatement: Parser<Let | Term> = bind(str("let"), (_) =>
   orFail(
     "let statment not well formed",
     bind(spc1(block(identifier2)), (id) =>
@@ -719,7 +715,7 @@ export const letStatement: Parser<Let | ParseError> = bind(str("let"), (_) =>
 
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
-export const ifStatement: Parser<If | ParseError> = bind(str("if"), (_) =>
+export const ifStatement: Parser<If | Term> = bind(str("if"), (_) =>
   orFail(
     "if statment not well formed",
     bind(spc(term), (condition) =>
@@ -749,8 +745,9 @@ export const integerLiteral: Parser<IntLit> = map(num, (x) => ({
 // Transforms a (successful) ParseError node into an actual failure.
 const failOnParseError = (p: Parser<Term>): Parser<Term> =>
   bind(p, (x) => {
-    if (x._ == "err") {
-      return zero(x.msg);
+    const y = x._ == "orig" ? x.child : x;
+    if (y._ == "err") {
+      return zero(y.msg);
     } else {
       return pure(x);
     }
@@ -812,27 +809,27 @@ export const stringLiteral: Parser<Term> = bind(str('"'), (_) =>
 export const subterm: Parser<Term> = bind(
   any12(
     // parenthesis `(T)`
-    block(parenthesis(spc(lazy(() => term)))),
+    parenthesis(spc(lazy(() => term))),
     // pi `Πx:A t`
-    block(pi(() => term)),
+    pi(() => term),
     // abstraction `λx t`
-    block(abstraction(() => term)),
+    abstraction(() => term),
     // a case destructuring `case x of ...`
-    block(caseStatement),
+    caseStatement,
     // a let statement `let x = ...`
-    block(letStatement),
+    letStatement,
     // an if-then-else block
-    block(ifStatement),
+    ifStatement,
     // the type of types `*`
-    block(star),
+    star,
     // a reference for example `t`
     reference,
     // a list literal, for example `[1,2,3]`
-    block(listLiteral),
+    listLiteral,
     // an integer literal, for example `123`
-    block(integerLiteral),
+    integerLiteral,
     // a string literal, for example `"abc"`
-    block(stringLiteral),
+    stringLiteral,
     // if nothing parses then skip past these characters and present a
     // ParseError AST node.
     resync2("expected term")
@@ -864,7 +861,7 @@ export const term: Parser<Term> =
   // Parse the actual term. Consume any leading, but not trailing, whitespace as
   // if the next parser is requiring leading whitespace it'll already have been
   // consumed.
-  bind(lspc(subterm), (lhs) =>
+  bind(block(lspc(subterm)), (lhs) =>
     // A term may be followed by an arrow - making it a pi type.
     either(
       bind(str("->"), (_) =>
@@ -959,7 +956,7 @@ export const parseFile: Parser<File> = map(
       parseWhitespace,
       parseNewline,
       parsePackage,
-      block2(definition),
+      definition,
       adt,
       parseLineComment
     )
