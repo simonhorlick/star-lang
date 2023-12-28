@@ -139,7 +139,6 @@ export const item: Parser<string> = (cs: Stream): Result<string> => {
         _: "parseerror",
         stream: cs,
         error: "EOF",
-        // idx: cs.idx,
       };
 };
 
@@ -169,7 +168,7 @@ export function str(st: string): Parser<string> {
 }
 
 // until returns a Parser that fails if the provided parser succeeds and
-// succeeds otherwise. This parser does not advance the stream.
+// succeeds otherwise. This parser does not advance the stream. See `takeUntil`.
 export const until =
   <T>(st: Parser<T>): Parser<string> =>
   (s: Stream): Result<string> => {
@@ -180,13 +179,16 @@ export const until =
       return {
         _: "parseerror",
         stream: s,
-        error: `encountered ${st}`,
+        error: `encountered match`,
       };
     } else {
       // No match so return success and advance by 1 character.
       return item(s);
     }
   };
+
+export const takeUntil = <T>(p: Parser<T>) =>
+  map(many(until(p)), (x: string[]) => x.join(""));
 
 // identity is a parser that does the same as parser.
 function identity<T>(parser: Parser<T>): Parser<T> {

@@ -17,6 +17,8 @@ import {
   num,
   parseErrorDiagnostic,
   skip,
+  Parser,
+  takeUntil,
 } from "./parser";
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
@@ -110,6 +112,26 @@ describe("parser", () => {
 
   test("should parse 12345", () =>
     expect(result(num(ts("12345")))).toStrictEqual(12345));
+
+  const untila = takeUntil(char("a"));
+
+  test("should parse until the given parser is true", () =>
+    expect(result(untila(ts("12345abcd")))).toStrictEqual("12345"));
+});
+
+describe("csv", () => {
+  // a string that starts with two double quotes and ends with two double quotes.
+  // e.g. ""hello""
+  const quoted: Parser<string> = bind(str(`""`), (_) =>
+    bind(takeUntil(str(`""`)), (name) => bind(str(`""`), (_) => pure(name)))
+  );
+  const plain: Parser<string> = takeUntil(either(char(`,`), char(`"`)));
+
+  test("plain", () =>
+    expect(result(plain(ts(`Event,`)))).toStrictEqual("Event"));
+  test("plain2", () => expect(result(plain(ts(`,,"`)))).toStrictEqual(""));
+  test("quoted", () =>
+    expect(result(quoted(ts(`""aaaaa""`)))).toStrictEqual("aaaaa"));
 });
 
 describe("util", () => {
