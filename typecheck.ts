@@ -19,7 +19,7 @@ import {
 import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
-import { Context, addTermToCtx } from "./context";
+import { Context, addTermToCtx, lookupType } from "./context";
 import { shift, substHole, substTop } from "./substitution";
 
 const verbose = true;
@@ -59,29 +59,6 @@ export const Result = (
   type: type,
   holes: holes,
 });
-
-export const lookupType = (
-  ctx: Context,
-  index: number,
-  name: string | undefined = undefined
-): Type => {
-  if (index >= ctx.length) {
-    throw `variable ${name} not found in context`;
-  }
-  let x = ctx[ctx.length - index - 1];
-  // For debugging - this can only happen if the wrong index is used in a
-  // hand-crafted expression.
-  if (name && x.name != name) {
-    throw `name mismatch: got ${name}; expected ${x.name}`;
-  }
-  // Shift the indices referenced in this type to take into account the actual
-  // context length. When this type was added to the context all variables are
-  // offset from 0, but when looking up the entry in position i, the absolute
-  // offsets of all variables in this entry are offset by i.
-  // For example, if the context is [(A *), (a A@0)] then the returned type
-  // for a@0 is A@1, not A@0.
-  return shift(index + 1, 0, x.typ);
-};
 
 // infer the type of a term. This produces an annotated version of the term
 // whose type can always be checked.

@@ -1,5 +1,6 @@
 import { Star, Term, Type, identifier2str } from "./ast";
 import { printCtx } from "./pretty";
+import { shift } from "./substitution";
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
 
@@ -85,4 +86,27 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "err":
       throw "dbgCheckIndices: unexpected parse error";
   }
+};
+
+export const lookupType = (
+  ctx: Context,
+  index: number,
+  name: string | undefined = undefined
+): Type => {
+  if (index >= ctx.length) {
+    throw `variable ${name} not found in context`;
+  }
+  let x = ctx[ctx.length - index - 1];
+  // For debugging - this can only happen if the wrong index is used in a
+  // hand-crafted expression.
+  if (name && x.name != name) {
+    throw `name mismatch: got ${name}; expected ${x.name}`;
+  }
+  // Shift the indices referenced in this type to take into account the actual
+  // context length. When this type was added to the context all variables are
+  // offset from 0, but when looking up the entry in position i, the absolute
+  // offsets of all variables in this entry are offset by i.
+  // For example, if the context is [(A *), (a A@0)] then the returned type
+  // for a@0 is A@1, not A@0.
+  return shift(index + 1, 0, x.typ);
 };
