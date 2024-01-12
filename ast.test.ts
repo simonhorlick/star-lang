@@ -28,7 +28,7 @@ import {
   Result,
 } from "./parser";
 import { TypecheckError } from "./typecheck";
-import { foldTreeCtx, printDiagnostic } from "./inspect/inspect";
+import { foldTreeCtx, printDiagnostic } from "./inspect";
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,

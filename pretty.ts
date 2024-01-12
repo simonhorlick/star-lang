@@ -1,6 +1,6 @@
 import { Context, Term, identifier2str } from "./ast";
 import * as Erased from "./erased";
-import { foldTree } from "./inspect/inspect";
+import { foldTree } from "./inspect";
 
 export function printCtx(ctx: Context, indices: boolean = false): string {
   return (

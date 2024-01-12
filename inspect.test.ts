@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import { TypecheckError } from "../typecheck";
-import { indexToLineCol, printLine } from "../parser";
+import { TypecheckError } from "./typecheck";
+import { indexToLineCol, printLine } from "./parser";
 import {
   complete,
   hover,
@@ -11,7 +11,7 @@ import {
   printMultilineDiagnostic,
   Range,
 } from "./inspect";
-import { build, BuildResult } from "../build";
+import { build, BuildResult } from "./build";
 
 const ensureBuild = (src: string): BuildResult => {
   const result = build(src, false);

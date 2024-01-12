@@ -2,11 +2,7 @@
 
 import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
 import { TypecheckError, infer } from "./typecheck";
-import {
-  foldTree,
-  foldTreeCtx,
-  typecheckErrorDiagnostic,
-} from "./inspect/inspect";
+import { foldTree, foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
 import { processADTs, desugar } from "./process";
 
