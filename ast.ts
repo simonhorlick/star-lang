@@ -887,10 +887,8 @@ export const definition: Parser<ParseError | Def> = bind(str("func"), (_) =>
         bind(orFail("expected :", char(":")), (_) =>
           bind(orFail("expected type", type), (typ) =>
             bind(orFail("expected =", lspc(char("="))), (_) =>
-              bind(many(either(whitespace, newline)), (_) =>
-                bind(orFail("expected term", term), (tm) =>
-                  pure(Def(name, Ann(tm, typ)))
-                )
+              bind(orFail("expected term", term), (tm) =>
+                pure(Def(name, Ann(tm, typ)))
               )
             )
           )
