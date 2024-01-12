@@ -1,8 +1,6 @@
 import { App, Context, Def, Self, Term, identifier2str } from "./ast";
 import { TypecheckError, substTop } from "./check";
 
-var _ = require("lodash");
-
 // Compute the weak head normal form for a term.
 export const whnf = (
   unfold: boolean,

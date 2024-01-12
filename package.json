@@ -9,7 +9,6 @@
   "author": "Simon Horlick",
   "license": "MIT",
   "dependencies": {
-    "lodash": "^4.17.21"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",

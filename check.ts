@@ -28,8 +28,6 @@ import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
 
-var _ = require("lodash");
-
 const verbose = true;
 
 export const logFull = (x: any) => {
@@ -38,8 +36,6 @@ export const logFull = (x: any) => {
     util.inspect(x, { showHidden: false, depth: null, colors: true })
   );
 };
-
-export const typeEq = (A: Type, B: Type) => _.isEqual(A, B);
 
 export const ctxContains = (name: string, ctx: Context) =>
   ctx.find((b) => b.name == name) != undefined;
