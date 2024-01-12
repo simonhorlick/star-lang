@@ -3,7 +3,6 @@ import {
   Star,
   Pi,
   Self,
-  Context,
   Type,
   Term,
   App,
@@ -17,10 +16,11 @@ import {
   identifier2str,
   File,
 } from "./ast";
-import { addTermToCtx, TypecheckError } from "./typecheck";
+import { TypecheckError } from "./typecheck";
 import { whnf } from "./equal";
 import { indexToLineCol, printLine } from "./parser";
 import { pretty, printCtx } from "./pretty";
+import { Context, addTermToCtx } from "./context";
 
 export const printMultilineDiagnostic = (
   src: string,
@@ -379,9 +379,6 @@ export const inspect = (
           return t;
         }
         const typ = whnf(true, [], defs, ty);
-        if (typ._ == "typecheckerror") {
-          return t;
-        }
         if (typ._ != "pi") {
           throw "inspect: expected pi";
         }
