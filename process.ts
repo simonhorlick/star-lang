@@ -25,7 +25,7 @@ import {
   Let,
   identifier2str,
 } from "./ast";
-import { addTermToCtx } from "./check";
+import { addTermToCtx } from "./typecheck";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 

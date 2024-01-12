@@ -1,5 +1,7 @@
-import { App, Context, Def, Self, Term, identifier2str } from "./ast";
-import { TypecheckError, substTop } from "./check";
+import { App, Def, Self, Term, identifier2str } from "./ast";
+import { TypecheckError } from "./typecheck";
+import { Context } from "./context";
+import { substTop } from "./substitution";
 
 // Compute the weak head normal form for a term.
 export const whnf = (

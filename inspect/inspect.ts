@@ -17,7 +17,7 @@ import {
   identifier2str,
   File,
 } from "../ast";
-import { addTermToCtx, TypecheckError } from "../check";
+import { addTermToCtx, TypecheckError } from "../typecheck";
 import { whnf } from "../equal";
 import { indexToLineCol, printLine } from "../parser";
 import { pretty, printCtx } from "../pretty";

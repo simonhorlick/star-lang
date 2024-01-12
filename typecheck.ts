@@ -1,83 +1,28 @@
 // check implements a typechecker for this language
 import {
-  Context,
   Term,
   Type,
   App,
   Abs,
-  Var,
   Ann,
   Pi,
   Def,
   Star,
-  Self,
-  Case,
-  Branch,
   Origin,
   Constructor,
   ADT,
   AbsI,
-  If,
   Ref,
-  Let,
-  Rel,
   identifier2str,
   strip,
 } from "./ast";
 import { whnf } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { desugarTerm } from "./process";
+import { Context, addTermToCtx } from "./context";
+import { shift, substHole, substTop } from "./substitution";
 
 const verbose = true;
-
-export const logFull = (x: any) => {
-  const util = require("util");
-  console.log(
-    util.inspect(x, { showHidden: false, depth: null, colors: true })
-  );
-};
-
-export const ctxContains = (name: string, ctx: Context) =>
-  ctx.find((b) => b.name == name) != undefined;
-
-export const addTermToCtx = (
-  ctx: Context,
-  name: string,
-  type: Type
-): Context => {
-  if (name != "" && name != "P" && ctxContains(name, ctx)) {
-    console.log(
-      `warning: variable ${name} shadows existing variable; context is ${printCtx(
-        ctx
-      )}`
-    );
-  }
-  dbgCheckIndices(ctx, 0, type);
-  return [...ctx, { type: "bind", name: name, typ: type }];
-};
-
-export const lookupType = (
-  ctx: Context,
-  index: number,
-  name: string | undefined = undefined
-): Type => {
-  if (index >= ctx.length) {
-    throw `variable ${name} not found in context`;
-  }
-  let x = ctx[ctx.length - index - 1];
-  // For debugging - this can only happen if the wrong index is used in a
-  // hand-crafted expression.
-  if (name && x.name != name) {
-    throw `name mismatch: got ${name}; expected ${x.name}`;
-  }
-  // Shift the indices referenced in this type to take into account the actual
-  // context length. When this type was added to the context all variables are
-  // offset from 0, but when looking up the entry in position i, the absolute
-  // offsets of all variables in this entry are offset by i.
-  // For example, if the context is [(A *), (a A@0)] then the returned type
-  // for a@0 is A@1, not A@0.
-  return shift(index + 1, 0, x.typ);
-};
 
 export type TypecheckError = {
   _: "typecheckerror";
@@ -114,6 +59,29 @@ export const Result = (
   type: type,
   holes: holes,
 });
+
+export const lookupType = (
+  ctx: Context,
+  index: number,
+  name: string | undefined = undefined
+): Type => {
+  if (index >= ctx.length) {
+    throw `variable ${name} not found in context`;
+  }
+  let x = ctx[ctx.length - index - 1];
+  // For debugging - this can only happen if the wrong index is used in a
+  // hand-crafted expression.
+  if (name && x.name != name) {
+    throw `name mismatch: got ${name}; expected ${x.name}`;
+  }
+  // Shift the indices referenced in this type to take into account the actual
+  // context length. When this type was added to the context all variables are
+  // offset from 0, but when looking up the entry in position i, the absolute
+  // offsets of all variables in this entry are offset by i.
+  // For example, if the context is [(A *), (a A@0)] then the returned type
+  // for a@0 is A@1, not A@0.
+  return shift(index + 1, 0, x.typ);
+};
 
 // infer the type of a term. This produces an annotated version of the term
 // whose type can always be checked.
@@ -534,166 +502,6 @@ export const typecheck = (
   return fill(chk);
 };
 
-// Shifting renumbers the indices of the free variables in a term.
-// If the variable index is greater than the cutoff, c, then adjust the index
-// by d.
-export function shift(d: number, c: number, t: Term): Term {
-  switch (t._) {
-    case "var":
-      return t.index >= c ? Var(t.name, t.index + d) : t;
-    case "lam":
-      return AbsI(t.name, shift(d, c + 1, t.body));
-    case "self":
-      return Self(t.name, shift(d, c + 1, t.body));
-    case "app":
-      return App(shift(d, c, t.left), shift(d, c, t.right));
-    case "ann":
-      return Ann(shift(d, c, t.term), t.typ);
-    case "pi":
-      return Pi(t.name, shift(d, c, t.from), shift(d, c + 1, t.to));
-    case "star":
-    case "ref":
-    case "par":
-    case "id":
-    case "hole":
-    case "int":
-    case "str":
-      return t;
-    case "orig":
-      return Origin(t.start, t.end, shift(d, c, t.child));
-    case "case":
-      return Case(
-        shift(d, c, t.name),
-        t.branches.map((b) => Branch(b.constructor, shift(d, c, b.term))) // TODO: Is this correct? Do we need to shift here?
-      );
-    case "let":
-      return Let(t.name, shift(d, c, t.expr), shift(d, c + 1, t.body));
-    case "if":
-      return If(
-        shift(d, c, t.condition),
-        shift(d, c, t.trueBranch),
-        shift(d, c, t.falseBranch)
-      );
-    case "rel":
-      return Rel(shift(d, c, t.term), t.uses);
-    case "err":
-      return t;
-  }
-}
-
-// Given a term t, find all Vars with index j and replace them with the term s.
-export function subst(
-  j: number,
-  s: Term,
-  c: number,
-  t: Term,
-  name: string
-): Term {
-  switch (t._) {
-    case "var":
-      // Substitute in the term s, renumbering any free variables so the
-      // expression is consistent.
-      // Debug check:
-      // if (t.index == j + c && t.name != name) {
-      //   throw `name mismatch in subst: var at index ${j + c} is ${
-      //     t.name
-      //   }; but expected to find ${name}`;
-      // }
-      return t.index == j + c ? shift(c, 0, s) : t;
-    case "lam":
-      return AbsI(t.name, subst(j, s, c + 1, t.body, name));
-    case "self":
-      return Self(t.name, subst(j, s, c + 1, t.body, name));
-    case "app":
-      return App(subst(j, s, c, t.left, name), subst(j, s, c, t.right, name));
-    case "ann":
-      return Ann(subst(j, s, c, t.term, name), t.typ);
-    case "pi":
-      return Pi(
-        t.name,
-        subst(j, s, c, t.from, name),
-        subst(j, s, c + 1, t.to, name)
-      );
-    case "par":
-      throw "subst: unexpected par";
-    case "star":
-    case "ref":
-    case "id":
-    case "hole":
-    case "int":
-    case "str":
-      return t;
-    case "orig":
-      return Origin(t.start, t.end, subst(j, s, c, t.child, name));
-    case "case":
-      throw "subst: unexpected case";
-    case "let":
-      return Let(
-        t.name,
-        subst(j, s, c, t.expr, name),
-        subst(j, s, c + 1, t.body, name)
-      );
-    case "if":
-      throw "subst: unexpected if";
-    case "rel":
-      return Rel(subst(j, s, c, t.term, name), t.uses);
-    case "err":
-      throw "subst: unexpected parse error";
-  }
-}
-
-// Replaces all instances of Var(0) with s in the term t. A name can be passed
-// as a sanity check to ensure the substituted variables are the correct ones.
-export function substTop(s: Term, t: Term, name: string): Term {
-  // The term being substituted for the bound variable is first shifted up by one, then the
-  // substitution is made, and then the whole result is shifted down by one to account for the
-  // fact that the bound variable has been used up.
-  return shift(-1, 0, subst(0, shift(1, 0, s), 0, t, name));
-}
-
-// Given a term t, find all Holes with index j and replace them with the term s.
-export function substHole(j: number, s: Term, t: Term): Term {
-  switch (t._) {
-    case "var":
-      return t;
-    case "lam":
-      return AbsI(t.name, substHole(j, s, t.body));
-    case "self":
-      return Self(t.name, substHole(j, s, t.body));
-    case "app":
-      return App(substHole(j, s, t.left), substHole(j, s, t.right));
-    case "ann":
-      return Ann(substHole(j, s, t.term), substHole(j, s, t.typ));
-    case "pi":
-      return Pi(t.name, substHole(j, s, t.from), substHole(j, s, t.to));
-    case "par":
-      throw "substHole: unexpected par";
-    case "star":
-    case "ref":
-    case "id":
-    case "int":
-    case "str":
-      return t;
-    case "hole":
-      if (t.id == j) {
-        return s;
-      }
-      return t;
-    case "orig":
-      return Origin(t.start, t.end, substHole(j, s, t.child));
-    case "case":
-      throw "substHole: unexpected case";
-    case "let":
-      throw "substHole: unexpected let";
-    case "if":
-      throw "substHole: unexpected if";
-    case "rel":
-      return Rel(substHole(j, s, t.term), t.uses);
-    case "err":
-      throw "substHole: unexpected parse error";
-  }
-}
-
 // aeq returns true if the two terms are alpha-equivalent, i.e. they are the
 // same up to renaming of bound variables.
 const aeq = (t1: Term, t2: Term): boolean => {
@@ -807,59 +615,6 @@ export const equate = (
     return { eq: true, holes: [{ id: n2.id, term: ty1 }] };
   } else {
     return { eq: false, holes: [] };
-  }
-};
-
-export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
-  // check the names of Var terms match what's in the context.
-  switch (t._) {
-    case "var":
-      lookupType(ctx, t.index, t.name);
-      return t;
-    case "lam":
-      dbgCheckIndices(
-        addTermToCtx(ctx, identifier2str(t.name), Star()),
-        depth + 1,
-        t.body
-      );
-      return t;
-    case "self":
-      dbgCheckIndices(addTermToCtx(ctx, t.name, Star()), depth + 1, t.body);
-      return t;
-    case "app":
-      dbgCheckIndices(ctx, depth, t.left);
-      dbgCheckIndices(ctx, depth, t.right);
-      return t;
-    case "ann":
-      dbgCheckIndices(ctx, depth, t.term);
-      dbgCheckIndices(ctx, depth, t.typ);
-      return t;
-    case "pi":
-      dbgCheckIndices(ctx, depth, t.from);
-      dbgCheckIndices(addTermToCtx(ctx, t.name, Star()), depth + 1, t.to);
-      return t;
-    case "star":
-    case "ref":
-    case "id":
-    case "par":
-    case "hole":
-    case "int":
-    case "str":
-      return t;
-    case "case":
-      // FIXME: Improve the types here.
-      throw "dbgCheckIndices: unexpected case";
-    case "let":
-      throw "dbgCheckIndices: unexpected let";
-    case "rel":
-      throw "dbgCheckIndices: unexpected rel";
-    case "if":
-      throw "dbgCheckIndices: unexpected if";
-    case "orig":
-      dbgCheckIndices(ctx, depth, t.child);
-      return t;
-    case "err":
-      throw "dbgCheckIndices: unexpected parse error";
   }
 };
 

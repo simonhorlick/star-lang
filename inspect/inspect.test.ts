@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { TypecheckError } from "../check";
+import { TypecheckError } from "../typecheck";
 import { indexToLineCol, printLine } from "../parser";
 import {
   complete,

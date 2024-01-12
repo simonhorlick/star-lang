@@ -51,11 +51,6 @@ export const ParseError = (msg: string): ParseError => ({
   _: "err",
   msg: msg,
 });
-export type VariableBinding = { type: "bind"; name: string; typ: Type };
-
-export type Binding = VariableBinding;
-
-export type Context = Binding[];
 
 // Identifier is a syntax node so that we can wrap it in origins and map it
 // back to the original source location.
