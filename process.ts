@@ -1,5 +1,4 @@
 import {
-  Context,
   Ann,
   Star,
   Pi,
@@ -25,7 +24,7 @@ import {
   Let,
   identifier2str,
 } from "./ast";
-import { addTermToCtx } from "./typecheck";
+import { Context, addTermToCtx } from "./context";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 
