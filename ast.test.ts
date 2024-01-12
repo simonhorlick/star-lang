@@ -17,6 +17,7 @@ import {
   parseFile,
   resync,
   pi,
+  Def,
 } from "./ast";
 import {
   bind,
@@ -26,6 +27,8 @@ import {
   Stream,
   Result,
 } from "./parser";
+import { TypecheckError } from "./check";
+import { foldTreeCtx, printDiagnostic } from "./inspect/inspect";
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,
@@ -453,6 +456,51 @@ describe("ast", () => {
     const ast = stripAST(result(bind(resync, (_) => definition)(ts(src))));
     expect(serialiseAST(ast)).toBe(
       `Def(name=x, term=Ann(Ref(zero), Ref(Nat)))`
+    );
+  });
+
+  test("should parse simple pi type", () => {
+    const src = `
+    Πb:Bool
+     *
+    `;
+    const tm = strip(result(type(ts(src))));
+    expect(serialise(tm)).toBe(`Pi("b", Ref(Bool), Star)`);
+  });
+
+  test("should parse pi types correctly", () => {
+    const src = `Πb:Bool ΠP:(Πx:Bool *) Πt:P(true) Πf:P(false) P(b)`;
+    const tm = strip(result(type(ts(src))));
+    expect(serialise(tm)).toBe(
+      `Pi("b", Ref(Bool), Pi("P", Pi("x", Ref(Bool), Star), Pi("t", App(Ref(P), Ref(true)), Pi("f", App(Ref(P), Ref(false)), App(Ref(P), Ref(b))))))`
+    );
+  });
+
+  test("should parse pi types in function type", () => {
+    const src = `func bool_match : Πb:Bool ΠP:(Πx:Bool *) Πt:P(true) Πf:P(false) P(b) =
+    λb λP λt λf b(P)(t)(f)
+`;
+    const ast = stripAST(result(definition(ts(src)))) as Def;
+    // const ast = result(definition(ts(src))) as Def;
+
+    console.log(`checking for parse errors in tree`);
+    const errs = foldTreeCtx(
+      (acc, curr) => {
+        if (curr.term._ !== "err") return acc;
+        const err = {
+          msg: curr.term.msg,
+          start: curr.start ?? 0,
+          end: curr.end ?? 0,
+        } as TypecheckError;
+        console.log(printDiagnostic(src, err));
+        return acc.concat(err);
+      },
+      [] as TypecheckError[],
+      ast.term
+    );
+
+    expect(serialiseAST(ast)).toBe(
+      `Def(name=bool_match, term=Ann(Abs("b", Abs("P", Abs("t", Abs("f", App(App(App(Ref(b), Ref(P)), Ref(t)), Ref(f)))))), Pi("b", Ref(Bool), Pi("P", Pi("x", Ref(Bool), Star), Pi("t", App(Ref(P), Ref(true)), Pi("f", App(Ref(P), Ref(false)), App(Ref(P), Ref(b))))))))`
     );
   });
 });
