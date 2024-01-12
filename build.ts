@@ -71,18 +71,19 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
   let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
     console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
-    const result = infer(defsMap, adts, [], def.term, 0, src.length);
-    if (result._ == "typecheckerror") {
+    try {
+      const result = infer(defsMap, adts, [], def.term, 0, src.length);
+      if (result.term._ != "ann") {
+        throw "expected annotated term for definition body";
+      }
+      checkedMap.set(def.name, Def(def.name, result.term));
+    } catch (e) {
+      const result = e as TypecheckError;
       console.error(typecheckErrorDiagnostic(src, result));
       checkerErrors.push(result);
       // add the original term to the map so we can at least get some
       // information when inspecting.
       checkedMap.set(def.name, Def(def.name, def.term));
-    } else {
-      if (result.term._ != "ann") {
-        throw "expected annotated term for definition body";
-      }
-      checkedMap.set(def.name, Def(def.name, result.term));
     }
   }
 

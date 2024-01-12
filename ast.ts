@@ -256,9 +256,6 @@ export type ASTNode =
   | Origin2
   | ParseError;
 
-// Normal is a hint to the user that the term is in weak head normal form.
-export type Normal = Term;
-
 export type Argument = {
   name: string;
   type: Type;

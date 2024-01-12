@@ -1,4 +1,4 @@
-import { App, Context, Def, Normal, Self, Term, identifier2str } from "./ast";
+import { App, Context, Def, Self, Term, identifier2str } from "./ast";
 import { TypecheckError, substTop } from "./check";
 
 var _ = require("lodash");
@@ -9,20 +9,17 @@ export const whnf = (
   ctx: Context,
   defs: Map<string, Def>,
   t: Term
-): Normal | TypecheckError => {
+): Term => {
   switch (t._) {
     case "ref":
       if (!unfold) return t;
       const match = defs.get(t.name);
       if (match == undefined) {
-        return TypecheckError(`whnf: reference not found: ${t.name}`, 0, 0);
+        throw TypecheckError(`whnf: reference not found: ${t.name}`, 0, 0);
       }
       return whnf(false, ctx, defs, match.term);
     case "app": {
       let nf = whnf(unfold, ctx, defs, t.left);
-      if (nf._ == "typecheckerror") {
-        return nf;
-      }
       if (nf._ == "lam") {
         return whnf(
           unfold,
@@ -40,27 +37,7 @@ export const whnf = (
     case "rel":
       throw "whnf: unexpected Rel";
     case "self":
-      // // eliminate self
-      // if (selfTerm == undefined) {
-      //   // This can happen if we're checking a type definition, i.e. Nat:*.
-      //   const nf = whnf(unfold, ctx, defs, t.body, selfTerm);
-      //   if (nf._ == "typecheckerror") {
-      //     return nf;
-      //   }
-      //   return Self(t.name, nf);
-      // }
-      // return whnf(
-      //   unfold,
-      //   ctx,
-      //   defs,
-      //   substTop(selfTerm, t.body, t.name),
-      //   selfTerm
-      // );
-      const nf = whnf(unfold, ctx, defs, t.body);
-      if (nf._ == "typecheckerror") {
-        return nf;
-      }
-      return Self(t.name, nf);
+      return Self(t.name, whnf(unfold, ctx, defs, t.body));
     case "var":
       //throw "this looks wrong";
       //return lookupType(ctx, t.index, t.name);

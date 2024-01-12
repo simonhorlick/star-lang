@@ -5,6 +5,7 @@ import {
   Def,
   Self,
   Term,
+  Type,
   identifier2str,
   parseFile,
 } from "./ast";
@@ -230,20 +231,23 @@ describe("typechecker", () => {
 
     test("should error if the type doesn't matche the annotation", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
-      const result = typecheck(
-        defs([
-          Def("A", Ann(Abs("x", Abs("y", Var("y", 0))), Star())),
-          Def("B", Ann(Abs("x", Abs("y", Var("x", 1))), Star())),
-        ]),
-        adts(),
-        ctx,
-        Ann(Var("a", 0), Ref("B")),
-        Ref("B")
-      );
-      if (result._ != "typecheckerror") {
-        throw "expected checker failure";
+      try {
+        const result = typecheck(
+          defs([
+            Def("A", Ann(Abs("x", Abs("y", Var("y", 0))), Star())),
+            Def("B", Ann(Abs("x", Abs("y", Var("x", 1))), Star())),
+          ]),
+          adts(),
+          ctx,
+          Ann(Var("a", 0), Ref("B")),
+          Ref("B")
+        );
+      } catch (e) {
+        const result = e as TypecheckError;
+        expect(result.msg).toBe(`typecheck failed: B is not A`);
+        return;
       }
-      expect(result.msg).toBe(`typecheck failed: B is not A`);
+      throw "expected checker failure";
     });
 
     test("should check type of a matches the annotation", () => {
@@ -541,13 +545,7 @@ describe("typechecker", () => {
     const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
 
     let result = typecheck(defs(), adts(), [], tru, Bool);
-    if (result._ == "typecheckerror") {
-      throw new Error(result.msg);
-    }
     let result2 = typecheck(defs(), adts(), [], fls, Bool);
-    if (result2._ == "typecheckerror") {
-      throw new Error(result2.msg);
-    }
   });
 
   test("can typecheck bool with self types", () => {
@@ -711,9 +709,6 @@ describe("typechecker", () => {
     ensure(typecheck(defns, adts(), [], eliminator, bool.term));
 
     const reduced = whnf(true, [], defns, eliminator);
-    if (reduced._ == "typecheckerror") {
-      throw reduced.msg;
-    }
     expect(pretty(reduced)).toBe("λP λfalse λtrue false");
   });
 
