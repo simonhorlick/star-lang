@@ -8,8 +8,7 @@ export const whnf = (
   unfold: boolean,
   ctx: Context,
   defs: Map<string, Def>,
-  t: Term,
-  selfTerm: Term | undefined
+  t: Term
 ): Normal | TypecheckError => {
   switch (t._) {
     case "ref":
@@ -18,9 +17,9 @@ export const whnf = (
       if (match == undefined) {
         return TypecheckError(`whnf: reference not found: ${t.name}`, 0, 0);
       }
-      return whnf(false, ctx, defs, match.term, selfTerm);
+      return whnf(false, ctx, defs, match.term);
     case "app": {
-      let nf = whnf(unfold, ctx, defs, t.left, selfTerm);
+      let nf = whnf(unfold, ctx, defs, t.left);
       if (nf._ == "typecheckerror") {
         return nf;
       }
@@ -29,35 +28,39 @@ export const whnf = (
           unfold,
           ctx,
           defs,
-          substTop(t.right, nf.body, identifier2str(nf.name)),
-          selfTerm
+          substTop(t.right, nf.body, identifier2str(nf.name))
         );
       }
       return App(nf, t.right);
     }
     case "ann":
-      return whnf(unfold, ctx, defs, t.term, selfTerm);
+      return whnf(unfold, ctx, defs, t.term);
     case "par":
       throw "whnf: unexpected Par";
     case "rel":
       throw "whnf: unexpected Rel";
     case "self":
-      // eliminate self
-      if (selfTerm == undefined) {
-        // This can happen if we're checking a type definition, i.e. Nat:*.
-        const nf = whnf(unfold, ctx, defs, t.body, selfTerm);
-        if (nf._ == "typecheckerror") {
-          return nf;
-        }
-        return Self(t.name, nf);
+      // // eliminate self
+      // if (selfTerm == undefined) {
+      //   // This can happen if we're checking a type definition, i.e. Nat:*.
+      //   const nf = whnf(unfold, ctx, defs, t.body, selfTerm);
+      //   if (nf._ == "typecheckerror") {
+      //     return nf;
+      //   }
+      //   return Self(t.name, nf);
+      // }
+      // return whnf(
+      //   unfold,
+      //   ctx,
+      //   defs,
+      //   substTop(selfTerm, t.body, t.name),
+      //   selfTerm
+      // );
+      const nf = whnf(unfold, ctx, defs, t.body);
+      if (nf._ == "typecheckerror") {
+        return nf;
       }
-      return whnf(
-        unfold,
-        ctx,
-        defs,
-        substTop(selfTerm, t.body, t.name),
-        selfTerm
-      );
+      return Self(t.name, nf);
     case "var":
       //throw "this looks wrong";
       //return lookupType(ctx, t.index, t.name);
@@ -77,7 +80,7 @@ export const whnf = (
     case "if":
       return t;
     case "orig": // remove origins
-      return whnf(unfold, ctx, defs, t.child, selfTerm);
+      return whnf(unfold, ctx, defs, t.child);
     case "err":
       // return successfully
       return t;

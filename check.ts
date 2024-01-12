@@ -31,7 +31,7 @@ import { desugarTerm } from "./process";
 
 var _ = require("lodash");
 
-const verbose = false;
+const verbose = true;
 
 export const logFull = (x: any) => {
   const util = require("util");
@@ -177,30 +177,43 @@ export const infer = (
       // ------------------- app
       // Γ ⊢ f(b) => B[b/x]
 
+      console.log(`term is ${pretty(term)}`);
+
       let f = term.left;
       let b = term.right;
+
+      console.log(`f is ${pretty(f)}`);
+      console.log(`b is ${pretty(b)}`);
+
       let fType = infer(defs, adts, ctx, f, os, oe);
       if (fType._ == "typecheckerror") {
         return fType;
       }
-      let fTypeElaborated = fType.term;
+      console.log(`:f is ${pretty(fType.type)}`);
+
+      let fTermElaborated = fType.term;
       // TODO: Is this necessary?
-      let nf = whnf(true, ctx, defs, fType.type, term);
+      let nf = whnf(true, ctx, defs, fType.type);
       if (nf._ == "typecheckerror") {
         return nf;
       }
-      if (nf._ != "pi") {
+
+      console.log(`:f' is ${pretty(nf)}`);
+
+      const nf2 = nf._ == "self" ? substTop(f, nf.body, nf.name) : nf;
+      console.log(`nf2 is ${pretty(nf2)}`);
+      if (nf2._ != "pi") {
         console.error(pretty(fType.type));
-        console.error(pretty(nf));
+        console.error(pretty(nf2));
         return TypecheckError(
-          `expected pi type on the left of app; got ${nf._}: ${pretty(nf)}`,
+          `expected pi type on the left of app; got ${nf2._}: ${pretty(nf2)}`,
           os,
           oe
         );
       }
 
-      let tyA = nf.from;
-      let tyB = nf.to;
+      let tyA = nf2.from;
+      let tyB = nf2.to;
       let arg = typecheck(defs, adts, ctx, b, tyA, os, oe);
       if (arg._ == "typecheckerror") {
         return arg;
@@ -208,7 +221,7 @@ export const infer = (
       let et2 = arg.term;
       // Substitute the argument in the pi type with the elaborated argument to
       // the app inside of tyB.
-      let typ = substTop(et2, tyB, nf.name);
+      let typ = substTop(et2, tyB, nf2.name);
 
       if (verbose)
         console.log(
@@ -222,7 +235,7 @@ export const infer = (
       // that further stages can use it.
 
       return Result(
-        App(Ann(fTypeElaborated, strip(fType.type)), Ann(et2, arg.type)),
+        App(Ann(fTermElaborated, strip(fType.type)), Ann(et2, arg.type)),
         typ,
         arg.holes.concat(fType.holes)
       );
@@ -299,6 +312,21 @@ const check = (
 
   if (verbose) {
     console.log(`check ${pretty(term)} <= ${pretty(type)} in ${printCtx(ctx)}`);
+  }
+
+  const ty = whnf(true, ctx, defs, type);
+  if (ty._ == "self") {
+    // If an expression has a self-type then the term we're checking must be
+    // substituted into the type before we can continue.
+    const x = substTop(term, ty.body, ty.name);
+
+    console.log(
+      `self inst: type ${pretty(ty)} is self, doing self inst:\n${pretty(
+        term
+      )}\n${pretty(x)}`
+    );
+
+    return check(defs, adts, ctx, term, x, os, oe);
   }
 
   // TODO: When adding a variable to the context, ensure it doesn't shadow an
@@ -442,7 +470,7 @@ const check = (
       // The type of a lambda is a pi, so check this. It might also be an
       // expression that evaluates to a pi type, for example a function
       // application, or a reference, so make sure to normalise that first.
-      const normalTy = whnf(true, ctx, defs, type, term);
+      const normalTy = whnf(true, ctx, defs, type);
       if (normalTy._ != "pi") {
         return TypecheckError(
           `expected pi type; got ${type._}: ${pretty(type)}`,
@@ -500,29 +528,23 @@ const check = (
     console.log("inferred " + pretty(ty1.term) + " => " + pretty(ty1.type));
   }
 
-  // TODO: Fill hole from type. Say type=Maybe(Bool) and ty1.type=Maybe(▨0) then
-  // we can substitute all ▨0 in ty1 with Bool.
-  // let type2 = type;
+  let ty11 = whnf(true, ctx, defs, ty1.type);
+  if (ty11._ == "typecheckerror") {
+    return ty11;
+  }
 
-  // const holes: Array<{ id: number; term: Term }> = [];
-  // // match up a hole with a constraint
-  // if (type._ == "hole" && ty1.type._ != "hole") {
-  //   holes.push({ id: type.id, term: ty1.type });
-  // }
+  let ty111 = ty11._ == "self" ? substTop(term, ty11.body, ty11.name) : ty11;
 
-  const eq = equate(ctx, defs, term, type, ty1.type, ctx.length);
+  const eq = equate(ctx, defs, term, type, ty111, ctx.length);
   if (!eq.eq) {
     return TypecheckError(
-      `typecheck failed: ${pretty(type, false)} is not ${pretty(
-        ty1.type,
-        false
-      )}`,
+      `typecheck failed: ${pretty(type, false)} is not ${pretty(ty111, false)}`,
       os,
       oe
     );
   }
 
-  return Result(ty1.term, ty1.type, ty1.holes.concat(eq.holes));
+  return Result(ty1.term, ty111, ty1.holes.concat(eq.holes));
 };
 
 export const fill = (chk: Result): Result => {
@@ -575,7 +597,7 @@ export const typecheck = (
     return Result(Origin(tm.start, tm.end, tc.term), tc.type, tc.holes);
   }
 
-  const tynf = whnf(false, ctx, defs, ty, tm);
+  const tynf = whnf(false, ctx, defs, ty);
   if (tynf._ == "typecheckerror") {
     return tynf;
   }
@@ -824,8 +846,8 @@ export const equate = (
     return { eq: true, holes: [] };
   }
 
-  let n1 = whnf(true, ctx, defs, ty1, term);
-  let n2 = whnf(true, ctx, defs, ty2, term);
+  let n1 = whnf(true, ctx, defs, ty1);
+  let n2 = whnf(true, ctx, defs, ty2);
   if (n1._ == "typecheckerror" || n2._ == "typecheckerror") {
     return { eq: false, holes: [] };
   }

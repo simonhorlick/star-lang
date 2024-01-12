@@ -378,7 +378,7 @@ export const inspect = (
           // throw "inspect: type not present";
           return t;
         }
-        const typ = whnf(true, [], defs, ty, t);
+        const typ = whnf(true, [], defs, ty);
         if (typ._ == "typecheckerror") {
           return t;
         }

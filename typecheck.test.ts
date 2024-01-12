@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { Context, Def, Self, Term } from "./ast";
+import {
+  ADT,
+  Context,
+  Def,
+  Self,
+  Term,
+  identifier2str,
+  parseFile,
+} from "./ast";
 import {
   typecheck,
   equate,
@@ -31,6 +39,8 @@ import {
 } from "./test_defs";
 import { whnf } from "./equal";
 import { build } from "./build";
+import { desugar, processADTs } from "./process";
+import { foldTreeCtx, printDiagnostic } from "./inspect/inspect";
 
 const logFull = (x: any) => {
   const util = require("util");
@@ -273,20 +283,18 @@ describe("typechecker", () => {
 
   describe("whnf", () => {
     test("should not be able to reduce id", () => {
-      expect(
-        whnf(false, [], defs(), Abs("x", Var("x", 0)), Star())
-      ).toStrictEqual(Abs("x", Var("x", 0)));
+      expect(whnf(false, [], defs(), Abs("x", Var("x", 0)))).toStrictEqual(
+        Abs("x", Var("x", 0))
+      );
     });
 
     test("should not reduce refs", () => {
-      expect(whnf(false, [], defs(), Ref("ref"), Star())).toStrictEqual(
-        Ref("ref")
-      );
+      expect(whnf(false, [], defs(), Ref("ref"))).toStrictEqual(Ref("ref"));
     });
 
     test("should not reduce constructors", () => {
       expect(
-        whnf(false, [], defs(), App(Ref("succ"), Ref("zero")), Star())
+        whnf(false, [], defs(), App(Ref("succ"), Ref("zero")))
       ).toStrictEqual(App(Ref("succ"), Ref("zero")));
     });
 
@@ -296,22 +304,9 @@ describe("typechecker", () => {
           false,
           [],
           defs(),
-          App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0))),
-          Star()
+          App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0)))
         )
       ).toStrictEqual(Abs("x", Var("x", 0)));
-    });
-
-    test("should reduce self type", () => {
-      expect(
-        whnf(
-          false,
-          [],
-          defs(),
-          Self("t", Pi("", Ref("X"), Ref("X"))),
-          Abs("x", Var("x", 0))
-        )
-      ).toStrictEqual(Pi("", Ref("X"), Ref("X")));
     });
   });
 
@@ -698,7 +693,7 @@ describe("typechecker", () => {
   test("one is a Nat", () => {
     const defns = defs([nat, zero, succ, bool, tru, fls]);
     const one = App(succ.term, zero.term); // succ(zero)
-    const onewhnf = te(whnf(false, [], defns, one, one));
+    const onewhnf = te(whnf(false, [], defns, one));
     ensure(typecheck(defns, adts(), [], onewhnf, nat.term));
   });
 
@@ -715,7 +710,7 @@ describe("typechecker", () => {
     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
     ensure(typecheck(defns, adts(), [], eliminator, bool.term));
 
-    const reduced = whnf(true, [], defns, eliminator, Star());
+    const reduced = whnf(true, [], defns, eliminator);
     if (reduced._ == "typecheckerror") {
       throw reduced.msg;
     }
@@ -868,7 +863,6 @@ describe("typechecker", () => {
       true,
       [],
       defs([bool, tru, fls, maybe, mnull, just]),
-      caseExp,
       caseExp
     );
     expect(reduced).toStrictEqual(tru.term.term);
@@ -1108,6 +1102,52 @@ describe("typechecker", () => {
     if (t.checkerErrors.length != 0) throw `check failed`;
   });
 
+  test("bool match 3", () => {
+    // b:Bool, P:(Πx:Bool. ★), t:P(true), f:P(false)];
+    const ctx: Context = [
+      { type: "bind", name: "b", typ: Ref("Bool") },
+      { type: "bind", name: "P", typ: Pi("x", Ref("Bool"), Star()) },
+      { type: "bind", name: "t", typ: App(Var("P", 0), Ref("true")) },
+      { type: "bind", name: "f", typ: App(Var("P", 1), Ref("false")) },
+    ];
+    const term = App(Var("b", 3), Var("P", 2));
+    const actual = ensure(
+      infer(defs([tru, fls, bool]), adts(), ctx, term, 0, 0)
+    );
+    expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
+  });
+
+  // test("not(not(true))==true", () => {
+  //   const src = `
+  //   type Bool = true | false
+  //   func not:Bool->Bool = λb b(λx Bool)(false)(true)
+  //   func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)
+  //   func refl: ΠA:* Πx:A equal(A)(x)(x) = λA λx λP λp p
+  //   func nn: Πb:Bool equal(Bool)(not(not(b)))(b) = λb
+  //     b(λx equal(Bool)(not(not(x)))(x))(refl(Bool)(true))(refl(Bool)(false))
+  //   `;
+
+  //   const t = parseFile({ src, idx: 0 });
+  //   if (t._ == "parseerror") throw "unexpected parse error";
+  //   const f = processADTs(t.value);
+  //   const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
+  //   const adts = new Map<string, ADT>();
+  //   for (const adt of adtList) {
+  //     adts.set(identifier2str(adt.name), adt);
+  //   }
+  //   const defs = (f.content.filter((c) => c._ == "def") as Def[]).map((def) =>
+  //     desugar(def, adts)
+  //   );
+  //   let defsMap: Map<string, Def> = new Map();
+  //   for (const def of defs) {
+  //     defsMap.set(def.name, def);
+  //   }
+  //   const nn = defsMap.get("nn")!;
+
+  //   const c = typecheck(defsMap, adts, [], nn.term.term, nn.term.typ);
+  //   console.log(c);
+  // });
+
   describe("type equality", () => {
     const id = Def(
       "id",
@@ -1291,7 +1331,7 @@ describe("evaluation", () => {
     const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
     const expected: Term = Abs("z", Var("z", 0));
 
-    const actual = whnf(true, [], defs(), identity, Star());
+    const actual = whnf(true, [], defs(), identity);
 
     expect(actual).toStrictEqual(expected);
   });
@@ -1306,8 +1346,7 @@ describe("evaluation", () => {
       true,
       [],
       defs([id]),
-      App(Ref("id"), Abs("z", Var("z", 0))),
-      Star()
+      App(Ref("id"), Abs("z", Var("z", 0)))
     );
     expect(actual).toStrictEqual(expected);
   });
@@ -1329,7 +1368,7 @@ describe("evaluation", () => {
 
     let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
 
-    const actual = whnf(true, [], defs(), src, Star());
+    const actual = whnf(true, [], defs(), src);
 
     expect(actual).toStrictEqual(expected);
   });
