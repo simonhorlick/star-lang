@@ -2,7 +2,12 @@
 
 import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
 import { TypecheckError, infer } from "./check";
-import { foldTree, foldTreeCtx } from "./inspect/inspect";
+import {
+  foldTree,
+  foldTreeCtx,
+  typecheckErrorDiagnostic,
+} from "./inspect/inspect";
+import { pretty } from "./pretty";
 import { processADTs, desugar } from "./process";
 
 // What's the MVP for this?
@@ -30,7 +35,7 @@ export type BuildResult = {
 // typechecks each top level definition. It will always return something. In
 // the case of a parse error an error node will be present in the parse tree.
 // If there are any typecheck failures they will be returned in the result.
-export const build = (src: string, stripDefs: boolean = true): BuildResult => {
+export const build = (src: string, stripDefs: boolean = false): BuildResult => {
   const t = parseFile({ src, idx: 0 });
 
   console.log(`building...`);
@@ -65,11 +70,14 @@ export const build = (src: string, stripDefs: boolean = true): BuildResult => {
 
   let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
-    // console.log(`\n# checking definition ${def.name}`);
+    console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
     const result = infer(defsMap, adts, [], def.term, 0, src.length);
     if (result._ == "typecheckerror") {
-      // console.error(typecheckErrorDiagnostic(src, result));
+      console.error(typecheckErrorDiagnostic(src, result));
       checkerErrors.push(result);
+      // add the original term to the map so we can at least get some
+      // information when inspecting.
+      checkedMap.set(def.name, Def(def.name, def.term));
     } else {
       if (result.term._ != "ann") {
         throw "expected annotated term for definition body";
