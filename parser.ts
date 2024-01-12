@@ -471,7 +471,11 @@ export const num = map(many1(digit), (digits) =>
   Number.parseInt(digits.join(""))
 );
 
-export const whitespace = char(" ");
+export const whitespace = any(
+  char(" "),
+  char("\t"),
+  char(String.fromCharCode(0x0a)) // line feed
+);
 export const newline = char("\n");
 
 // spaces parses required whitespace (spaces and newlines)
@@ -486,7 +490,7 @@ export function spc<T>(between: Parser<T>): Parser<T> {
 
 // lspc is a parser that allows optional leading whitespace.
 export function lspc<T>(p: Parser<T>): Parser<T> {
-  return bind(optional(spaces), (_) => p);
+  return bind(many(either(whitespace, newline)), (_) => p);
 }
 
 // spc1 is a parser that requires leading and trailing whitespace.
