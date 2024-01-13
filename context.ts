@@ -54,7 +54,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       dbgCheckIndices(addTermToCtx(ctx, t.name, Star()), depth + 1, t.body);
       return t;
     case "app":
-      dbgCheckIndices(ctx, depth, t.left);
+      dbgCheckIndices(ctx, depth, t.func);
       dbgCheckIndices(ctx, depth, t.arg);
       return t;
     case "ann":

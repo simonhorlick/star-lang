@@ -24,10 +24,10 @@ export function pretty(
       case "self":
         return `ι${term.name}. ${pretty(term.body)}`;
       case "app": {
-        let l = pretty(term.left);
+        let l = pretty(term.func);
         let r = "(" + pretty(term.arg) + ")";
 
-        if (term.left._ == "lam") {
+        if (term.func._ == "lam") {
           l = "(" + l + ")";
         }
 
@@ -157,7 +157,7 @@ export const printNodeAsDotGraph = (term: Term): string => {
           break;
         case "app":
           node = `  "${uid(curr)}" [label="@"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.left)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.func)}";\n`;
           edges += `  "${uid(curr)}" -> "${uid(curr.arg)}";\n`;
           break;
         case "case":

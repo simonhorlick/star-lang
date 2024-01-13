@@ -125,13 +125,13 @@ export const infer2 = (
       // Γ ⊢ b <= A
       // ------------------- app
       // Γ ⊢ f(b) => B[b/x]
-      const inf = infer2(defs, adts, ctx, term.left as Inferrable, os, oe);
+      const inf = infer2(defs, adts, ctx, term.func as Inferrable, os, oe);
       const funcTyp = reduce(true, ctx, defs, inf.type);
 
       // can be self
       const funcTyp2 =
         funcTyp._ == "self"
-          ? substTop(term.left, funcTyp.body, funcTyp.name)
+          ? substTop(term.func, funcTyp.body, funcTyp.name)
           : funcTyp;
 
       if (funcTyp2._ != "pi") {
@@ -147,7 +147,7 @@ export const infer2 = (
       // substitute the argument into the pi to get the type.
       let typ = substTop(arg.term, funcTyp2.body, funcTyp2.name);
 
-      console.log(`Γ ⊢ ${pretty(term.left)} => ${pretty(funcTyp2)}`);
+      console.log(`Γ ⊢ ${pretty(term.func)} => ${pretty(funcTyp2)}`);
       console.log(`Γ ⊢ ${pretty(term.arg)} <= ${pretty(funcTyp2.from)}`);
       console.log(`------------------- app`);
       console.log(`Γ ⊢ ${pretty(term)} => ${pretty(typ)}`);
@@ -348,7 +348,7 @@ const aeq = (t1: Term, t2: Term): boolean => {
     case "self":
       return t2._ == "self" && aeq(t1.body, t2.body);
     case "app":
-      return t2._ == "app" && aeq(t1.left, t2.left) && aeq(t1.arg, t2.arg);
+      return t2._ == "app" && aeq(t1.func, t2.func) && aeq(t1.arg, t2.arg);
     case "ann":
       return t2._ == "ann" && aeq(t1.term, t2.term) && aeq(t1.typ, t2.typ);
     case "pi":
@@ -416,7 +416,7 @@ export const equate = (
   }
 
   if (ty1._ == "app" && ty2._ == "app") {
-    const l = equate(ctx, defs, ty1.left, ty2.left, depth + 1);
+    const l = equate(ctx, defs, ty1.func, ty2.func, depth + 1);
     const r = equate(ctx, defs, ty1.arg, ty2.arg, depth + 1);
     return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "lam" && ty2._ == "lam") {
@@ -458,7 +458,7 @@ function getTypeNameFromTypeConstructor(t: Term): Ref {
     case "ref":
       return t;
     case "app":
-      return getTypeNameFromTypeConstructor(t.left);
+      return getTypeNameFromTypeConstructor(t.func);
     default:
       throw `unexpected ${t._}`;
   }

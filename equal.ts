@@ -27,7 +27,7 @@ export const reduce = (
       return reduce(false, ctx, defs, match.term);
     }
     case "app": {
-      let func = reduce(unfold, ctx, defs, t.left);
+      let func = reduce(unfold, ctx, defs, t.func);
       if (func._ == "lam") {
         return reduce(
           unfold,

@@ -115,13 +115,13 @@ export const Self = (name: string, body: Term): Self => ({
 // App is a function application.
 export type App = {
   _: "app";
-  left: Term;
+  func: Term;
   arg: Term;
 };
 
 export const App = (left: Term, right: Term): App => ({
   _: "app",
-  left: left,
+  func: left,
   arg: right,
 });
 
@@ -644,12 +644,12 @@ export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
       const expr = terms.slice(2).reduce<App>(
         (acc, t) => ({
           _: "app",
-          left: acc,
+          func: acc,
           arg: t,
         }),
         {
           _: "app",
-          left: terms[0],
+          func: terms[0],
           arg: terms[1],
         }
       );
@@ -974,7 +974,7 @@ export function strip(t: Term): Term {
     case "self":
       return Self(t.name, strip(t.body));
     case "app":
-      return App(strip(t.left), strip(t.arg));
+      return App(strip(t.func), strip(t.arg));
     case "ann":
       return Ann(strip(t.term), strip(t.typ));
     case "pi":
@@ -1045,7 +1045,7 @@ export function serialise(t: Term, d: number = 0): string {
     case "self":
       return `Self("${t.name}", ${serialise(t.body, d + 1)})`;
     case "app":
-      return `App(${serialise(t.left, d + 1)}, ${serialise(t.arg, d + 1)})`;
+      return `App(${serialise(t.func, d + 1)}, ${serialise(t.arg, d + 1)})`;
     case "ann":
       return `Ann(${serialise(t.term, d + 1)}, ${serialise(t.typ, d + 1)})`;
     case "pi":

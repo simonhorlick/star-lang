@@ -27,7 +27,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "self":
       return Self(t.name, shift(d, c + 1, t.body));
     case "app":
-      return App(shift(d, c, t.left), shift(d, c, t.arg));
+      return App(shift(d, c, t.func), shift(d, c, t.arg));
     case "ann":
       return Ann(shift(d, c, t.term), t.typ);
     case "pi":
@@ -86,7 +86,7 @@ export function subst(
     case "self":
       return Self(t.name, subst(j, s, c + 1, t.body, name));
     case "app":
-      return App(subst(j, s, c, t.left, name), subst(j, s, c, t.arg, name));
+      return App(subst(j, s, c, t.func, name), subst(j, s, c, t.arg, name));
     case "ann":
       return Ann(subst(j, s, c, t.term, name), t.typ);
     case "pi":
@@ -142,7 +142,7 @@ export function substHole(j: number, s: Term, t: Term): Term {
     case "self":
       return Self(t.name, substHole(j, s, t.body));
     case "app":
-      return App(substHole(j, s, t.left), substHole(j, s, t.arg));
+      return App(substHole(j, s, t.func), substHole(j, s, t.arg));
     case "ann":
       return Ann(substHole(j, s, t.term), substHole(j, s, t.typ));
     case "pi":
