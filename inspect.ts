@@ -108,7 +108,7 @@ export const foldTree = <A>(
   switch (t._) {
     case "app": {
       const left = foldTree(f, x, t.left);
-      const rght = foldTree(f, left, t.right);
+      const rght = foldTree(f, left, t.arg);
       return rght;
     }
     case "lam": {
@@ -197,7 +197,7 @@ export const foldTreeCtx = <A>(
           end: ctx.end,
         });
         const rght = doFold(left, {
-          term: t.right,
+          term: t.arg,
           start: ctx.start,
           end: ctx.end,
         });
@@ -368,7 +368,7 @@ export const inspect = (
         // argument type
         return App(
           traverse(t.left, undefined, undefined, undefined, ctx, defs),
-          traverse(t.right, undefined, undefined, undefined, ctx, defs)
+          traverse(t.arg, undefined, undefined, undefined, ctx, defs)
         );
       }
       case "lam": {

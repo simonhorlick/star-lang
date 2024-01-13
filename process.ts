@@ -217,7 +217,7 @@ export const desugarTerm = (
     case "app":
       return App(
         desugarTerm(t.left, undefined, adts, ctx),
-        desugarTerm(t.right, undefined, adts, ctx)
+        desugarTerm(t.arg, undefined, adts, ctx)
       );
     case "lam":
       // The type in this context is not important so just set it as *.
@@ -340,7 +340,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "ann":
       return Ann(processPars(t.term, ctx), processPars(t.typ, ctx));
     case "app":
-      return App(processPars(t.left, ctx), processPars(t.right, ctx));
+      return App(processPars(t.left, ctx), processPars(t.arg, ctx));
     case "lam":
       // The type in this context is not important so just set it as *.
       return AbsI(

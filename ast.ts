@@ -116,13 +116,13 @@ export const Self = (name: string, body: Term): Self => ({
 export type App = {
   _: "app";
   left: Term;
-  right: Term;
+  arg: Term;
 };
 
 export const App = (left: Term, right: Term): App => ({
   _: "app",
   left: left,
-  right: right,
+  arg: right,
 });
 
 // A bound variable.
@@ -645,12 +645,12 @@ export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
         (acc, t) => ({
           _: "app",
           left: acc,
-          right: t,
+          arg: t,
         }),
         {
           _: "app",
           left: terms[0],
-          right: terms[1],
+          arg: terms[1],
         }
       );
 
@@ -974,7 +974,7 @@ export function strip(t: Term): Term {
     case "self":
       return Self(t.name, strip(t.body));
     case "app":
-      return App(strip(t.left), strip(t.right));
+      return App(strip(t.left), strip(t.arg));
     case "ann":
       return Ann(strip(t.term), strip(t.typ));
     case "pi":
@@ -1045,7 +1045,7 @@ export function serialise(t: Term, d: number = 0): string {
     case "self":
       return `Self("${t.name}", ${serialise(t.body, d + 1)})`;
     case "app":
-      return `App(${serialise(t.left, d + 1)}, ${serialise(t.right, d + 1)})`;
+      return `App(${serialise(t.left, d + 1)}, ${serialise(t.arg, d + 1)})`;
     case "ann":
       return `Ann(${serialise(t.term, d + 1)}, ${serialise(t.typ, d + 1)})`;
     case "pi":

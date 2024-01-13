@@ -33,7 +33,7 @@ export const reduce = (
           unfold,
           ctx,
           defs,
-          substTop(t.right, func.body, id(func.name))
+          substTop(t.arg, func.body, id(func.name))
         );
       }
       return t;

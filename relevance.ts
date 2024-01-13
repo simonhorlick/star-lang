@@ -64,7 +64,7 @@ export const relevance = (t: Term, env: number[]): Ret => {
     }
     case "app": {
       const left = relevance(t.left, env);
-      const right = relevance(t.right, env);
+      const right = relevance(t.arg, env);
       const upd = App(left.term, right.term);
       return {
         term: upd,

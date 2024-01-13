@@ -19,7 +19,7 @@ export function erase(term: Term): Erased.Term {
     case "lam":
       return Erased.Abs(identifier2str(term.name), erase(term.body));
     case "app":
-      return Erased.App(erase(term.left), erase(term.right));
+      return Erased.App(erase(term.left), erase(term.arg));
     case "ann":
       return erase(term.term);
     case "ref":

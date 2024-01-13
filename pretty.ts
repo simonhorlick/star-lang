@@ -25,7 +25,7 @@ export function pretty(
         return `ι${term.name}. ${pretty(term.body)}`;
       case "app": {
         let l = pretty(term.left);
-        let r = "(" + pretty(term.right) + ")";
+        let r = "(" + pretty(term.arg) + ")";
 
         if (term.left._ == "lam") {
           l = "(" + l + ")";
@@ -158,7 +158,7 @@ export const printNodeAsDotGraph = (term: Term): string => {
         case "app":
           node = `  "${uid(curr)}" [label="@"];\n`;
           edges += `  "${uid(curr)}" -> "${uid(curr.left)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.right)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.arg)}";\n`;
           break;
         case "case":
           node = `  "${uid(curr)}" [label="case ${curr.name}"];\n`;
