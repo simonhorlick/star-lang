@@ -1201,6 +1201,35 @@ describe("typechecker", () => {
     console.log(c);
   });
 
+  test("reflexivity", () => {
+    const src = `
+    type Bool = true | false
+    // refl creates an instance of x==x
+    func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(Πx:A *) Πp:P(a) P(b)
+    func refl: ΠA:* Πx:A equal(A)(x)(x) = λA λx λP λp p
+    func rt: equal(Bool)(true)(true) = refl(Bool)(true)
+    `;
+
+    const t = parseFile({ src, idx: 0 });
+    if (t._ == "parseerror") throw "unexpected parse error";
+    const f = processADTs(t.value);
+    const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
+    const adts = new Map<string, ADT>();
+    for (const adt of adtList) {
+      adts.set(identifier2str(adt.name), adt);
+    }
+    const defs = (f.content.filter((c) => c._ == "def") as Def[]).map((def) =>
+      desugar(def, adts)
+    );
+    let defsMap: Map<string, Def> = new Map();
+    for (const def of defs) {
+      defsMap.set(def.name, def);
+    }
+    const rt = defsMap.get("rt")!;
+
+    const c = typecheck(defsMap, adts, [], rt.term.term, rt.term.typ);
+  });
+
   describe("type equality", () => {
     const id = Def(
       "id",

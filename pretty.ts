@@ -49,7 +49,7 @@ export function pretty(
         if (term.name == "") {
           return pretty(term.from) + "→" + pretty(term.body);
         } else {
-          return `(Π${term.name}:${pretty(term.from)}. ${pretty(term.body)})`;
+          return `(Π${term.name}:${pretty(term.from)} ${pretty(term.body)})`;
         }
       case "ann":
         if (annotate) {
