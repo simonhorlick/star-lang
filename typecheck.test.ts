@@ -1,18 +1,9 @@
 import { describe, expect, test } from "vitest";
-import {
-  ADT,
-  Def,
-  Identifier,
-  Let,
-  Self,
-  Term,
-  identifier2str,
-  parseFile,
-} from "./ast";
+import { ADT, Def, Self, Term, identifier2str, parseFile } from "./ast";
 import {
   typecheck,
   equate,
-  infer2 as infer,
+  infer,
   TypecheckError,
   Result,
   defs,

@@ -66,7 +66,7 @@ export const Result = (
 });
 
 // infer the type of a term
-export const infer2 = (
+export const infer = (
   defs: Map<string, Def>,
   adts: Map<string, ADT>,
   ctx: Context,
@@ -84,9 +84,9 @@ export const infer2 = (
     }
     case "pi": {
       // The domain of the pi needs to be a type.
-      let d = check2(defs, adts, ctx, term.from, Star(), os, oe);
+      let d = check(defs, adts, ctx, term.from, Star(), os, oe);
 
-      let c = check2(
+      let c = check(
         defs,
         adts,
         cons(ctx, term.name, term.from),
@@ -112,7 +112,7 @@ export const infer2 = (
       // Γ ⊢ b <= A
       // ------------------- app
       // Γ ⊢ f(b) => B[b/x]
-      const inf = infer2(defs, adts, ctx, term.func, os, oe);
+      const inf = infer(defs, adts, ctx, term.func, os, oe);
       const funcTyp = reduce(true, ctx, defs, inf.type);
 
       // can be self
@@ -129,7 +129,7 @@ export const infer2 = (
         );
       }
       // Check the type of the argument.
-      const arg = check2(defs, adts, ctx, term.arg, funcTyp2.from, os, oe);
+      const arg = check(defs, adts, ctx, term.arg, funcTyp2.from, os, oe);
 
       // substitute the argument into the pi to get the type.
       let typ = substTop(arg.term, funcTyp2.body, funcTyp2.name);
@@ -143,9 +143,9 @@ export const infer2 = (
     }
     case "ann": {
       // Check the annotation is actually a type.
-      const typ = check2(defs, adts, ctx, term.typ, Star(), os, oe);
+      const typ = check(defs, adts, ctx, term.typ, Star(), os, oe);
       // Check the annotated type matches the computed type.
-      const c = check2(defs, adts, ctx, term.term, term.typ, os, oe);
+      const c = check(defs, adts, ctx, term.term, term.typ, os, oe);
       return Result(term, c.type, typ.holes.concat(c.holes));
     }
     case "ref": {
@@ -161,7 +161,7 @@ export const infer2 = (
     }
     case "self": {
       // Add the value being typed to the context (i.e. self-typing) and check the body has the correct type.
-      let c = check2(
+      let c = check(
         defs,
         adts,
         cons(ctx, term.name, term),
@@ -174,7 +174,7 @@ export const infer2 = (
       return Result(term, Star(), c.holes);
     }
     case "orig": {
-      return infer2(defs, adts, ctx, term.child, term.start, term.end);
+      return infer(defs, adts, ctx, term.child, term.start, term.end);
     }
     case "int": {
       return Result(term, Ref("Nat"), []);
@@ -189,7 +189,7 @@ export const infer2 = (
 };
 
 // check the term val has the type typ.
-const check2 = (
+const check = (
   defs: Map<string, Def>,
   adts: Map<string, ADT>,
   ctx: Context,
@@ -199,7 +199,7 @@ const check2 = (
   oe: number
 ): Result => {
   if (val._ == "orig") {
-    return check2(defs, adts, ctx, val.child, tty, val.start, val.end);
+    return check(defs, adts, ctx, val.child, tty, val.start, val.end);
   }
 
   const pval = pretty(val);
@@ -227,7 +227,7 @@ const check2 = (
 
     // We add the bound variable x:A to the context then using that context we
     // check the body has type B.
-    let c = check2(
+    let c = check(
       defs,
       adts,
       cons(ctx, id(val.name), typ.from),
@@ -243,7 +243,7 @@ const check2 = (
     return Result(val, tty, []);
   } else {
     // infer the type of the term and check this matches the supplied type.
-    var ii = infer2(defs, adts, ctx, val, os, oe);
+    var ii = infer(defs, adts, ctx, val, os, oe);
     var inf = reduce(true, ctx, defs, ii.type);
     var inf = inf._ == "self" ? substTop(val, inf.body, inf.name) : inf;
     const eq = equate(ctx, defs, inf, typ);
@@ -303,7 +303,7 @@ export const typecheck = (
     return Result(Origin(tm.start, tm.end, tc.term), tc.type, tc.holes);
   }
 
-  const chk = check2(defs, adts, ctx, tm, ty, os, oe);
+  const chk = check(defs, adts, ctx, tm, ty, os, oe);
 
   return fill(chk);
 };
