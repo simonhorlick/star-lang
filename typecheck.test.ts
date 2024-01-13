@@ -1170,7 +1170,7 @@ describe("typechecker", () => {
     expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
   });
 
-  test("not(not(true))==true", () => {
+  test("double negation proof", () => {
     const src = `
     type Bool = true | false
     func not:Bool->Bool = λb b(λx Bool)(false)(true)
@@ -1198,7 +1198,6 @@ describe("typechecker", () => {
     const nn = defsMap.get("nn")!;
 
     const c = typecheck(defsMap, adts, [], nn.term.term, nn.term.typ);
-    console.log(c);
   });
 
   test("reflexivity", () => {
