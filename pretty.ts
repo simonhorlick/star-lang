@@ -1,4 +1,5 @@
-import { Context, Term, identifier2str } from "./ast";
+import { Term, identifier2str } from "./ast";
+import { Context } from "./context";
 import * as Erased from "./erased";
 import { foldTree } from "./inspect";
 
