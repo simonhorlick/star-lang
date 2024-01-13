@@ -453,18 +453,6 @@ export const equate = (
   }
 };
 
-// given an ast of the form App(App(App(X,y),z),w) return the leftmost ref X.
-function getTypeNameFromTypeConstructor(t: Term): Ref {
-  switch (t._) {
-    case "ref":
-      return t;
-    case "app":
-      return getTypeNameFromTypeConstructor(t.func);
-    default:
-      throw `unexpected ${t._}`;
-  }
-}
-
 export const defs = (defs: Def[] = []): Map<string, Def> => {
   const m = new Map<string, Def>();
   for (const d of defs) {
