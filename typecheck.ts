@@ -225,8 +225,8 @@ const check2 = (
 
   const pval = pretty(val);
   const ptty = pretty(tty);
-  console.log("chk", pval);
-  console.log(" ::", ptty);
+  console.log(`ch ${pval}`);
+  console.log(`<= ${ptty}`);
 
   var typ = reduce(true, ctx, defs, tty);
 
@@ -408,10 +408,11 @@ export const equate = (
   const lhs = pretty(ty1);
   const rhs = pretty(ty2);
   if (verbose) {
-    console.log(`equate ${lhs} == ${rhs}`);
+    console.log(`eq ${lhs}`);
+    console.log(`== ${rhs}`);
   }
 
-  if (depth > 100) {
+  if (depth > 1000) {
     throw "equate depth exceeds limit";
   }
 
