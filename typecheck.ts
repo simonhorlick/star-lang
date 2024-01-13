@@ -7,25 +7,17 @@
 import {
   Term,
   Type,
-  App,
-  Ann,
-  Pi,
   Def,
   Star,
   Origin,
   ADT,
   Ref,
   identifier2str as id,
-  IntLit,
-  Var,
-  Self,
-  Hole,
 } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
 import { substHole, substTop } from "./substitution";
-import { StringLit } from "./erased";
 
 const verbose = true;
 
