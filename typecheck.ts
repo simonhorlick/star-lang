@@ -65,25 +65,12 @@ export const Result = (
   holes: holes,
 });
 
-type Inferrable =
-  | Var
-  | Pi
-  | Star
-  | App
-  | Self
-  | Ann
-  | Hole
-  | Ref
-  | Origin
-  | IntLit
-  | StringLit;
-
 // infer the type of a term
 export const infer2 = (
   defs: Map<string, Def>,
   adts: Map<string, ADT>,
   ctx: Context,
-  term: Inferrable,
+  term: Term,
   os: number,
   oe: number
 ): Result => {
@@ -125,7 +112,7 @@ export const infer2 = (
       // Γ ⊢ b <= A
       // ------------------- app
       // Γ ⊢ f(b) => B[b/x]
-      const inf = infer2(defs, adts, ctx, term.func as Inferrable, os, oe);
+      const inf = infer2(defs, adts, ctx, term.func, os, oe);
       const funcTyp = reduce(true, ctx, defs, inf.type);
 
       // can be self
@@ -187,14 +174,7 @@ export const infer2 = (
       return Result(term, Star(), c.holes);
     }
     case "orig": {
-      return infer2(
-        defs,
-        adts,
-        ctx,
-        term.child as Inferrable,
-        term.start,
-        term.end
-      );
+      return infer2(defs, adts, ctx, term.child, term.start, term.end);
     }
     case "int": {
       return Result(term, Ref("Nat"), []);
@@ -203,8 +183,7 @@ export const infer2 = (
       return Result(term, Ref("String"), []);
     }
     default: {
-      const t = term as Term;
-      throw `infer: ${t._} ${pretty(term)} is not inferrable`;
+      throw `infer: ${term._} ${pretty(term)} is not inferrable`;
     }
   }
 };
@@ -264,7 +243,7 @@ const check2 = (
     return Result(val, tty, []);
   } else {
     // infer the type of the term and check this matches the supplied type.
-    var ii = infer2(defs, adts, ctx, val as Inferrable, os, oe);
+    var ii = infer2(defs, adts, ctx, val, os, oe);
     var inf = reduce(true, ctx, defs, ii.type);
     var inf = inf._ == "self" ? substTop(val, inf.body, inf.name) : inf;
     const eq = equate(ctx, defs, inf, typ);
