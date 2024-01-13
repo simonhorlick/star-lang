@@ -147,7 +147,7 @@ export const foldTree = <A>(
     }
     case "pi": {
       const frm = foldTree(f, x, t.from);
-      const to = foldTree(f, frm, t.to);
+      const to = foldTree(f, frm, t.body);
       return to;
     }
     case "rel": {
@@ -296,7 +296,7 @@ export const foldTreeCtx = <A>(
           end: ctx.end,
         });
         const to = doFold(frm, {
-          term: t.to,
+          term: t.body,
           start: ctx.start,
           end: ctx.end,
         });
@@ -394,7 +394,7 @@ export const inspect = (
             | Identifier,
           traverse(
             t.body,
-            typ.to,
+            typ.body,
             undefined,
             undefined,
             addTermToCtx(ctx, identifier2str(t.name), typ.from),
@@ -413,7 +413,7 @@ export const inspect = (
           t.name,
           traverse(t.from, undefined, undefined, undefined, ctx, defs),
           traverse(
-            t.to,
+            t.body,
             undefined,
             undefined,
             undefined,

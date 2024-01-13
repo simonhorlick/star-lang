@@ -242,7 +242,7 @@ export const desugarTerm = (
       return Pi(
         t.name,
         desugarTerm(t.from, undefined, adts, ctx),
-        desugarTerm(t.to, undefined, adts, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
       );
     case "self":
       return Self(
@@ -359,7 +359,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
       return Pi(
         t.name,
         processPars(t.from, ctx),
-        processPars(t.to, addTermToCtx(ctx, t.name, Star()))
+        processPars(t.body, addTermToCtx(ctx, t.name, Star()))
       );
     case "self":
       return Self(

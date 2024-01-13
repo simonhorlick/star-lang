@@ -103,7 +103,7 @@ export const infer2 = (
         defs,
         adts,
         cons(ctx, term.name, term.from),
-        term.to,
+        term.body,
         Star(),
         os,
         oe
@@ -145,7 +145,7 @@ export const infer2 = (
       const arg = check2(defs, adts, ctx, term.right, funcTyp2.from, os, oe);
 
       // substitute the argument into the pi to get the type.
-      let typ = substTop(arg.term, funcTyp2.to, funcTyp2.name);
+      let typ = substTop(arg.term, funcTyp2.body, funcTyp2.name);
 
       console.log(`Γ ⊢ ${pretty(term.left)} => ${pretty(funcTyp2)}`);
       console.log(`Γ ⊢ ${pretty(term.right)} <= ${pretty(funcTyp2.from)}`);
@@ -253,7 +253,7 @@ const check2 = (
       adts,
       cons(ctx, id(val.name), typ.from),
       val.body,
-      typ.to,
+      typ.body,
       os,
       oe
     );
@@ -352,7 +352,7 @@ const aeq = (t1: Term, t2: Term): boolean => {
     case "ann":
       return t2._ == "ann" && aeq(t1.term, t2.term) && aeq(t1.typ, t2.typ);
     case "pi":
-      return t2._ == "pi" && aeq(t1.from, t2.from) && aeq(t1.to, t2.to);
+      return t2._ == "pi" && aeq(t1.from, t2.from) && aeq(t1.body, t2.body);
     case "par":
       throw "aeq: unexpected par";
     case "star":
@@ -425,7 +425,7 @@ export const equate = (
     return equate(ctx, defs, ty1.body, ty2.body, depth + 1);
   } else if (ty1._ == "pi" && ty2._ == "pi") {
     const l = equate(ctx, defs, ty1.from, ty2.from, depth + 1);
-    const r = equate(ctx, defs, ty1.to, ty2.to, depth + 1);
+    const r = equate(ctx, defs, ty1.body, ty2.body, depth + 1);
     return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "star" && ty2._ == "star") {
     return { eq: true, holes: [] };

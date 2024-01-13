@@ -46,9 +46,9 @@ export function pretty(
         return `${term.name}`;
       case "pi":
         if (term.name == "") {
-          return pretty(term.from) + "→" + pretty(term.to);
+          return pretty(term.from) + "→" + pretty(term.body);
         } else {
-          return `(Π${term.name}:${pretty(term.from)}. ${pretty(term.to)})`;
+          return `(Π${term.name}:${pretty(term.from)}. ${pretty(term.body)})`;
         }
       case "ann":
         if (annotate) {
@@ -217,7 +217,7 @@ export const printNodeAsDotGraph = (term: Term): string => {
         case "pi":
           node = `  "${uid(curr)}" [label="Π${curr.name}"];\n`;
           edges += `  "${uid(curr)}" -> "${uid(curr.from)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.to)}";\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
           break;
         case "rel":
           node = `  "${uid(curr)}" [label="rel ${curr.uses}"];\n`;

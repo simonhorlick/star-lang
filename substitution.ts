@@ -31,7 +31,7 @@ export function shift(d: number, c: number, t: Term): Term {
     case "ann":
       return Ann(shift(d, c, t.term), t.typ);
     case "pi":
-      return Pi(t.name, shift(d, c, t.from), shift(d, c + 1, t.to));
+      return Pi(t.name, shift(d, c, t.from), shift(d, c + 1, t.body));
     case "star":
     case "ref":
     case "par":
@@ -93,7 +93,7 @@ export function subst(
       return Pi(
         t.name,
         subst(j, s, c, t.from, name),
-        subst(j, s, c + 1, t.to, name)
+        subst(j, s, c + 1, t.body, name)
       );
     case "par":
       throw "subst: unexpected par";
@@ -146,7 +146,7 @@ export function substHole(j: number, s: Term, t: Term): Term {
     case "ann":
       return Ann(substHole(j, s, t.term), substHole(j, s, t.typ));
     case "pi":
-      return Pi(t.name, substHole(j, s, t.from), substHole(j, s, t.to));
+      return Pi(t.name, substHole(j, s, t.from), substHole(j, s, t.body));
     case "par":
       throw "substHole: unexpected par";
     case "star":

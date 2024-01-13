@@ -68,14 +68,14 @@ export const Identifier = (name: string): Identifier => ({
 export type Pi = {
   _: "pi";
   from: Type;
-  to: Type;
+  body: Type;
   name: string; // name of the binder
 };
 
 export const Pi = (name: string, from: Type, to: Type): Pi => ({
   _: "pi",
   from: from,
-  to: to,
+  body: to,
   name: name,
 });
 
@@ -978,7 +978,7 @@ export function strip(t: Term): Term {
     case "ann":
       return Ann(strip(t.term), strip(t.typ));
     case "pi":
-      return Pi(t.name, strip(t.from), strip(t.to));
+      return Pi(t.name, strip(t.from), strip(t.body));
     case "par":
     case "star":
     case "ref":
@@ -1050,7 +1050,7 @@ export function serialise(t: Term, d: number = 0): string {
       return `Ann(${serialise(t.term, d + 1)}, ${serialise(t.typ, d + 1)})`;
     case "pi":
       return `Pi("${t.name}", ${serialise(t.from, d + 1)}, ${serialise(
-        t.to,
+        t.body,
         d + 1
       )})`;
     case "par":

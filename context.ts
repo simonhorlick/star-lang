@@ -63,7 +63,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       return t;
     case "pi":
       dbgCheckIndices(ctx, depth, t.from);
-      dbgCheckIndices(addTermToCtx(ctx, t.name, Star()), depth + 1, t.to);
+      dbgCheckIndices(addTermToCtx(ctx, t.name, Star()), depth + 1, t.body);
       return t;
     case "star":
     case "ref":

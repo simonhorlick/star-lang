@@ -1,15 +1,4 @@
-import {
-  AbsI,
-  Ann,
-  App,
-  If,
-  Let,
-  Origin,
-  Pi,
-  Rel,
-  Self,
-  Term,
-} from "./ast";
+import { AbsI, Ann, App, If, Let, Origin, Pi, Rel, Self, Term } from "./ast";
 
 // const addBinder = (env: number[]) = env
 const head = (l: number[]) => l[0];
@@ -93,7 +82,7 @@ export const relevance = (t: Term, env: number[]): Ret => {
     }
     case "pi": {
       const from = relevance(t.from, env);
-      const to = relevance(t.to, env.concat([0]));
+      const to = relevance(t.body, env.concat([0]));
       const upd = Pi(t.name, from.term, to.term);
       return {
         term: Rel(upd, last(to.env)),
