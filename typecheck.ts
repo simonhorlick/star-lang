@@ -1,26 +1,31 @@
-// check implements a typechecker for this language
+// typecheck.ts implements a simple bidirectional typechecker for this language
+//
+// The typechecker is split into two based on the term being checked. Some
+// terms, like lambdas, must be checked against a specified type. Others, like
+// applications can be inferred by looking up their definition.
+//
 import {
   Term,
   Type,
   App,
-  Abs,
   Ann,
   Pi,
   Def,
   Star,
   Origin,
-  Constructor,
   ADT,
-  AbsI,
   Ref,
-  identifier2str,
-  strip,
+  identifier2str as id,
+  IntLit,
+  Var,
+  Self,
+  Hole,
 } from "./ast";
-import { whnf } from "./equal";
+import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
-import { desugarTerm } from "./process";
-import { Context, addTermToCtx, lookupType } from "./context";
-import { shift, substHole, substTop } from "./substitution";
+import { Context, addTermToCtx as cons, lookupType } from "./context";
+import { substHole, substTop } from "./substitution";
+import { StringLit } from "./erased";
 
 const verbose = true;
 
@@ -60,127 +65,103 @@ export const Result = (
   holes: holes,
 });
 
-// infer the type of a term. This produces an annotated version of the term
-// whose type can always be checked.
-export const infer = (
+type Inferrable =
+  | Var
+  | Pi
+  | Star
+  | App
+  | Self
+  | Ann
+  | Hole
+  | Ref
+  | Origin
+  | IntLit
+  | StringLit;
+
+// infer the type of a term
+export const infer2 = (
   defs: Map<string, Def>,
   adts: Map<string, ADT>,
   ctx: Context,
-  term: Term,
+  term: Inferrable,
   os: number,
   oe: number
 ): Result => {
   switch (term._) {
-    case "pi": {
-      // Γ ⊢ A <= ★
-      // Γ,x:A ⊢ B <= ★
-      // ----------------
-      // Γ ⊢ Πx:A. B => ★
-      let elA = check(defs, adts, ctx, term.from, Star(), os, oe);
-      let elB = check(
-        defs,
-        adts,
-        addTermToCtx(ctx, term.name, term.from),
-        term.to,
-        Star(),
-        os,
-        oe
-      );
-      return Result(
-        Pi(term.name, elA.term, elB.term),
-        Star(),
-        elB.holes.concat(elA.holes)
-      );
-    }
-    case "star":
-      // ----------------
-      // Γ ⊢ ★ => ★
-      return Result(term, Star(), []);
-    case "var":
+    case "var": {
       // Look up its type in the context.
       if (term.index >= ctx.length) {
         throw TypecheckError("undefined variable " + term.name, os, oe);
       }
       return Result(term, lookupType(ctx, term.index, term.name), []);
+    }
+    case "pi": {
+      // The domain of the pi needs to be a type.
+      let d = check2(defs, adts, ctx, term.from, Star(), os, oe);
+
+      let c = check2(
+        defs,
+        adts,
+        cons(ctx, term.name, term.from),
+        term.to,
+        Star(),
+        os,
+        oe
+      );
+
+      // The type of a pi is ★.
+      return Result(term, Star(), d.holes.concat(c.holes));
+    }
+    case "star": {
+      // ----------------
+      // Γ ⊢ ★ => ★
+      return Result(term, Star(), []);
+    }
     case "app": {
-      // We must infer the type of the function f, but once we have that type, we may
-      // to use it to check the type of the argument:
+      // We must infer the type of the function f, but once we have that type,
+      // we may to use it to check the type of the argument:
       //
       // Γ ⊢ f => (x:A) -> B
       // Γ ⊢ b <= A
       // ------------------- app
       // Γ ⊢ f(b) => B[b/x]
+      const inf = infer2(defs, adts, ctx, term.left as Inferrable, os, oe);
+      const funcTyp = reduce(true, ctx, defs, inf.type);
 
-      console.log(`term is ${pretty(term)}`);
+      // can be self
+      const funcTyp2 =
+        funcTyp._ == "self"
+          ? substTop(term.left, funcTyp.body, funcTyp.name)
+          : funcTyp;
 
-      let f = term.left;
-      let b = term.right;
-
-      console.log(`f is ${pretty(f)}`);
-      console.log(`b is ${pretty(b)}`);
-
-      let fType = infer(defs, adts, ctx, f, os, oe);
-      console.log(`:f is ${pretty(fType.type)}`);
-
-      let fTermElaborated = fType.term;
-      // TODO: Is this necessary?
-      let nf = whnf(true, ctx, defs, fType.type);
-
-      console.log(`:f' is ${pretty(nf)}`);
-
-      const nf2 = nf._ == "self" ? substTop(f, nf.body, nf.name) : nf;
-      console.log(`nf2 is ${pretty(nf2)}`);
-      if (nf2._ != "pi") {
-        console.error(pretty(fType.type));
-        console.error(pretty(nf2));
+      if (funcTyp2._ != "pi") {
         throw TypecheckError(
-          `expected pi type on the left of app; got ${nf2._}: ${pretty(nf2)}`,
+          `expected function got ${pretty(funcTyp2)}`,
           os,
           oe
         );
       }
+      // Check the type of the argument.
+      const arg = check2(defs, adts, ctx, term.right, funcTyp2.from, os, oe);
 
-      let tyA = nf2.from;
-      let tyB = nf2.to;
-      let arg = typecheck(defs, adts, ctx, b, tyA, os, oe);
-      let et2 = arg.term;
-      // Substitute the argument in the pi type with the elaborated argument to
-      // the app inside of tyB.
-      let typ = substTop(et2, tyB, nf2.name);
+      // substitute the argument into the pi to get the type.
+      let typ = substTop(arg.term, funcTyp2.to, funcTyp2.name);
 
-      if (verbose)
-        console.log(
-          `Γ ⊢ ${pretty(f)} => ${pretty(fType.type)}
-Γ ⊢ ${pretty(b)} <= ${pretty(tyA)}
-------------------- app
-Γ ⊢ ${pretty(term)} => ${pretty(typ)}`
-        );
+      console.log(`Γ ⊢ ${pretty(term.left)} => ${pretty(funcTyp2)}`);
+      console.log(`Γ ⊢ ${pretty(term.right)} <= ${pretty(funcTyp2.from)}`);
+      console.log(`------------------- app`);
+      console.log(`Γ ⊢ ${pretty(term)} => ${pretty(typ)}`);
 
-      // After inferring the type of f we need to return it as an annotation so
-      // that further stages can use it.
-
-      return Result(
-        App(Ann(fTermElaborated, strip(fType.type)), Ann(et2, arg.type)),
-        typ,
-        arg.holes.concat(fType.holes)
-      );
-      // return Result(App(fTypeElaborated, et2), typ);
+      return Result(term, typ, arg.holes.concat(inf.holes));
     }
     case "ann": {
       // Check the annotation is actually a type.
-      let typ = check(defs, adts, ctx, term.typ, Star(), os, oe);
-      // check the annotated type matches the computed type.
-      let ty = typecheck(defs, adts, ctx, term.term, term.typ, os, oe);
-
-      // Keep the Ann node with the elaborated term and type, the result type is
-      // simplified and origins are removed.
-      return Result(
-        Ann(ty.term, typ.term),
-        ty.type,
-        typ.holes.concat(ty.holes)
-      );
+      const typ = check2(defs, adts, ctx, term.typ, Star(), os, oe);
+      // Check the annotated type matches the computed type.
+      const c = check2(defs, adts, ctx, term.term, term.typ, os, oe);
+      return Result(term, c.type, typ.holes.concat(c.holes));
     }
-    case "ref":
+    case "ref": {
       const match = defs.get(term.name);
       if (match == undefined) {
         throw TypecheckError(
@@ -189,242 +170,111 @@ export const infer = (
           oe
         );
       }
-
-      // Without loss of generality we can assume that other definitions
-      // typecheck because if we use a definition that later fails to check
-      // the compilation will fail with a typecheck error.
-      return Result(term, match.term.typ, []);
-    case "orig":
-      const tc = infer(defs, adts, ctx, term.child, term.start, term.end);
-      return Result(Origin(term.start, term.end, tc.term), tc.type, tc.holes);
-    case "int":
-      return Result(term, Ref("Nat"), []);
-    case "str":
-      return Result(term, Ref("String"), []);
-    default:
-      throw TypecheckError(`cannot infer type of ${term._}`, os, oe);
-  }
-};
-
-// check a term has the given type, producing an elaborated term where all of
-// the type annotations have been filled in. The type argument must be in weak
-// head normal form.
-const check = (
-  defs: Map<string, Def>,
-  adts: Map<string, ADT>,
-  ctx: Context,
-  term: Term,
-  type: Term,
-  os: number,
-  oe: number
-): Result => {
-  if (term._ == "orig") {
-    const tc = check(defs, adts, ctx, term.child, type, term.start, term.end);
-    return Result(Origin(term.start, term.end, tc.term), tc.type, tc.holes);
-  }
-
-  if (verbose) {
-    console.log(`check ${pretty(term)} <= ${pretty(type)} in ${printCtx(ctx)}`);
-  }
-
-  const ty = whnf(true, ctx, defs, type);
-  if (ty._ == "self") {
-    // If an expression has a self-type then the term we're checking must be
-    // substituted into the type before we can continue.
-    const x = substTop(term, ty.body, ty.name);
-
-    console.log(
-      `self inst: type ${pretty(ty)} is self, doing self inst:\n${pretty(
-        term
-      )}\n${pretty(x)}`
-    );
-
-    return check(defs, adts, ctx, term, x, os, oe);
-  }
-
-  // TODO: When adding a variable to the context, ensure it doesn't shadow an
-  // existing variable.
-
-  switch (term._) {
-    case "case": {
-      // the type of an App is
-      // Γ ⊢ f => Πx:A. B
-      // Γ ⊢ b <= A
-      // ------------------- app
-      // Γ ⊢ f(b) => B[b/x]
-      //
-      // We should be able to construct this App node and infer it's type then
-      // check the type is equivalent. But what's P? Can we take the expected
-      // type and use it?
-      //
-      //  case x of
-      //    c1 -> t1
-      //    c2 -> t2
-      // desugars to:
-      //  x(() MotiveType, t1, t2)
-      //
-      // When we desugar a case we need to create abstractions for all of the
-      // arguments in each branch, for example, assume x is a Nat:
-      // case x of
-      //  zero -> true
-      //  succ -> false
-      // we need to desugar the second branch to be
-      //  Abs("x.n", Ref("false"))
-
-      const P = Abs("", shift(1, 0, type)); // P just returns the expected type
-      const branches = term.branches.reduce<Term>((acc: Term, curr) => {
-        const branchTerm = curr.term;
-
-        // Make any constructor arguments available using dot notation.
-
-        // We need to infer the type of x; this *must* be done as part of
-        // the typechecking phase.
-        const xTyp = infer(defs, adts, ctx, term.name, os, oe);
-        let ref = strip(xTyp.type);
-        if (ref._ == "ref") {
-          // ok
-        } else if (ref._ == "app") {
-          // find the type
-          ref = getTypeNameFromTypeConstructor(ref);
-        } else {
-          throw TypecheckError(
-            `type of argument to case should be a reference; got ${ref._}`,
-            os,
-            oe
-          );
-        }
-
-        // Now look up the constructors for the type.
-        const adtDef = adts.get(ref.name);
-        if (adtDef == undefined) {
-          throw TypecheckError(`type not found: ${ref.name}`, os, oe);
-        }
-
-        var constructor: Constructor | undefined = undefined;
-        const constructorName = identifier2str(curr.constructor);
-        for (const con of adtDef.constructors) {
-          if (identifier2str(con.name) == constructorName) {
-            constructor = con;
-          }
-        }
-        if (constructor == undefined) {
-          throw `constructor not found: ${constructorName}`;
-        }
-
-        // FIXME: Ensure all branches are covered.
-
-        const absArgs = constructor.args.reduceRight(
-          (acc2, curr2) => Abs(`${pretty(term.name)}.${curr2.name}`, acc2),
-          shift(constructor.args.length, 0, branchTerm)
-        );
-
-        return App(acc, absArgs);
-      }, App(term.name, P) as Term);
-
-      // desugarTerm ensures any Refs that reference constructor arguments
-      // are converted into Vars.
-      const desugared = desugarTerm(branches, undefined, adts, ctx);
-
-      if (verbose) console.log(printCtx(ctx) + " " + pretty(desugared, true));
-
-      return check(defs, adts, ctx, desugared, type, os, oe);
-    }
-    case "let": {
-      throw "let not implemented";
-
-      // // A let statement desugars to a lambda.
-      // //
-      // //   let x = t1 in t2 => (λx:T1 t2)(t1)
-      // //
-      // // the typechecker should infer the expression of the let statement as Bool
-      // // then with [x:Bool] check that the body of the let statement is of type
-      // // Bool.
-      // //
-      // //   func ex:Bool->Bool = λb let x = b in x
-      // //
-
-      // const expressionType = infer(defs, adts, ctx, term.expr, os, oe);
-
-      // // let x = t1 in t2 => (λx:T1 t2)(t1)
-      // // Annotate the lambda with the expected type and check it.
-      // const desugared = App(
-      //   Ann(AbsI(term.name, term.body), Pi("", expressionType.type, type)),
-      //   term.expr
-      // );
-
-      // return check(defs, adts, ctx, desugared, type, os, oe);
+      return Result(match.term.term, match.term.typ, []);
     }
     case "self": {
-      // What's the type of a self-type?
-      if (type._ != "star") {
-        throw TypecheckError(`expected star type; got ${type._}`, os, oe);
-      }
-      return Result(term, type, []);
-    }
-    case "hole": {
-      return Result(term, type, []);
-    }
-    case "lam": {
-      // The type of a lambda is a pi, so check this. It might also be an
-      // expression that evaluates to a pi type, for example a function
-      // application, or a reference, so make sure to normalise that first.
-      const normalTy = whnf(true, ctx, defs, type);
-      if (normalTy._ != "pi") {
-        throw TypecheckError(
-          `expected pi type; got ${type._}: ${pretty(type)}`,
-          os,
-          oe
-        );
-      }
-
-      // The domain of the pi type needs to be a type.
-      const domain = check(defs, adts, ctx, normalTy.from, Star(), os, oe);
-
-      // We add the bound variable x:A to the context then using that context we
-      // check the body has type B.
-      let ebody = typecheck(
+      // Add the value being typed to the context (i.e. self-typing) and check the body has the correct type.
+      let c = check2(
         defs,
         adts,
-        addTermToCtx(ctx, identifier2str(term.name), normalTy.from),
+        cons(ctx, term.name, term),
         term.body,
-        normalTy.to,
+        Star(),
         os,
         oe
       );
 
-      // We return the elaborated body here - as case statements must be
-      // desugared for any consumers.
-      return Result(
-        AbsI(term.name, ebody.term),
-        type,
-        domain.holes.concat(ebody.holes)
+      return Result(term, Star(), c.holes);
+    }
+    case "orig": {
+      return infer2(
+        defs,
+        adts,
+        ctx,
+        term.child as Inferrable,
+        term.start,
+        term.end
       );
     }
-    case "err":
-      return Result(term, type, []);
+    case "int": {
+      return Result(term, Ref("Nat"), []);
+    }
+    case "str": {
+      return Result(term, Ref("String"), []);
+    }
+    default: {
+      const t = term as Term;
+      throw `infer: ${t._} ${pretty(term)} is not inferrable`;
+    }
+  }
+};
+
+// check the term val has the type typ.
+const check2 = (
+  defs: Map<string, Def>,
+  adts: Map<string, ADT>,
+  ctx: Context,
+  val: Term,
+  tty: Term,
+  os: number,
+  oe: number
+): Result => {
+  if (val._ == "orig") {
+    return check2(defs, adts, ctx, val.child, tty, val.start, val.end);
   }
 
-  // If there's a type, and one of the other rules doesn't apply, then check
-  // the type matches inferred type.
-  let ty1 = infer(defs, adts, ctx, term, os, oe);
-  if (verbose) {
-    console.log("inferred " + pretty(ty1.term) + " => " + pretty(ty1.type));
-  }
+  const pval = pretty(val);
+  const ptty = pretty(tty);
+  console.log("chk", pval);
+  console.log(" ::", ptty);
 
-  let ty11 = whnf(true, ctx, defs, ty1.type);
+  var typ = reduce(true, ctx, defs, tty);
 
-  let ty111 = ty11._ == "self" ? substTop(term, ty11.body, ty11.name) : ty11;
+  // If an expression has a self-type then the term we're checking must be
+  // substituted into the type before we can continue.
+  typ = typ._ == "self" ? substTop(val, typ.body, typ.name) : typ;
 
-  const eq = equate(ctx, defs, term, type, ty111, ctx.length);
-  if (!eq.eq) {
-    throw TypecheckError(
-      `typecheck failed: ${pretty(type, false)} is not ${pretty(ty111, false)}`,
+  if (val._ == "lam") {
+    // Lambdas must be checked against a supplied pi type.
+    //
+    // Γ,x:A ⊢ a <= B
+    // Γ ⊢ A <= *
+    // ---------------------- lambda
+    // Γ ⊢ λx.a <= (x:A) -> B
+
+    if (typ._ != "pi") {
+      throw `lam must have pi type; got ${pretty(typ)}`;
+    }
+
+    // We add the bound variable x:A to the context then using that context we
+    // check the body has type B.
+    let c = check2(
+      defs,
+      adts,
+      cons(ctx, id(val.name), typ.from),
+      val.body,
+      typ.to,
       os,
       oe
     );
-  }
 
-  return Result(ty1.term, ty111, ty1.holes.concat(eq.holes));
+    return Result(val, typ, c.holes);
+  } else if (val._ == "hole") {
+    // Holes always check against their desired types.
+    return Result(val, tty, []);
+  } else {
+    // infer the type of the term and check this matches the supplied type.
+    var ii = infer2(defs, adts, ctx, val as Inferrable, os, oe);
+    var inf = reduce(true, ctx, defs, ii.type);
+    var inf = inf._ == "self" ? substTop(val, inf.body, inf.name) : inf;
+    const eq = equate(ctx, defs, inf, typ);
+    if (!eq.eq) {
+      const ptyp = pretty(tty);
+      const pinf = pretty(ii.type);
+      throw TypecheckError(`typecheck failed: ${ptyp} is not ${pinf}`, os, oe);
+    }
+    return Result(val, typ, ii.holes.concat(eq.holes));
+  }
 };
 
 export const fill = (chk: Result): Result => {
@@ -474,9 +324,7 @@ export const typecheck = (
     return Result(Origin(tm.start, tm.end, tc.term), tc.type, tc.holes);
   }
 
-  const tynf = whnf(false, ctx, defs, ty);
-
-  const chk = check(defs, adts, ctx, tm, tynf, os, oe);
+  const chk = check2(defs, adts, ctx, tm, ty, os, oe);
 
   return fill(chk);
 };
@@ -549,7 +397,6 @@ const aeq = (t1: Term, t2: Term): boolean => {
 export const equate = (
   ctx: Context,
   defs: Map<string, Def>,
-  term: Term,
   ty1: Term,
   ty2: Term,
   depth: number = 0
@@ -558,42 +405,49 @@ export const equate = (
     return { eq: true, holes: [] };
   }
 
-  let n1: Term;
-  let n2: Term;
-  try {
-    n1 = whnf(true, ctx, defs, ty1);
-    n2 = whnf(true, ctx, defs, ty2);
-  } catch (e) {
-    return { eq: false, holes: [] };
+  const lhs = pretty(ty1);
+  const rhs = pretty(ty2);
+  if (verbose) {
+    console.log(`equate ${lhs} == ${rhs}`);
   }
 
-  if (verbose) {
-    console.log(`equate ${pretty(n1)} == ${pretty(n2)}`);
+  if (depth > 100) {
+    throw "equate depth exceeds limit";
   }
 
   if (ty1._ == "app" && ty2._ == "app") {
-    const l = equate(ctx, defs, term, ty1.left, ty2.left, depth + 1);
-    const r = equate(ctx, defs, term, ty1.right, ty2.right, depth + 1);
+    const l = equate(ctx, defs, ty1.left, ty2.left, depth + 1);
+    const r = equate(ctx, defs, ty1.right, ty2.right, depth + 1);
     return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
-  } else if (n1._ == "lam" && n2._ == "lam") {
-    return equate(ctx, defs, term, n1.body, n2.body, depth + 1);
-  } else if (n1._ == "self" && n2._ == "self") {
-    return equate(ctx, defs, term, n1.body, n2.body, depth + 1);
-  } else if (n1._ == "pi" && n2._ == "pi") {
-    const l = equate(ctx, defs, term, n1.from, n2.from, depth + 1);
-    const r = equate(ctx, defs, term, n1.to, n2.to, depth + 1);
+  } else if (ty1._ == "lam" && ty2._ == "lam") {
+    return equate(ctx, defs, ty1.body, ty2.body, depth + 1);
+  } else if (ty1._ == "self" && ty2._ == "self") {
+    return equate(ctx, defs, ty1.body, ty2.body, depth + 1);
+  } else if (ty1._ == "pi" && ty2._ == "pi") {
+    const l = equate(ctx, defs, ty1.from, ty2.from, depth + 1);
+    const r = equate(ctx, defs, ty1.to, ty2.to, depth + 1);
     return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
-  } else if (n1._ == "star" && n2._ == "star") {
+  } else if (ty1._ == "star" && ty2._ == "star") {
     return { eq: true, holes: [] };
-  } else if (n1._ == "var" && n2._ == "var") {
-    return { eq: n1.index == n2.index, holes: [] };
-  } else if (n1._ == "hole") {
+  } else if (ty1._ == "var" && ty2._ == "var") {
+    return { eq: ty1.index == ty2.index, holes: [] };
+  } else if (ty1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
     // hole substitution.
-    return { eq: true, holes: [{ id: n1.id, term: ty2 }] };
-  } else if (n2._ == "hole") {
-    return { eq: true, holes: [{ id: n2.id, term: ty1 }] };
+    return { eq: true, holes: [{ id: ty1.id, term: ty2 }] };
+  } else if (ty2._ == "hole") {
+    return { eq: true, holes: [{ id: ty2.id, term: ty1 }] };
   } else {
+    const n1 = reduce(true, ctx, defs, ty1);
+    if (n1 !== ty1) {
+      return equate(ctx, defs, n1, ty2, depth + 1);
+    }
+
+    const n2 = reduce(true, ctx, defs, ty2);
+    if (n2 !== ty2) {
+      return equate(ctx, defs, ty1, n2, depth + 1);
+    }
+
     return { eq: false, holes: [] };
   }
 };
@@ -621,7 +475,7 @@ export const defs = (defs: Def[] = []): Map<string, Def> => {
 export const adts = (adts: ADT[] = []): Map<string, ADT> => {
   const m = new Map<string, ADT>();
   for (const adt of adts) {
-    m.set(identifier2str(adt.name), adt);
+    m.set(id(adt.name), adt);
   }
   return m;
 };

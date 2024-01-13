@@ -1,9 +1,18 @@
 import { describe, expect, test } from "vitest";
-import { Def, Identifier, Let, Self, Term } from "./ast";
+import {
+  ADT,
+  Def,
+  Identifier,
+  Let,
+  Self,
+  Term,
+  identifier2str,
+  parseFile,
+} from "./ast";
 import {
   typecheck,
   equate,
-  infer,
+  infer2 as infer,
   TypecheckError,
   Result,
   defs,
@@ -27,9 +36,10 @@ import {
   pair,
   ppair,
 } from "./test_defs";
-import { whnf } from "./equal";
+import { reduce } from "./equal";
 import { build } from "./build";
 import { Context } from "./context";
+import { desugar, processADTs } from "./process";
 
 // throw any type checking errors
 const te = (t: Term | TypecheckError): Term => {
@@ -92,19 +102,24 @@ describe("typechecker", () => {
     test("should infer the domain of a pi type to be type star", () => {
       // In this test case, the typechecker should look up the reference A and
       // ensure it's a type.
-      const result = typecheck(
-        defs(),
-        adts(),
-        [],
-        Abs("a", Var("a", 0)),
-        Pi("", Ref("A"), Ref("A"))
-      );
-      expect(result).toStrictEqual({
-        _: "typecheckerror",
-        end: 0,
-        msg: "reference not found: A; ctx is []",
-        start: 0,
-      });
+      try {
+        const result = typecheck(
+          defs(),
+          adts(),
+          [],
+          Abs("a", Var("a", 0)),
+          Pi("", Ref("A"), Ref("A"))
+        );
+      } catch (e) {
+        expect(e).toStrictEqual({
+          _: "typecheckerror",
+          end: 0,
+          msg: "reference not found: A; ctx is [a:A]",
+          start: 0,
+        });
+        return;
+      }
+      throw "expected exception";
     });
 
     test("should check that a lambda has a pi type", () => {
@@ -194,12 +209,18 @@ describe("typechecker", () => {
         { type: "bind", name: "a", typ: Star() },
       ];
       const program = App(Var("a", 0), Var("b", 1));
-      expect(infer(defs(), adts(), ctx, program, 0, 0)).toStrictEqual({
-        _: "typecheckerror",
-        end: 0,
-        msg: "expected pi type on the left of app; got star: ★",
-        start: 0,
-      });
+      try {
+        infer(defs(), adts(), ctx, program, 0, 0);
+      } catch (e) {
+        expect(e).toStrictEqual({
+          _: "typecheckerror",
+          end: 0,
+          msg: "expected function got ★",
+          start: 0,
+        });
+        return;
+      }
+      throw "expected exception";
     });
   });
 
@@ -208,7 +229,7 @@ describe("typechecker", () => {
     // ---------------- annot
     // Γ ⊢ (a : A) => A
 
-    test("should error if the type doesn't matche the annotation", () => {
+    test("should error if the type doesn't match the annotation", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
       try {
         const result = typecheck(
@@ -264,26 +285,76 @@ describe("typechecker", () => {
     });
   });
 
-  describe("whnf", () => {
+  describe("term reduction", () => {
+    // (λx. x)(λz. z) -> (λz. z)
+    test("TestReduceIdentity", () => {
+      const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
+      const expected: Term = Abs("z", Var("z", 0));
+
+      const actual = reduce(true, [], defs(), identity);
+
+      expect(actual).toStrictEqual(expected);
+    });
+
+    // λx. x
+    const id = Def(
+      "id",
+      Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))
+    );
+
+    // Test that substituting top level functions works properly.
+    test("TestSubstituteDef", () => {
+      const expected = Abs("z", Var("z", 0));
+      const actual = reduce(
+        true,
+        [],
+        defs([id]),
+        App(Ref("id"), Abs("z", Var("z", 0)))
+      );
+      expect(actual).toStrictEqual(expected);
+    });
+
+    test("should ensure redex uses up bound variable", () => {
+      // Γ = [z→2, y→1]
+      // (λx. y(x)(z))(λx. x)
+      // y(λx. x)(z)
+      // This corresponds to the nameless representation:
+      // (λx. 1(0)(2))(λx. 0)
+      // After one step of evaluation, then indices for y and z are evaluated by 1
+      // as the x binder has now been used up.
+      // 0(λx. 0)(1)
+
+      let src = App(
+        Abs("x", App(App(Var("y", 1), Var("x", 0)), Var("z", 2))),
+        Abs("x", Var("x", 0))
+      );
+
+      let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
+
+      const actual = reduce(true, [], defs(), src);
+
+      expect(actual).toStrictEqual(expected);
+    });
+
     test("should not be able to reduce id", () => {
-      expect(whnf(false, [], defs(), Abs("x", Var("x", 0)))).toStrictEqual(
+      expect(reduce(false, [], defs(), Abs("x", Var("x", 0)))).toStrictEqual(
         Abs("x", Var("x", 0))
       );
     });
 
     test("should not reduce refs", () => {
-      expect(whnf(false, [], defs(), Ref("ref"))).toStrictEqual(Ref("ref"));
+      expect(reduce(false, [], defs(), Ref("ref"))).toStrictEqual(Ref("ref"));
     });
 
     test("should not reduce constructors", () => {
       expect(
-        whnf(false, [], defs(), App(Ref("succ"), Ref("zero")))
+        reduce(false, [], defs(), App(Ref("succ"), Ref("zero")))
       ).toStrictEqual(App(Ref("succ"), Ref("zero")));
     });
 
     test("should reduce id(id) to id", () => {
       expect(
-        whnf(
+        reduce(
           false,
           [],
           defs(),
@@ -527,66 +598,68 @@ describe("typechecker", () => {
     let result2 = typecheck(defs(), adts(), [], fls, Bool);
   });
 
-  test("can typecheck bool with self types", () => {
-    /*
-        type Bool = false | true
+  /*
+    type Bool = false | true
 
-        This creates the following functions:
-          true : Bool
-          false : Bool
+    This creates the following functions:
+      true : Bool
+      false : Bool
 
-        The parser should build the following:
-          Bool = ιb. ΠP:Bool→*.
-            P(Bool.true) →
-            P(Bool.false) →
-            P(b)
-          true = (P) (t) (f) t
-          false = (P) (t) (f) f
+    The parser should build the following:
+      Bool = ιb. ΠP:Bool→*.
+        P(Bool.true) →
+        P(Bool.false) →
+        P(b)
+      true = (P) (t) (f) t
+      false = (P) (t) (f) f
 
-        To generalise a little:
-          T : Type = ιt. ΠP:T→*.
-            P(constructor1) →
-            P(constructor2) →
-            ...
-            P(constructorN) →
-            P(t)
-          constructor1 : T = (P) (c1) (c2) ... (cN) c1
-          constructor2 : T = (P) (c1) (c2) ... (cN) c2
-          ...
-          constructorN : T = (P) (c1) (c2) ... (cN) cN
+    To generalise a little:
+      T : Type = ιt. ΠP:T→*.
+        P(constructor1) →
+        P(constructor2) →
+        ...
+        P(constructorN) →
+        P(t)
+      constructor1 : T = (P) (c1) (c2) ... (cN) c1
+      constructor2 : T = (P) (c1) (c2) ... (cN) c2
+      ...
+      constructorN : T = (P) (c1) (c2) ... (cN) cN
 
-          i.e.
-          define a top-level def T:Type = as above
-          define n constructors; constructor1 through constructorN.
-          Def()
+      i.e.
+      define a top-level def T:Type = as above
+      define n constructors; constructor1 through constructorN.
+      Def()
 
-        Example values of this type:
-          true : Bool
-          false : Bool
+    Example values of this type:
+      true : Bool
+      false : Bool
 
-        You can eliminate a Bool using a case statement:
-          case b of
-            true => "t"
-            false => "f"
-            : String
-        desugars
-          case x as t : m
-        becomes
-          x<(t) m>
-        i.e.
-          b((t) => String, "t", "f")
-        In the case that b == true:
-          true((t) => String, "t", "f") // def true = (P) (t) (f) t
-          "t"
-      */
+    You can eliminate a Bool using a case statement:
+      case b of
+        true => "t"
+        false => "f"
+        : String
+    desugars
+      case x as t : m
+    becomes
+      x<(t) m>
+    i.e.
+      b((t) => String, "t", "f")
+    In the case that b == true:
+      true((t) => String, "t", "f") // def true = (P) (t) (f) t
+      "t"
+  */
+  test("true is generated correctly", () =>
     expect(pretty(tru.term)).toBe(
       pretty(Abs("P", Abs("false", Abs("true", Var("true", 0)))))
-    );
+    ));
+
+  test("false is generated correctly", () =>
     expect(pretty(fls.term)).toBe(
       pretty(Abs("P", Abs("false", Abs("true", Var("false", 1)))))
-    );
+    ));
 
-    // ιt. ΠP:Bool→*. P(false) → P(true) → P(t)
+  test("Bool term is generated correctly", () =>
     expect(pretty(bool.term)).toBe(
       pretty(
         Self(
@@ -606,12 +679,22 @@ describe("typechecker", () => {
           )
         )
       )
-    );
+    ));
 
-    ensure(typecheck(defs([tru, fls, bool]), adts(), [], tru.term, bool.term));
-    ensure(typecheck(defs([tru, fls, bool]), adts(), [], fls.term, bool.term));
-    ensure(typecheck(defs([tru, fls, bool]), adts(), [], bool.term, Star()));
-  });
+  test("true is a bool", () =>
+    ensure(
+      typecheck(defs([tru, fls, bool]), adts(), [], tru.term.term, bool.term)
+    ));
+
+  test("false is a bool", () =>
+    ensure(
+      typecheck(defs([tru, fls, bool]), adts(), [], fls.term.term, bool.term)
+    ));
+
+  test("Bool is a type", () =>
+    ensure(
+      typecheck(defs([tru, fls, bool]), adts(), [], bool.term.term, Star())
+    ));
 
   test("recursive types", () => {
     /*
@@ -670,7 +753,7 @@ describe("typechecker", () => {
   test("one is a Nat", () => {
     const defns = defs([nat, zero, succ, bool, tru, fls]);
     const one = App(succ.term, zero.term); // succ(zero)
-    const onewhnf = te(whnf(false, [], defns, one));
+    const onewhnf = te(reduce(false, [], defns, one));
     ensure(typecheck(defns, adts(), [], onewhnf, nat.term));
   });
 
@@ -685,9 +768,9 @@ describe("typechecker", () => {
     const n = App(Ref("succ"), Ref("zero")); // succ(zero)
     const P = Abs("P", Ref("Bool")); // λP. Bool
     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
-    ensure(typecheck(defns, adts(), [], eliminator, bool.term));
+    ensure(typecheck(defns, adts(), [], eliminator, bool.term.term));
 
-    const reduced = whnf(true, [], defns, eliminator);
+    const reduced = reduce(true, [], defns, eliminator);
     expect(pretty(reduced)).toBe("λP λfalse λtrue false");
   });
 
@@ -833,7 +916,7 @@ describe("typechecker", () => {
       Abs("value", Var("value", 0))
     );
 
-    const reduced = whnf(
+    const reduced = reduce(
       true,
       [],
       defs([bool, tru, fls, maybe, mnull, just]),
@@ -1060,6 +1143,7 @@ describe("typechecker", () => {
     type Pair(A *, B *) = pair(a A, b B)
     func ex:Pair(Bool)(Bool) = pair(Bool)(Bool)(true)(true)    
     `;
+
     const t = build(src);
     if (t.checkerErrors.length != 0) throw `check failed`;
   });
@@ -1095,36 +1179,36 @@ describe("typechecker", () => {
     expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
   });
 
-  // test("not(not(true))==true", () => {
-  //   const src = `
-  //   type Bool = true | false
-  //   func not:Bool->Bool = λb b(λx Bool)(false)(true)
-  //   func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)
-  //   func refl: ΠA:* Πx:A equal(A)(x)(x) = λA λx λP λp p
-  //   func nn: Πb:Bool equal(Bool)(not(not(b)))(b) = λb
-  //     b(λx equal(Bool)(not(not(x)))(x))(refl(Bool)(true))(refl(Bool)(false))
-  //   `;
+  test("not(not(true))==true", () => {
+    const src = `
+    type Bool = true | false
+    func not:Bool->Bool = λb b(λx Bool)(false)(true)
+    func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)
+    func refl: ΠA:* Πx:A equal(A)(x)(x) = λA λx λP λp p
+    func nn: Πb:Bool equal(Bool)(not(not(b)))(b) = λb
+      b(λx equal(Bool)(not(not(x)))(x))(refl(Bool)(true))(refl(Bool)(false))
+    `;
 
-  //   const t = parseFile({ src, idx: 0 });
-  //   if (t._ == "parseerror") throw "unexpected parse error";
-  //   const f = processADTs(t.value);
-  //   const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
-  //   const adts = new Map<string, ADT>();
-  //   for (const adt of adtList) {
-  //     adts.set(identifier2str(adt.name), adt);
-  //   }
-  //   const defs = (f.content.filter((c) => c._ == "def") as Def[]).map((def) =>
-  //     desugar(def, adts)
-  //   );
-  //   let defsMap: Map<string, Def> = new Map();
-  //   for (const def of defs) {
-  //     defsMap.set(def.name, def);
-  //   }
-  //   const nn = defsMap.get("nn")!;
+    const t = parseFile({ src, idx: 0 });
+    if (t._ == "parseerror") throw "unexpected parse error";
+    const f = processADTs(t.value);
+    const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
+    const adts = new Map<string, ADT>();
+    for (const adt of adtList) {
+      adts.set(identifier2str(adt.name), adt);
+    }
+    const defs = (f.content.filter((c) => c._ == "def") as Def[]).map((def) =>
+      desugar(def, adts)
+    );
+    let defsMap: Map<string, Def> = new Map();
+    for (const def of defs) {
+      defsMap.set(def.name, def);
+    }
+    const nn = defsMap.get("nn")!;
 
-  //   const c = typecheck(defsMap, adts, [], nn.term.term, nn.term.typ);
-  //   console.log(c);
-  // });
+    const c = typecheck(defsMap, adts, [], nn.term.term, nn.term.typ);
+    console.log(c);
+  });
 
   describe("type equality", () => {
     const id = Def(
@@ -1147,7 +1231,7 @@ describe("typechecker", () => {
     // The type Nat→Bool.
     const NatToBool: Term = Pi("", Nat, Bool);
 
-    const eq = (a: Term, b: Term) => equate([], ds, Star(), a, b);
+    const eq = (a: Term, b: Term) => equate([], ds, a, b);
 
     test("Nat→Bool === Nat→Bool", () =>
       expect(eq(NatToBool, NatToBool).eq).toBe(true));
@@ -1202,54 +1286,5 @@ describe("typechecker", () => {
 
       expect(eq(one, two).eq).toBe(false);
     });
-  });
-});
-
-describe("evaluation", () => {
-  // (λx. x)(λz. z) -> (λz. z)
-  test("TestReduceIdentity", () => {
-    const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
-    const expected: Term = Abs("z", Var("z", 0));
-
-    const actual = whnf(true, [], defs(), identity);
-
-    expect(actual).toStrictEqual(expected);
-  });
-
-  // λx. x
-  const id = Def("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
-
-  // Test that substituting top level functions works properly.
-  test("TestSubstituteDef", () => {
-    const expected = Abs("z", Var("z", 0));
-    const actual = whnf(
-      true,
-      [],
-      defs([id]),
-      App(Ref("id"), Abs("z", Var("z", 0)))
-    );
-    expect(actual).toStrictEqual(expected);
-  });
-
-  test("should ensure redex uses up bound variable", () => {
-    // Γ = [z→2, y→1]
-    // (λx. y(x)(z))(λx. x)
-    // y(λx. x)(z)
-    // This corresponds to the nameless representation:
-    // (λx. 1(0)(2))(λx. 0)
-    // After one step of evaluation, then indices for y and z are evaluated by 1
-    // as the x binder has now been used up.
-    // 0(λx. 0)(1)
-
-    let src = App(
-      Abs("x", App(App(Var("y", 1), Var("x", 0)), Var("z", 2))),
-      Abs("x", Var("x", 0))
-    );
-
-    let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
-
-    const actual = whnf(true, [], defs(), src);
-
-    expect(actual).toStrictEqual(expected);
   });
 });

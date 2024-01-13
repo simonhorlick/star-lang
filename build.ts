@@ -1,7 +1,7 @@
 // build is a library for orchestrating builds of source files for this language.
 
 import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
-import { TypecheckError, infer } from "./typecheck";
+import { TypecheckError, infer2 as infer } from "./typecheck";
 import { foldTree, foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
 import { processADTs, desugar } from "./process";

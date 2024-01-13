@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest";
 import { Ann, App, Hole, Ref } from "./ast";
-import { Result, TypecheckError, fill, infer, adts, defs } from "./typecheck";
+import {
+  Result,
+  TypecheckError,
+  fill,
+  infer2 as infer,
+  adts,
+  defs,
+} from "./typecheck";
 import { pretty } from "./pretty";
 import {
   bool,

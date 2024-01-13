@@ -17,7 +17,7 @@ import {
   File,
 } from "./ast";
 import { TypecheckError } from "./typecheck";
-import { whnf } from "./equal";
+import { reduce } from "./equal";
 import { indexToLineCol, printLine } from "./parser";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx } from "./context";
@@ -378,7 +378,7 @@ export const inspect = (
           // throw "inspect: type not present";
           return t;
         }
-        const typ = whnf(true, [], defs, ty);
+        const typ = reduce(true, [], defs, ty);
         if (typ._ != "pi") {
           throw "inspect: expected pi";
         }

@@ -38,7 +38,9 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       // For debugging - this can only happen if the wrong index is used in a
       // hand-crafted expression.
       if (t.name && x.name != t.name) {
-        throw `name mismatch: got ${t.name}; expected ${x.name}`;
+        throw `name mismatch: got ${t.name}; expected ${
+          x.name
+        }. ctx is ${printCtx(ctx)}`;
       }
       return t;
     case "lam":
@@ -100,7 +102,9 @@ export const lookupType = (
   // For debugging - this can only happen if the wrong index is used in a
   // hand-crafted expression.
   if (name && x.name != name) {
-    throw `name mismatch: got ${name}; expected ${x.name}`;
+    throw `name mismatch: got ${name}; expected ${x.name}. ctx is ${printCtx(
+      ctx
+    )}`;
   }
   // Shift the indices referenced in this type to take into account the actual
   // context length. When this type was added to the context all variables are
