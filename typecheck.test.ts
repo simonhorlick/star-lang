@@ -1,5 +1,16 @@
 import { describe, expect, test } from "vitest";
-import { ADT, Def, Self, Term, identifier2str, parseFile } from "./ast";
+import {
+  ADT,
+  Def,
+  Self,
+  Term,
+  definition,
+  identifier2str,
+  parseFile,
+  strip,
+  stripAST,
+  type,
+} from "./ast";
 import {
   typecheck,
   equate,
@@ -31,6 +42,7 @@ import { reduce } from "./equal";
 import { build } from "./build";
 import { Context } from "./context";
 import { desugar, processADTs } from "./process";
+import { Stream, parseErrorDiagnostic, Result as ParserResult } from "./parser";
 
 // throw any type checking errors
 const te = (t: Term | TypecheckError): Term => {
@@ -47,6 +59,23 @@ const ensure = (r: Result | TypecheckError): Result => {
     return r;
   }
 };
+
+export const ts = (s: string): Stream => ({
+  src: `parsed${s}`,
+  idx: 6,
+});
+
+export const result = <T>(x: ParserResult<T>) => {
+  if (x._ == "parseerror") {
+    const msg = parseErrorDiagnostic(x);
+    throw msg;
+  } else {
+    return x.value;
+  }
+};
+
+const pdef = (s: string): Def =>
+  desugar(stripAST(result(definition(ts(s)))) as Def, adts());
 
 describe("typechecker", () => {
   // Typing Rules
@@ -1170,35 +1199,23 @@ describe("typechecker", () => {
     expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
   });
 
-  test("double negation proof", () => {
-    const src = `
-    type Bool = true | false
-    func not:Bool->Bool = λb b(λx Bool)(false)(true)
-    func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)
-    func refl: ΠA:* Πx:A equal(A)(x)(x) = λA λx λP λp p
-    func nn: Πb:Bool equal(Bool)(not(not(b)))(b) = λb
-      b(λx equal(Bool)(not(not(x)))(x))(refl(Bool)(true))(refl(Bool)(false))
-    `;
+  const not = pdef(`func not:Bool->Bool = λb b(λx Bool)(true)(false)`);
+  const equal = pdef(
+    `func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)`
+  );
+  const refl = pdef(`func refl: ΠA:* Πx:A equal(A)(x)(x) = λA λx λP λp p`);
+  const nn = pdef(
+    `func nn: Πb:Bool equal(Bool)(not(not(b)))(b) = λb b(λx equal(Bool)(not(not(x)))(x))(refl(Bool)(false))(refl(Bool)(true))`
+  );
 
-    const t = parseFile({ src, idx: 0 });
-    if (t._ == "parseerror") throw "unexpected parse error";
-    const f = processADTs(t.value);
-    const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
-    const adts = new Map<string, ADT>();
-    for (const adt of adtList) {
-      adts.set(identifier2str(adt.name), adt);
-    }
-    const defs = (f.content.filter((c) => c._ == "def") as Def[]).map((def) =>
-      desugar(def, adts)
-    );
-    let defsMap: Map<string, Def> = new Map();
-    for (const def of defs) {
-      defsMap.set(def.name, def);
-    }
-    const nn = defsMap.get("nn")!;
-
-    const c = typecheck(defsMap, adts, [], nn.term.term, nn.term.typ);
-  });
+  test("double negation proof", () =>
+    typecheck(
+      defs([bool, tru, fls, not, equal, refl]),
+      adts(),
+      [],
+      nn.term.term,
+      nn.term.typ
+    ));
 
   test("reflexivity", () => {
     const src = `
@@ -1228,82 +1245,79 @@ describe("typechecker", () => {
 
     const c = typecheck(defsMap, adts, [], rt.term.term, rt.term.typ);
   });
+});
 
-  describe("type equality", () => {
-    const id = Def(
-      "id",
-      Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))
+describe("type equality", () => {
+  const id = Def("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
+
+  const Nat: Term = Ref("Nat");
+  const Bool: Term = Ref("Bool");
+
+  // The identity type operator λX.X: when applied to any type it gives back
+  // the argument.
+  const Id: Term = Abs("A", Var("A", 0));
+
+  const ds = defs([
+    Def("Nat", Ann(id.term, Star())),
+    Def("Bool", Ann(id.term, Star())),
+  ]);
+
+  // The type Nat→Bool.
+  const NatToBool: Term = Pi("", Nat, Bool);
+
+  const eq = (a: Term, b: Term) => equate([], ds, a, b);
+
+  test("Nat→Bool === Nat→Bool", () =>
+    expect(eq(NatToBool, NatToBool).eq).toBe(true));
+
+  test("Nat→Bool === Nat→Id(Bool)", () => {
+    let s = Pi("", Nat, App(Id, Bool));
+    expect(eq(NatToBool, s).eq).toBe(true);
+  });
+
+  test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
+    expect(eq(NatToBool, Pi("", App(Id, Nat), App(Id, Bool))).eq).toBe(true));
+
+  test("Nat→Bool === Id(Nat)→Bool", () =>
+    expect(eq(NatToBool, Pi("", App(Id, Nat), Bool)).eq).toBe(true));
+
+  test("Nat→Bool === Id(Nat→Bool)", () =>
+    expect(eq(NatToBool, App(Id, Pi("", Nat, Bool))).eq).toBe(true));
+
+  test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
+    const t = App(Id, App(Id, Pi("", App(Id, Nat), Bool)));
+    expect(eq(NatToBool, t).eq).toBe(true);
+  });
+
+  test("* === Id(*)", () => {
+    expect(eq(Star(), App(Id, Star())).eq).toBe(true);
+  });
+
+  test("id === id(id)", () => {
+    expect(
+      eq(
+        Abs("x", Var("x", 0)),
+        App(Abs("y", Var("y", 0)), Abs("z", Var("z", 0)))
+      ).eq
+    ).toBe(true);
+  });
+
+  test("true != false", () => {
+    expect(
+      eq(Abs("t", Abs("f", Var("t", 1))), Abs("t", Abs("f", Var("f", 0)))).eq
+    ).toBe(false);
+  });
+
+  test("one != two", () => {
+    // λs. λz. s z
+    const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
+
+    // λs. λz. s (s z)
+    const two = Abs(
+      "s",
+      Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0))))
     );
 
-    const Nat: Term = Ref("Nat");
-    const Bool: Term = Ref("Bool");
-
-    // The identity type operator λX.X: when applied to any type it gives back
-    // the argument.
-    const Id: Term = Abs("A", Var("A", 0));
-
-    const ds = defs([
-      Def("Nat", Ann(id.term, Star())),
-      Def("Bool", Ann(id.term, Star())),
-    ]);
-
-    // The type Nat→Bool.
-    const NatToBool: Term = Pi("", Nat, Bool);
-
-    const eq = (a: Term, b: Term) => equate([], ds, a, b);
-
-    test("Nat→Bool === Nat→Bool", () =>
-      expect(eq(NatToBool, NatToBool).eq).toBe(true));
-
-    test("Nat→Bool === Nat→Id(Bool)", () => {
-      let s = Pi("", Nat, App(Id, Bool));
-      expect(eq(NatToBool, s).eq).toBe(true);
-    });
-
-    test("Nat→Bool === Id(Nat)→Id(Bool)", () =>
-      expect(eq(NatToBool, Pi("", App(Id, Nat), App(Id, Bool))).eq).toBe(true));
-
-    test("Nat→Bool === Id(Nat)→Bool", () =>
-      expect(eq(NatToBool, Pi("", App(Id, Nat), Bool)).eq).toBe(true));
-
-    test("Nat→Bool === Id(Nat→Bool)", () =>
-      expect(eq(NatToBool, App(Id, Pi("", Nat, Bool))).eq).toBe(true));
-
-    test("Nat→Bool === Id(Id(Id(Nat)→Bool))", () => {
-      const t = App(Id, App(Id, Pi("", App(Id, Nat), Bool)));
-      expect(eq(NatToBool, t).eq).toBe(true);
-    });
-
-    test("* === Id(*)", () => {
-      expect(eq(Star(), App(Id, Star())).eq).toBe(true);
-    });
-
-    test("id === id(id)", () => {
-      expect(
-        eq(
-          Abs("x", Var("x", 0)),
-          App(Abs("y", Var("y", 0)), Abs("z", Var("z", 0)))
-        ).eq
-      ).toBe(true);
-    });
-
-    test("true != false", () => {
-      expect(
-        eq(Abs("t", Abs("f", Var("t", 1))), Abs("t", Abs("f", Var("f", 0)))).eq
-      ).toBe(false);
-    });
-
-    test("one != two", () => {
-      // λs. λz. s z
-      const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
-
-      // λs. λz. s (s z)
-      const two = Abs(
-        "s",
-        Abs("z", App(Var("s", 1), App(Var("s", 1), Var("z", 0))))
-      );
-
-      expect(eq(one, two).eq).toBe(false);
-    });
+    expect(eq(one, two).eq).toBe(false);
   });
 });
