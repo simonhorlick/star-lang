@@ -876,6 +876,8 @@ describe("typechecker", () => {
   });
 
   const not = pdef(`func not:Bool->Bool = λb b(λx Bool)(true)(false)`);
+
+  // A value of type equal(A)(a)(b) can only be constructed if a == b.
   const equal = pdef(
     `func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)`
   );
