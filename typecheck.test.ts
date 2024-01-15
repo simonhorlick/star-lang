@@ -1,14 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { Def, Self, Term, definition, stripAST } from "./ast";
-import {
-  check,
-  equate,
-  infer,
-  TypecheckError,
-  Result,
-  defs,
-  adts,
-} from "./typecheck";
+import { Def, Identifier, Let, Self, Term, definition, stripAST } from "./ast";
+import { check, equate, infer, TypecheckError, defs, adts } from "./typecheck";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
 import {
@@ -26,28 +18,16 @@ import {
   zero,
   pair,
   ppair,
+  and,
+  conj,
+  proj1,
+  proj2,
+  andCommutes,
 } from "./test_defs";
 import { reduce } from "./equal";
-import { build } from "./build";
 import { Context } from "./context";
 import { desugar } from "./process";
 import { Stream, parseErrorDiagnostic, Result as ParserResult } from "./parser";
-
-// throw any type checking errors
-const te = (t: Term | TypecheckError): Term => {
-  if (t._ == "typecheckerror") {
-    throw t.msg;
-  } else {
-    return t;
-  }
-};
-const ensure = (r: Result | TypecheckError): Result => {
-  if (r._ == "typecheckerror") {
-    throw r.msg;
-  } else {
-    return r;
-  }
-};
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,
@@ -80,9 +60,9 @@ describe("typechecker", () => {
     // Γ ⊢ x => A
     test("should infer type of variable from context", () => {
       const ctx: Context = [{ type: "bind", name: "x", typ: Ref("A") }];
-      expect(
-        ensure(infer(defs(), adts(), ctx, Var("x", 0), 0, 0)).type
-      ).toStrictEqual(Ref("A"));
+      expect(infer(defs(), adts(), ctx, Var("x", 0), 0, 0).type).toStrictEqual(
+        Ref("A")
+      );
     });
 
     test("ensure var lookup indices are correct", () => {
@@ -112,7 +92,7 @@ describe("typechecker", () => {
       // In this test case, the typechecker should look up the reference A and
       // ensure it's a type.
       try {
-        const result = check(
+        check(
           defs(),
           adts(),
           [],
@@ -131,19 +111,14 @@ describe("typechecker", () => {
       throw "expected exception";
     });
 
-    test("should check that a lambda has a pi type", () => {
-      const result = ensure(
-        check(
-          defs([Def("A", Ann(Abs("x", Var("x", 0)), Star()))]),
-          adts(),
-          [],
-          Abs("a", Var("a", 0)),
-          Pi("", Ref("A"), Ref("A"))
-        )
-      );
-      expect(result.term).toStrictEqual(Abs("a", Var("a", 0)));
-      expect(result.type).toStrictEqual(Pi("", Ref("A"), Ref("A")));
-    });
+    test("should check that a lambda has a pi type", () =>
+      check(
+        defs([Def("A", Ann(Abs("x", Var("x", 0)), Star()))]),
+        adts(),
+        [],
+        Abs("a", Var("a", 0)),
+        Pi("", Ref("A"), Ref("A"))
+      ));
   });
 
   describe("pi", () => {
@@ -156,17 +131,15 @@ describe("typechecker", () => {
     // Γ ⊢ Πx:A. B => *
 
     test("should check domain is a type", () => {
-      ensure(
-        check(
-          defs([
-            Def("A", Ann(Abs("x", Var("x", 0)), Star())),
-            Def("B", Ann(Abs("x", Var("x", 0)), Star())),
-          ]),
-          adts(),
-          [],
-          Pi("", Ref("A"), Ref("B")),
-          Star()
-        )
+      check(
+        defs([
+          Def("A", Ann(Abs("x", Var("x", 0)), Star())),
+          Def("B", Ann(Abs("x", Var("x", 0)), Star())),
+        ]),
+        adts(),
+        [],
+        Pi("", Ref("A"), Ref("B")),
+        Star()
       );
     });
   });
@@ -178,7 +151,7 @@ describe("typechecker", () => {
     // ----------------
     // Γ ⊢ ★ => ★
     test("should infer type star for star (type-in-type)", () => {
-      ensure(check(defs(), adts(), [], Star(), Star()));
+      check(defs(), adts(), [], Star(), Star());
     });
   });
 
@@ -191,24 +164,22 @@ describe("typechecker", () => {
 
     test("should infer f and use that to check the type of the argument", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
-      ensure(
-        check(
-          defs([
-            // A:★
-            Def("A", Ann(Abs("x", Var("x", 0)), Star())),
-            // B:★
-            Def("B", Ann(Abs("x", Var("x", 0)), Star())),
-            // f:A->B
-            Def(
-              "f",
-              Ann(Abs("a", Abs("x", Var("x", 0))), Pi("", Ref("A"), Ref("B")))
-            ),
-          ]),
-          adts(),
-          ctx,
-          App(Ref("f"), Var("a", 0)), // f(a):B
-          Ref("B")
-        )
+      check(
+        defs([
+          // A:★
+          Def("A", Ann(Abs("x", Var("x", 0)), Star())),
+          // B:★
+          Def("B", Ann(Abs("x", Var("x", 0)), Star())),
+          // f:A->B
+          Def(
+            "f",
+            Ann(Abs("a", Abs("x", Var("x", 0))), Pi("", Ref("A"), Ref("B")))
+          ),
+        ]),
+        adts(),
+        ctx,
+        App(Ref("f"), Var("a", 0)), // f(a):B
+        Ref("B")
       );
     });
 
@@ -241,7 +212,7 @@ describe("typechecker", () => {
     test("should error if the type doesn't match the annotation", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
       try {
-        const result = check(
+        check(
           defs([
             Def("A", Ann(Abs("x", Abs("y", Var("y", 0))), Star())),
             Def("B", Ann(Abs("x", Abs("y", Var("x", 1))), Star())),
@@ -261,17 +232,15 @@ describe("typechecker", () => {
 
     test("should check type of a matches the annotation", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
-      ensure(
-        check(
-          defs([
-            Def("A", Ann(Abs("x", Var("x", 0)), Star())),
-            Def("B", Ann(Abs("x", Var("x", 0)), Star())),
-          ]),
-          adts(),
-          ctx,
-          Ann(Var("a", 0), Ref("A")),
-          Ref("A")
-        )
+      check(
+        defs([
+          Def("A", Ann(Abs("x", Var("x", 0)), Star())),
+          Def("B", Ann(Abs("x", Var("x", 0)), Star())),
+        ]),
+        adts(),
+        ctx,
+        Ann(Var("a", 0), Ref("A")),
+        Ref("A")
       );
     });
 
@@ -281,15 +250,13 @@ describe("typechecker", () => {
         Abs("a", Var("a", 0)),
         Pi("", Var("A", 0), Var("A", 1))
       );
-      ensure(
-        infer(
-          defs(),
-          adts(),
-          [{ type: "bind", name: "A", typ: Star() }],
-          program,
-          0,
-          0
-        )
+      infer(
+        defs(),
+        adts(),
+        [{ type: "bind", name: "A", typ: Star() }],
+        program,
+        0,
+        0
       );
     });
   });
@@ -301,232 +268,47 @@ describe("typechecker", () => {
       "T",
       Abs("f", Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0)))))
     );
-    ensure(
-      check(
-        defs([
-          Def("T", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))),
-        ]),
-        adts(),
-        [],
-        double,
+    check(
+      defs([Def("T", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))))]),
+      adts(),
+      [],
+      double,
+      Pi(
+        "T",
+        Star(),
         Pi(
-          "T",
-          Star(),
-          Pi(
-            "",
-            Pi("", Var("T", 0), Var("T", 1)),
-            Pi("", Var("T", 1), Var("T", 2))
-          )
+          "",
+          Pi("", Var("T", 0), Var("T", 1)),
+          Pi("", Var("T", 1), Var("T", 2))
         )
       )
     );
   });
 
-  // and : * -> * -> *
-  // and = λp. λq. Πc:*. (p -> q -> c) -> c
-  let and = Def(
-    "and",
-    Ann(
-      Abs(
-        "p",
-        Abs(
-          "q",
-          Pi(
-            "c",
-            Star(),
-            Pi(
-              "",
-              Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
-              Var("c", 1)
-            )
-          )
-        )
-      ),
-      Pi("", Star(), Pi("", Star(), Star()))
-    )
-  );
+  test("should check type-level and function", () =>
+    check(defs(), adts(), [], and.term.term, and.term.typ));
 
-  test("should check type-level and function", () => {
-    ensure(infer(defs(), adts(), [], and.term, 0, 0));
-  });
+  test("should check type-level conjunction function", () =>
+    check(defs([and]), adts(), [], conj.term.term, conj.term.typ));
 
-  // conj : Πp:*. Πq:*. p -> q -> and p q
-  // conj = λp. λq. λx. λy. λc. λf. f x y
-  let conj = Def(
-    "conj",
-    Ann(
-      Abs(
-        "p",
-        Abs(
-          "q",
-          Abs(
-            "x",
-            Abs(
-              "y",
-              Abs(
-                "c",
-                Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2)))
-              )
-            )
-          )
-        )
-      ),
-      Pi(
-        "p",
-        Star(),
-        Pi(
-          "q",
-          Star(),
-          Pi(
-            "",
-            Var("p", 1),
-            Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
-          )
-        )
-      )
-    )
-  );
-
-  test("should check type-level conjunction function", () => {
-    ensure(infer(defs([and]), adts(), [], conj.term, 0, 0));
-  });
-
-  // proj1 : Πp:*. Πq:*. and p q → p
-  // proj1 : λp. λq. λa. a p (λx. λy. x)
-  let proj1 = Def(
-    "proj1",
-    Ann(
-      Abs(
-        "p",
-        Abs(
-          "q",
-          Abs(
-            "a",
-            App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
-          )
-        )
-      ),
-      Pi(
-        "p",
-        Star(),
-        Pi(
-          "q",
-          Star(),
-          Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
-        )
-      )
-    )
-  );
-
-  test("proj1 checks", () => {
-    ensure(infer(defs([and]), adts(), [], proj1.term, 0, 0));
-  });
-
-  // proj2 : Πp:*. Πq:*. and p q → q
-  // proj2 = λp.   λq. λa. a q (λx. λy. y)
-  let proj2 = Def(
-    "proj2",
-    Ann(
-      Abs(
-        "p",
-        Abs(
-          "q",
-          Abs(
-            "a",
-            App(App(Var("a", 0), Var("q", 1)), Abs("x", Abs("y", Var("y", 0))))
-          )
-        )
-      ),
-      Pi(
-        "p",
-        Star(),
-        Pi(
-          "q",
-          Star(),
-          Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
-        )
-      )
-    )
-  );
+  test("proj1 checks", () =>
+    check(defs([and]), adts(), [], proj1.term.term, proj1.term.typ));
 
   test("proj2 checks", () => {
-    ensure(infer(defs([and]), adts(), [], proj2.term, 0, 0));
+    check(defs([and]), adts(), [], proj2.term.term, proj2.term.typ);
   });
 
-  // and_commutes : Πp:*. Πq:*. and p q → and q p
-  // and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
-  const andCommutes = Def(
-    "and_commutes",
-    Ann(
-      Abs(
-        "p",
-        Abs(
-          "q",
-          Abs(
-            "a",
-            App(
-              App(
-                App(App(Ref("conj"), Var("q", 1)), Var("p", 2)),
-                App(
-                  App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)),
-                  Var("a", 0)
-                )
-              ),
-              App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0))
-            )
-          )
-        )
-      ),
-      Pi(
-        "p",
-        Star(),
-        Pi(
-          "q",
-          Star(),
-          Pi(
-            "",
-            App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
-            App(App(Ref("and"), Var("q", 1)), Var("p", 2))
-          )
-        )
-      )
-    )
-  );
-
-  test("type-level and commutes", () => {
+  test("type-level and commutes", () =>
     // and(p,q) => and(q,p)
     // Logically, if we have an and(p,q) we can project out the components p,q
     // and construct an element of and(q,p) as desired.
-    ensure(
-      infer(defs([and, conj, proj1, proj2]), adts(), [], andCommutes.term, 0, 0)
-    );
-  });
-
-  test("can represent bool by its eliminators", () => {
-    // typeof Bool = ∀X. X→X→X
-    //
-    // untyped:
-    // tru = λt. λf. t
-    // fls = λt. λf. f
-    // if = λl. λm. λn. (l(m))(n)
-    //
-    // typed:
-    // tru: Bool = λX. λt:X. λf:X. t
-    // fls: Bool = λX. λt:X. λf:X. f
-    // if = λX. λb:Bool. λt:X. λf:X. (b(t))(f)
-
-    const Bool = Pi(
-      "X",
-      Star(),
-      Pi("", Var("X", 0), Pi("", Var("X", 1), Var("X", 2)))
-    );
-
-    const tru = Abs("X", Abs("t", Abs("f", Var("t", 1))));
-    const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
-
-    let result = check(defs(), adts(), [], tru, Bool);
-    let result2 = check(defs(), adts(), [], fls, Bool);
-  });
+    check(
+      defs([and, conj, proj1, proj2]),
+      adts(),
+      [],
+      andCommutes.term.term,
+      andCommutes.term.typ
+    ));
 
   /*
     type Bool = false | true
@@ -612,17 +394,13 @@ describe("typechecker", () => {
     ));
 
   test("true is a bool", () =>
-    ensure(
-      check(defs([tru, fls, bool]), adts(), [], tru.term.term, bool.term)
-    ));
+    check(defs([tru, fls, bool]), adts(), [], tru.term.term, bool.term));
 
   test("false is a bool", () =>
-    ensure(
-      check(defs([tru, fls, bool]), adts(), [], fls.term.term, bool.term)
-    ));
+    check(defs([tru, fls, bool]), adts(), [], fls.term.term, bool.term));
 
   test("Bool is a type", () =>
-    ensure(check(defs([tru, fls, bool]), adts(), [], bool.term.term, Star())));
+    check(defs([tru, fls, bool]), adts(), [], bool.term.term, Star()));
 
   test("recursive types", () => {
     /*
@@ -679,16 +457,13 @@ describe("typechecker", () => {
   });
 
   test("one is a Nat", () => {
-    const defns = defs([nat, zero, succ, bool, tru, fls]);
     const one = App(succ.term, zero.term); // succ(zero)
-    const onewhnf = te(reduce(false, [], defns, one));
-    ensure(check(defns, adts(), [], onewhnf, nat.term));
+    check(defs([nat, zero, succ, bool, tru, fls]), adts(), [], one, nat.term);
   });
 
   test("succ(zero) should have type Nat", () => {
-    const defns = defs([nat, zero, succ, bool, tru, fls]);
     const n = App(Ref("succ"), Ref("zero")); // succ(zero)
-    ensure(check(defns, adts(), [], n, nat.term));
+    check(defs([nat, zero, succ, bool, tru, fls]), adts(), [], n, nat.term);
   });
 
   test("eliminate nat", () => {
@@ -696,54 +471,53 @@ describe("typechecker", () => {
     const n = App(Ref("succ"), Ref("zero")); // succ(zero)
     const P = Abs("P", Ref("Bool")); // λP. Bool
     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
-    ensure(check(defns, adts(), [], eliminator, bool.term.term));
+    check(defns, adts(), [], eliminator, bool.term.term);
 
     const reduced = reduce(true, [], defns, eliminator);
     expect(pretty(reduced)).toBe("λP λfalse λtrue false");
   });
 
-  test("simple parameterised types", () => {
-    /*
-        type Maybe<T *> = null | just(value T)
+  /*
+    type Maybe<T *> = null | just(value T)
 
-        This creates the following functions (in the final language design: T is
-        always inferred from the usage, if it's unclear an annotation is
-        required). We need to create the definitions with the type parameters
-        first (the T) followed by any constructor arguments:
-          null : (T *) → Maybe<T>
-          just : (T *) → T → Maybe<T>
+    This creates the following functions (in the final language design: T is
+    always inferred from the usage, if it's unclear an annotation is
+    required). We need to create the definitions with the type parameters
+    first (the T) followed by any constructor arguments:
+      null : (T *) → Maybe<T>
+      just : (T *) → T → Maybe<T>
 
-        The parser generates:
-          Maybe: (A *) → * =
-            (A)
-              ιt. ΠP:Maybe(A)→*.
-              P(null(A)) →
-              ((value A) → P(just(A)(value))) →
-              P(t)
-          just: (A *) → (value A) → Maybe(A) =
-            (A) (value)
-            (P) (null) (just) just(A)(value)
-          null: (A *) → Maybe(A) =
-            (A)
-            (P) (null) (just) null(A)
+    The parser generates:
+      Maybe: (A *) → * =
+        (A)
+          ιt. ΠP:Maybe(A)→*.
+          P(null(A)) →
+          ((value A) → P(just(A)(value))) →
+          P(t)
+      just: (A *) → (value A) → Maybe(A) =
+        (A) (value)
+        (P) (null) (just) just(A)(value)
+      null: (A *) → Maybe(A) =
+        (A)
+        (P) (null) (just) null(A)
 
-        Example values of this type:
-          null(Int) : Maybe<Int>
-          just(Int, 6) : Maybe<Int>
+    Example values of this type:
+      null(Int) : Maybe<Int>
+      just(Int, 6) : Maybe<Int>
 
-          func hello(name Maybe<String>) = case name of
-            null => "world"
-            just => fmt.Sprintf("hello %s", name.value)
-          hello(null(String)) // TODO: the type Maybe<String> is inferred from the usage
-          hello(just(String, "世界")) // TODO: the type Maybe<String> can also be inferred from the argument
+      func hello(name Maybe<String>) = case name of
+        null => "world"
+        just => fmt.Sprintf("hello %s", name.value)
+      hello(null(String)) // TODO: the type Maybe<String> is inferred from the usage
+      hello(just(String, "世界")) // TODO: the type Maybe<String> can also be inferred from the argument
 
-        You can eliminate a Maybe using a case statement:
-          case m of
-            null => "n"
-            just => "j"
-            : String
-      */
-
+    You can eliminate a Maybe using a case statement:
+      case m of
+        null => "n"
+        just => "j"
+        : String
+  */
+  test("Maybe is generated correctly", () =>
     // λA. ιt. ΠP:Maybe(A)→*. P(null(A)) → ((value A) → P(just(A)(value))) → P(t)
     expect(pretty(maybe.term)).toBe(
       pretty(
@@ -774,8 +548,9 @@ describe("typechecker", () => {
           )
         )
       )
-    );
+    ));
 
+  test("type of null is generated correctly", () =>
     /*
       null: (A *) → Maybe(A) =
         (A)
@@ -783,12 +558,14 @@ describe("typechecker", () => {
     */
     expect(pretty(mnull.term.typ)).toBe(
       pretty(Pi("A", Star(), App(Ref("Maybe"), Var("A", 0))))
-    );
+    ));
 
+  test("null is generated correctly", () =>
     expect(pretty(mnull.term.term)).toBe(
       pretty(Abs("A", Abs("P", Abs("null", Abs("just", Var("null", 1))))))
-    );
+    ));
 
+  test("type of just is generated correctly", () =>
     /*
       just: (A *) → (value A) → Maybe(A) =
         (A) (value)
@@ -802,8 +579,9 @@ describe("typechecker", () => {
           Pi("value", Var("A", 0), App(Ref("Maybe"), Var("A", 1)))
         )
       )
-    );
+    ));
 
+  test("just is generated correctly", () =>
     expect(pretty(just.term.term)).toBe(
       pretty(
         Abs(
@@ -817,32 +595,44 @@ describe("typechecker", () => {
           )
         )
       )
-    );
-  });
+    ));
+
+  const justTrue = App(App(Ref("just"), Ref("Bool")), Ref("true"));
+
+  test("just(Bool)(true):Maybe(Bool)", () =>
+    check(
+      defs([bool, tru, fls, maybe, mnull, just]),
+      adts(),
+      [],
+      justTrue,
+      App(Ref("Maybe"), Ref("Bool"))
+    ));
 
   test("eliminate maybe", () => {
-    // Check an instantiation: just(Bool, true)
-    let result3 = ensure(
-      check(
-        defs([bool, tru, fls, maybe, mnull, just]),
-        adts(),
-        [],
-        App(App(Ref("just"), Ref("Bool")), Ref("true")),
-        App(Ref("Maybe"), Ref("Bool"))
-      )
-    );
+    // We can eliminate a type by providing a term for each of the values of a
+    // sum type. This is how case statements are implemented. In the following
+    // example we provide a term for `null` and a term for `just` to the term
+    // `just(Bool)(true)`. As it's a `just` we should get back the value we
+    // passed for the `just` case - `x.value`.
 
-    // x = just(Bool)(true)
+    // let x = just(Bool)(true)
     // case x of
     //  null -> false
     //  just -> x.value
-    // => evaluates to true
-    // is:
-    // x((m) Bool, false, (value) value)
-    const caseExp = App(
-      App(App(result3.term, Abs("m", Ref("Bool"))), Ref("false")),
-      Abs("value", Var("value", 0))
-    );
+
+    // this is desugared as
+    //  x(λm Bool, false, λvalue value)
+    const caseExp = //
+      App(
+        App(
+          App(
+            justTrue, // x
+            Abs("m", Ref("Bool"))
+          ),
+          Ref("false") // the null branch of the case statement
+        ),
+        Abs("value", Var("value", 0)) // the just branch of the case statement
+      );
 
     const reduced = reduce(
       true,
@@ -853,89 +643,80 @@ describe("typechecker", () => {
     expect(reduced).toStrictEqual(tru.term.term);
   });
 
-  test("null checks", () => {
-    console.log(
-      `checking ${pretty(mnull.term.term)} has type ${pretty(mnull.term.typ)}`
-    );
-    ensure(
-      check(
-        defs([maybe, mnull, just]),
-        adts(),
-        [],
-        mnull.term.term,
-        mnull.term.typ
-      )
-    );
-  });
+  test("null checks", () =>
+    check(
+      defs([maybe, mnull, just]),
+      adts(),
+      [],
+      mnull.term.term,
+      mnull.term.typ
+    ));
 
-  test("just checks", () => {
-    ensure(
-      check(
-        defs([maybe, mnull, just]),
-        adts(),
-        [],
-        just.term.term,
-        just.term.typ
-      )
-    );
-  });
+  test("just checks", () =>
+    check(
+      defs([maybe, mnull, just]),
+      adts(),
+      [],
+      just.term.term,
+      just.term.typ
+    ));
 
-  test("recursive parameterised types", () => {
-    /*
-      // List is a singly-linked list with elements of type T.
-      type List(T *) =
-        // nil constructs an empty list.
-        nil |
-        // cons constructs a list by passing a head element and an
-        // existing (though possibly empty) list.
-        cons(
-          // head is the first element of the list.
-          head T,
-          // tail is the remaining elements in the list.
-          tail List<T>)
+  /*
+  // List is a singly-linked list with elements of type T.
+  type List(T *) =
+    // nil constructs an empty list.
+    nil |
+    // cons constructs a list by passing a head element and an
+    // existing (though possibly empty) list.
+    cons(
+      // head is the first element of the list.
+      head T,
+      // tail is the remaining elements in the list.
+      tail List<T>)
 
-      This creates the following functions (in the final language design: T is
-      always inferred from the usage, if it's unclear an annotation is
-      required). We need to create the definitions with the type parameters
-      first (the T) followed by any constructor arguments:
-        nil : (T *) → List<T>
-        cons : (T *) → (head T) → (tail List<T>) → List<T>
+  This creates the following functions (in the final language design: T is
+  always inferred from the usage, if it's unclear an annotation is
+  required). We need to create the definitions with the type parameters
+  first (the T) followed by any constructor arguments:
+    nil : (T *) → List<T>
+    cons : (T *) → (head T) → (tail List<T>) → List<T>
 
-      The parser generates:
-        List = (A)
-          ιm. ΠP:List<A>→*.
-          P(nil<A>) →
-          ((head A) → (tail List<A>) → P(cons<A>(head)(tail))) →
-          P(m)
-        cons =
-          <A> (head) (tail)
-          <P> (nil) (cons) cons(head)(tail)
-        nil =
-          <A>
-          <P> (nil) (cons) nil
+  The parser generates:
+    List = (A)
+      ιm. ΠP:List<A>→*.
+      P(nil<A>) →
+      ((head A) → (tail List<A>) → P(cons<A>(head)(tail))) →
+      P(m)
+    cons =
+      <A> (head) (tail)
+      <P> (nil) (cons) cons(head)(tail)
+    nil =
+      <A>
+      <P> (nil) (cons) nil
 
-      Example values of this type:
-        nil(Int) : List<Int> // on it's own it requires an annotation, i.e.
-                              // let xs = nil : List<Int>
-        cons(Int, 1, nil(Int)) : List<Int>
-        cons(Int, 1, cons(Int, 2, cons(Int, 3, nil(Int)))) : List<Int>
+  Example values of this type:
+    nil(Int) : List<Int> // on it's own it requires an annotation, i.e.
+                          // let xs = nil : List<Int>
+    cons(Int, 1, nil(Int)) : List<Int>
+    cons(Int, 1, cons(Int, 2, cons(Int, 3, nil(Int)))) : List<Int>
 
-        // In the constructors for List we know that T has type *, but for
-        // ordinary functions we need the T somewhere, or else we wouldn't know
-        // what it is (and what type it is).
-        func append(T *, a T, l List<T>) List<T> = cons(a, l)
-        let l = append(Int, 4, [1,2,3])
+    // In the constructors for List we know that T has type *, but for
+    // ordinary functions we need the T somewhere, or else we wouldn't know
+    // what it is (and what type it is).
+    func append(T *, a T, l List<T>) List<T> = cons(a, l)
+    let l = append(Int, 4, [1,2,3])
 
-        // In a future version:
-        let l = append(4, [1,2,3])
+    // In a future version:
+    let l = append(4, [1,2,3])
 
-      You can eliminate a List using a case statement:
-        case l of
-          nil => "n"
-          cons => "c"
-          : String
-      */
+  You can eliminate a List using a case statement:
+    case l of
+      nil => "n"
+      cons => "c"
+      : String
+  */
 
+  test("list is generated correctly", () =>
     // λA. ιt. ΠP:List(A)→*. P(nil(A)) → ((head A) → (tail List(A)) → P(cons(A)(head)(tail))) → P(t)
     expect(pretty(list.term)).toBe(
       pretty(
@@ -973,27 +754,29 @@ describe("typechecker", () => {
           )
         )
       )
-    );
+    ));
 
-    /*
-      nil: (T *) → List<T>  =
-        <T>
-        <P> (nil) (cons) nil
-      */
-
+  /*
+  nil: (T *) → List<T>  =
+    <T>
+    <P> (nil) (cons) nil
+  */
+  test("type of nil is generated correctly", () =>
     expect(pretty(nil.term.typ)).toBe(
       pretty(Pi("A", Star(), App(Ref("List"), Var("A", 0))))
-    );
+    ));
 
+  test("nil is generated correctly", () =>
     expect(pretty(nil.term.term)).toBe(
       pretty(Abs("A", Abs("P", Abs("nil", Abs("cons", Var("nil", 1))))))
-    );
+    ));
 
-    /*
+  /*
       cons: (T *) → T → List<T> → List<T> =
         <T> (head) (tail)
         <P> (nil) (cons) cons(head)(tail)
     */
+  test("cons is generated correctly", () =>
     expect(pretty(cons.term.term)).toBe(
       pretty(
         Abs(
@@ -1016,8 +799,9 @@ describe("typechecker", () => {
           )
         )
       )
-    );
+    ));
 
+  test("type of cons is generated correctly", () =>
     expect(pretty(cons.term.typ)).toBe(
       pretty(
         Pi(
@@ -1034,33 +818,37 @@ describe("typechecker", () => {
           )
         )
       )
-    );
-  });
+    ));
 
-  test("nil checks", () => {
-    ensure(infer(defs([list, nil, cons]), adts([]), [], nil.term, 0, 0));
-  });
+  test("nil checks", () =>
+    check(defs([list, nil, cons]), adts([]), [], nil.term.term, nil.term.typ));
 
-  test("cons checks", () => {
-    ensure(infer(defs([list, nil, cons]), adts([]), [], cons.term, 0, 0));
-  });
+  test("cons checks", () =>
+    check(
+      defs([list, nil, cons]),
+      adts([]),
+      [],
+      cons.term.term,
+      cons.term.typ
+    ));
 
-  test("pair checks", () => {
-    ensure(infer(defs([pair, ppair]), adts([]), [], ppair.term, 0, 0));
-  });
+  test("pair checks", () =>
+    // ppair is the constructor for the type pair
+    check(defs([pair, ppair]), adts([]), [], ppair.term.term, ppair.term.typ));
 
-  test("type constructor with multiple arguments", () => {
-    const src = `
-    type Bool = false | true
-    type Pair(A *, B *) = pair(a A, b B)
-    func ex:Pair(Bool)(Bool) = pair(Bool)(Bool)(true)(true)    
-    `;
+  test("pair(Bool)(Bool)(true)(true):Pair(Bool)(Bool)", () =>
+    check(
+      defs([pair, ppair, bool, tru]),
+      adts([]),
+      [],
+      App(
+        App(App(App(Ref("pair"), Ref("Bool")), Ref("Bool")), Ref("true")),
+        Ref("true")
+      ),
+      App(App(Ref("Pair"), Ref("Bool")), Ref("Bool"))
+    ));
 
-    const t = build(src);
-    if (t.checkerErrors.length != 0) throw `check failed`;
-  });
-
-  // FIXME:
+  // TODO:
   // test("let statements should typecheck", () => {
   //   // the typechecker should infer the expression of the let statement as Bool
   //   // then with [x:Bool] check that the body of the let statement is of type
@@ -1070,13 +858,11 @@ describe("typechecker", () => {
 
   //   const term = Abs("b", Let(Identifier("x"), Var("b", 0), Var("x", 0)));
   //   const type = Pi("", Ref("Bool"), Ref("Bool"));
-  //   const actual = ensure(
-  //     typecheck(defs([tru, fls, bool]), adts(), [], term, type, 0)
-  //   );
+  //   const actual = check(defs([tru, fls, bool]), adts(), [], term, type, 0);
   //   expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
   // });
 
-  test("bool match 3", () => {
+  test("correct self-type is inferred for Bool(Πx:Bool ★)", () => {
     // b:Bool, P:(Πx:Bool. ★), t:P(true), f:P(false)];
     const ctx: Context = [
       { type: "bind", name: "b", typ: Ref("Bool") },
@@ -1085,9 +871,7 @@ describe("typechecker", () => {
       { type: "bind", name: "f", typ: App(Var("P", 1), Ref("false")) },
     ];
     const term = App(Var("b", 3), Var("P", 2));
-    const actual = ensure(
-      infer(defs([tru, fls, bool]), adts(), ctx, term, 0, 0)
-    );
+    const actual = infer(defs([tru, fls, bool]), adts(), ctx, term, 0, 0);
     expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
   });
 
@@ -1101,6 +885,7 @@ describe("typechecker", () => {
   );
 
   test("double negation proof", () =>
+    // Check that not(not(b)) == b on the type level.
     check(
       defs([bool, tru, fls, not, equal, refl]),
       adts(),
@@ -1111,7 +896,7 @@ describe("typechecker", () => {
 
   const reflTrue = pdef(`func rt: equal(Bool)(true)(true) = refl(Bool)(true)`);
 
-  test("reflexivity of true", () =>
+  test("reflexivity of true has type equal(Bool)(true)(true)", () =>
     check(
       defs([bool, tru, fls, not, equal, refl]),
       adts(),

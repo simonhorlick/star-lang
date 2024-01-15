@@ -1,4 +1,4 @@
-import { Ann, App, Def, Identifier, Par, Ref, Star } from "./ast";
+import { Abs, Ann, App, Def, Identifier, Par, Pi, Ref, Star, Var } from "./ast";
 import {
   GenerateConstructorTerm,
   GenerateConstructorType,
@@ -152,5 +152,154 @@ export const ppair = Def(
   Ann(
     GenerateConstructorTerm(pairParams, pairConstructors, 0),
     GenerateConstructorType("Pair", pairParams, pairConstructors[0])
+  )
+);
+
+// and : * -> * -> *
+// and = λp. λq. Πc:*. (p -> q -> c) -> c
+export const and = Def(
+  "and",
+  Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Pi(
+          "c",
+          Star(),
+          Pi(
+            "",
+            Pi("", Var("p", 2), Pi("", Var("q", 2), Var("c", 2))),
+            Var("c", 1)
+          )
+        )
+      )
+    ),
+    Pi("", Star(), Pi("", Star(), Star()))
+  )
+);
+
+// conj : Πp:*. Πq:*. p -> q -> and p q
+// conj = λp. λq. λx. λy. λc. λf. f x y
+export const conj = Def(
+  "conj",
+  Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "x",
+          Abs(
+            "y",
+            Abs("c", Abs("f", App(App(Var("f", 0), Var("x", 3)), Var("y", 2))))
+          )
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi(
+          "",
+          Var("p", 1),
+          Pi("", Var("q", 1), App(App(Ref("and"), Var("p", 3)), Var("q", 2)))
+        )
+      )
+    )
+  )
+);
+
+// proj1 : Πp:*. Πq:*. and p q → p
+// proj1 : λp. λq. λa. a p (λx. λy. x)
+export const proj1 = Def(
+  "proj1",
+  Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "a",
+          App(App(Var("a", 0), Var("p", 2)), Abs("x", Abs("y", Var("x", 1))))
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
+      )
+    )
+  )
+);
+
+// proj2 : Πp:*. Πq:*. and p q → q
+// proj2 = λp.   λq. λa. a q (λx. λy. y)
+export const proj2 = Def(
+  "proj2",
+  Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "a",
+          App(App(Var("a", 0), Var("q", 1)), Abs("x", Abs("y", Var("y", 0))))
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
+      )
+    )
+  )
+);
+
+// and_commutes : Πp:*. Πq:*. and p q → and q p
+// and_commutes = λp. λq. λa. conj q p (proj2 p q a) (proj1 p q a)
+export const andCommutes = Def(
+  "and_commutes",
+  Ann(
+    Abs(
+      "p",
+      Abs(
+        "q",
+        Abs(
+          "a",
+          App(
+            App(
+              App(App(Ref("conj"), Var("q", 1)), Var("p", 2)),
+              App(App(App(Ref("proj2"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+            ),
+            App(App(App(Ref("proj1"), Var("p", 2)), Var("q", 1)), Var("a", 0))
+          )
+        )
+      )
+    ),
+    Pi(
+      "p",
+      Star(),
+      Pi(
+        "q",
+        Star(),
+        Pi(
+          "",
+          App(App(Ref("and"), Var("p", 1)), Var("q", 0)),
+          App(App(Ref("and"), Var("q", 1)), Var("p", 2))
+        )
+      )
+    )
   )
 );
