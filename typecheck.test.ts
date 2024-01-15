@@ -1,18 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { Def, Self, Term, definition, stripAST } from "./ast";
 import {
-  ADT,
-  Def,
-  Self,
-  Term,
-  definition,
-  identifier2str,
-  parseFile,
-  strip,
-  stripAST,
-  type,
-} from "./ast";
-import {
-  typecheck,
+  check,
   equate,
   infer,
   TypecheckError,
@@ -41,7 +30,7 @@ import {
 import { reduce } from "./equal";
 import { build } from "./build";
 import { Context } from "./context";
-import { desugar, processADTs } from "./process";
+import { desugar } from "./process";
 import { Stream, parseErrorDiagnostic, Result as ParserResult } from "./parser";
 
 // throw any type checking errors
@@ -123,7 +112,7 @@ describe("typechecker", () => {
       // In this test case, the typechecker should look up the reference A and
       // ensure it's a type.
       try {
-        const result = typecheck(
+        const result = check(
           defs(),
           adts(),
           [],
@@ -144,7 +133,7 @@ describe("typechecker", () => {
 
     test("should check that a lambda has a pi type", () => {
       const result = ensure(
-        typecheck(
+        check(
           defs([Def("A", Ann(Abs("x", Var("x", 0)), Star()))]),
           adts(),
           [],
@@ -168,7 +157,7 @@ describe("typechecker", () => {
 
     test("should check domain is a type", () => {
       ensure(
-        typecheck(
+        check(
           defs([
             Def("A", Ann(Abs("x", Var("x", 0)), Star())),
             Def("B", Ann(Abs("x", Var("x", 0)), Star())),
@@ -189,7 +178,7 @@ describe("typechecker", () => {
     // ----------------
     // Γ ⊢ ★ => ★
     test("should infer type star for star (type-in-type)", () => {
-      ensure(typecheck(defs(), adts(), [], Star(), Star()));
+      ensure(check(defs(), adts(), [], Star(), Star()));
     });
   });
 
@@ -203,7 +192,7 @@ describe("typechecker", () => {
     test("should infer f and use that to check the type of the argument", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
       ensure(
-        typecheck(
+        check(
           defs([
             // A:★
             Def("A", Ann(Abs("x", Var("x", 0)), Star())),
@@ -252,7 +241,7 @@ describe("typechecker", () => {
     test("should error if the type doesn't match the annotation", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
       try {
-        const result = typecheck(
+        const result = check(
           defs([
             Def("A", Ann(Abs("x", Abs("y", Var("y", 0))), Star())),
             Def("B", Ann(Abs("x", Abs("y", Var("x", 1))), Star())),
@@ -273,7 +262,7 @@ describe("typechecker", () => {
     test("should check type of a matches the annotation", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
       ensure(
-        typecheck(
+        check(
           defs([
             Def("A", Ann(Abs("x", Var("x", 0)), Star())),
             Def("B", Ann(Abs("x", Var("x", 0)), Star())),
@@ -305,85 +294,6 @@ describe("typechecker", () => {
     });
   });
 
-  describe("term reduction", () => {
-    // (λx. x)(λz. z) -> (λz. z)
-    test("TestReduceIdentity", () => {
-      const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
-      const expected: Term = Abs("z", Var("z", 0));
-
-      const actual = reduce(true, [], defs(), identity);
-
-      expect(actual).toStrictEqual(expected);
-    });
-
-    // λx. x
-    const id = Def(
-      "id",
-      Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))
-    );
-
-    // Test that substituting top level functions works properly.
-    test("TestSubstituteDef", () => {
-      const expected = Abs("z", Var("z", 0));
-      const actual = reduce(
-        true,
-        [],
-        defs([id]),
-        App(Ref("id"), Abs("z", Var("z", 0)))
-      );
-      expect(actual).toStrictEqual(expected);
-    });
-
-    test("should ensure redex uses up bound variable", () => {
-      // Γ = [z→2, y→1]
-      // (λx. y(x)(z))(λx. x)
-      // y(λx. x)(z)
-      // This corresponds to the nameless representation:
-      // (λx. 1(0)(2))(λx. 0)
-      // After one step of evaluation, then indices for y and z are evaluated by 1
-      // as the x binder has now been used up.
-      // 0(λx. 0)(1)
-
-      let src = App(
-        Abs("x", App(App(Var("y", 1), Var("x", 0)), Var("z", 2))),
-        Abs("x", Var("x", 0))
-      );
-
-      let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
-
-      const actual = reduce(true, [], defs(), src);
-
-      expect(actual).toStrictEqual(expected);
-    });
-
-    test("should not be able to reduce id", () => {
-      expect(reduce(false, [], defs(), Abs("x", Var("x", 0)))).toStrictEqual(
-        Abs("x", Var("x", 0))
-      );
-    });
-
-    test("should not reduce refs", () => {
-      expect(reduce(false, [], defs(), Ref("ref"))).toStrictEqual(Ref("ref"));
-    });
-
-    test("should not reduce constructors", () => {
-      expect(
-        reduce(false, [], defs(), App(Ref("succ"), Ref("zero")))
-      ).toStrictEqual(App(Ref("succ"), Ref("zero")));
-    });
-
-    test("should reduce id(id) to id", () => {
-      expect(
-        reduce(
-          false,
-          [],
-          defs(),
-          App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0)))
-        )
-      ).toStrictEqual(Abs("x", Var("x", 0)));
-    });
-  });
-
   test("should check polymorphic double function", () => {
     // λT:*. λf:T→T. λx:T. f(f(x))
     // * -> T -> T -> T -> T
@@ -392,7 +302,7 @@ describe("typechecker", () => {
       Abs("f", Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0)))))
     );
     ensure(
-      typecheck(
+      check(
         defs([
           Def("T", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X")))),
         ]),
@@ -614,8 +524,8 @@ describe("typechecker", () => {
     const tru = Abs("X", Abs("t", Abs("f", Var("t", 1))));
     const fls = Abs("X", Abs("t", Abs("f", Var("f", 0))));
 
-    let result = typecheck(defs(), adts(), [], tru, Bool);
-    let result2 = typecheck(defs(), adts(), [], fls, Bool);
+    let result = check(defs(), adts(), [], tru, Bool);
+    let result2 = check(defs(), adts(), [], fls, Bool);
   });
 
   /*
@@ -703,18 +613,16 @@ describe("typechecker", () => {
 
   test("true is a bool", () =>
     ensure(
-      typecheck(defs([tru, fls, bool]), adts(), [], tru.term.term, bool.term)
+      check(defs([tru, fls, bool]), adts(), [], tru.term.term, bool.term)
     ));
 
   test("false is a bool", () =>
     ensure(
-      typecheck(defs([tru, fls, bool]), adts(), [], fls.term.term, bool.term)
+      check(defs([tru, fls, bool]), adts(), [], fls.term.term, bool.term)
     ));
 
   test("Bool is a type", () =>
-    ensure(
-      typecheck(defs([tru, fls, bool]), adts(), [], bool.term.term, Star())
-    ));
+    ensure(check(defs([tru, fls, bool]), adts(), [], bool.term.term, Star())));
 
   test("recursive types", () => {
     /*
@@ -774,13 +682,13 @@ describe("typechecker", () => {
     const defns = defs([nat, zero, succ, bool, tru, fls]);
     const one = App(succ.term, zero.term); // succ(zero)
     const onewhnf = te(reduce(false, [], defns, one));
-    ensure(typecheck(defns, adts(), [], onewhnf, nat.term));
+    ensure(check(defns, adts(), [], onewhnf, nat.term));
   });
 
   test("succ(zero) should have type Nat", () => {
     const defns = defs([nat, zero, succ, bool, tru, fls]);
     const n = App(Ref("succ"), Ref("zero")); // succ(zero)
-    ensure(typecheck(defns, adts(), [], n, nat.term));
+    ensure(check(defns, adts(), [], n, nat.term));
   });
 
   test("eliminate nat", () => {
@@ -788,7 +696,7 @@ describe("typechecker", () => {
     const n = App(Ref("succ"), Ref("zero")); // succ(zero)
     const P = Abs("P", Ref("Bool")); // λP. Bool
     const eliminator = App(App(App(n, P), Ref("true")), Abs("n", Ref("false")));
-    ensure(typecheck(defns, adts(), [], eliminator, bool.term.term));
+    ensure(check(defns, adts(), [], eliminator, bool.term.term));
 
     const reduced = reduce(true, [], defns, eliminator);
     expect(pretty(reduced)).toBe("λP λfalse λtrue false");
@@ -915,7 +823,7 @@ describe("typechecker", () => {
   test("eliminate maybe", () => {
     // Check an instantiation: just(Bool, true)
     let result3 = ensure(
-      typecheck(
+      check(
         defs([bool, tru, fls, maybe, mnull, just]),
         adts(),
         [],
@@ -950,7 +858,7 @@ describe("typechecker", () => {
       `checking ${pretty(mnull.term.term)} has type ${pretty(mnull.term.typ)}`
     );
     ensure(
-      typecheck(
+      check(
         defs([maybe, mnull, just]),
         adts(),
         [],
@@ -962,7 +870,7 @@ describe("typechecker", () => {
 
   test("just checks", () => {
     ensure(
-      typecheck(
+      check(
         defs([maybe, mnull, just]),
         adts(),
         [],
@@ -1141,22 +1049,6 @@ describe("typechecker", () => {
     ensure(infer(defs([pair, ppair]), adts([]), [], ppair.term, 0, 0));
   });
 
-  // // FIXME: this test blows the stack because the return type of snd is
-  // // incorrect. This should return a valid typecheck error.
-  // test("ensure wrong type fails", () => {
-  //   const src = `
-  //   type Bool = false | true
-  //   type Nat = zero | succ(x Nat)
-  //   type Pair(A *, B *) = pair(a A, b B)
-
-  //   func snd:(Pair(Bool)(Nat))->Bool = λp case p of
-  //   pair -> p.b
-  //   `;
-  //   const t = build(src);
-  //   if (t._ == "parseerror") throw `parse failed: ${t.error}`;
-  //   if (t._ == "typecheckerror") throw `check failed: ${t.msg}`;
-  // });
-
   test("type constructor with multiple arguments", () => {
     const src = `
     type Bool = false | true
@@ -1209,7 +1101,7 @@ describe("typechecker", () => {
   );
 
   test("double negation proof", () =>
-    typecheck(
+    check(
       defs([bool, tru, fls, not, equal, refl]),
       adts(),
       [],
@@ -1220,7 +1112,7 @@ describe("typechecker", () => {
   const reflTrue = pdef(`func rt: equal(Bool)(true)(true) = refl(Bool)(true)`);
 
   test("reflexivity of true", () =>
-    typecheck(
+    check(
       defs([bool, tru, fls, not, equal, refl]),
       adts(),
       [],
@@ -1247,7 +1139,7 @@ describe("type equality", () => {
   // The type Nat→Bool.
   const NatToBool: Term = Pi("", Nat, Bool);
 
-  const eq = (a: Term, b: Term) => equate([], ds, a, b);
+  const eq = (a: Term, b: Term) => equate([], ds, a, b, Ref("unused"));
 
   test("Nat→Bool === Nat→Bool", () =>
     expect(eq(NatToBool, NatToBool).eq).toBe(true));
@@ -1301,5 +1193,81 @@ describe("type equality", () => {
     );
 
     expect(eq(one, two).eq).toBe(false);
+  });
+});
+
+describe("term reduction", () => {
+  // (λx. x)(λz. z) -> (λz. z)
+  test("TestReduceIdentity", () => {
+    const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
+    const expected: Term = Abs("z", Var("z", 0));
+
+    const actual = reduce(true, [], defs(), identity);
+
+    expect(actual).toStrictEqual(expected);
+  });
+
+  // λx. x
+  const id = Def("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
+
+  // Test that substituting top level functions works properly.
+  test("TestSubstituteDef", () => {
+    const expected = Abs("z", Var("z", 0));
+    const actual = reduce(
+      true,
+      [],
+      defs([id]),
+      App(Ref("id"), Abs("z", Var("z", 0)))
+    );
+    expect(actual).toStrictEqual(expected);
+  });
+
+  test("should ensure redex uses up bound variable", () => {
+    // Γ = [z→2, y→1]
+    // (λx. y(x)(z))(λx. x)
+    // y(λx. x)(z)
+    // This corresponds to the nameless representation:
+    // (λx. 1(0)(2))(λx. 0)
+    // After one step of evaluation, then indices for y and z are evaluated by 1
+    // as the x binder has now been used up.
+    // 0(λx. 0)(1)
+
+    let src = App(
+      Abs("x", App(App(Var("y", 1), Var("x", 0)), Var("z", 2))),
+      Abs("x", Var("x", 0))
+    );
+
+    let expected = App(App(Var("y", 0), Abs("x", Var("x", 0))), Var("z", 1));
+
+    const actual = reduce(true, [], defs(), src);
+
+    expect(actual).toStrictEqual(expected);
+  });
+
+  test("should not be able to reduce id", () => {
+    expect(reduce(false, [], defs(), Abs("x", Var("x", 0)))).toStrictEqual(
+      Abs("x", Var("x", 0))
+    );
+  });
+
+  test("should not reduce refs", () => {
+    expect(reduce(false, [], defs(), Ref("ref"))).toStrictEqual(Ref("ref"));
+  });
+
+  test("should not reduce constructors", () => {
+    expect(
+      reduce(false, [], defs(), App(Ref("succ"), Ref("zero")))
+    ).toStrictEqual(App(Ref("succ"), Ref("zero")));
+  });
+
+  test("should reduce id(id) to id", () => {
+    expect(
+      reduce(
+        false,
+        [],
+        defs(),
+        App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0)))
+      )
+    ).toStrictEqual(Abs("x", Var("x", 0)));
   });
 });

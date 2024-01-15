@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Ann, App, Hole, Ref } from "./ast";
-import { Result, TypecheckError, fill, infer, adts, defs } from "./typecheck";
+import { infer, adts, defs, fill } from "./typecheck";
 import { pretty } from "./pretty";
 import {
   bool,
@@ -14,21 +14,14 @@ import {
   tru,
 } from "./test_defs";
 
-const ensure = (r: Result | TypecheckError): Result => {
-  if (r._ == "typecheckerror") {
-    throw r.msg;
-  } else {
-    return r;
-  }
-};
-
 describe("holes", () => {
   /*
   
   A hole is a place in the AST that's left blank for the compiler to figure
   out the contents. Generally speaking, this is allowed only when it's
   obvious from the context what should be filled in. For example, in the
-  term `cons(▨, true, nil(▨))` we can fill both holes with Bool (as the true has type Bool).
+  term `cons(▨, true, nil(▨))` we can fill both holes with Bool (as the true
+  here has type Bool).
   
   Note that the constructors for List are defined as:
     nil : (T *) → List(T)
@@ -49,21 +42,23 @@ describe("holes", () => {
     cons(α, true, nil(α))
   i.e. the two holes represent the same term.
 
-  Now we replace the holes with metavariables - holes that must represent the
-  same term get assigned the same metavariable. This is inferred in the normal
-  way through type inference.
-  
-  When we encounter a hole - how do we know it's the same metavariable as another hole? Can we look it up in the typing context and see if that's a hole?
-  
+  Now we assign numbers to the holes. Holes that must necessarily represent the
+  same term are assigned the same number. As part of the typechecking we do
+  equality testing of terms, if one side is a hole we note down what it
+  should correspond to (see typecheck.ts:equate). Similarly if we equate two
+  holes (with possibly different numbers) we can mark that these two holes
+  represent the same thing.
+    
               ap
             /    \
-          ap      ap:List(α)
+          ap      ap:List(▨0)
          /  \        /    \
-       ap   1:α     nil   α:*
+       ap   1:▨0    nil   ▨0:*
       /  \
-    cons  α:*
+    cons  ▨0:*
 
-  Now because 1:Int we can infer T=Int. (we should have α in a context somewhere so we can use this to set all the occurances of it, then typecheck again).
+  Because 1:Int we can infer T=Int. We can go through the AST substituting Int
+  every time we see the appropriate hole and run the checker again to verify.
 
                ap
             /      \
@@ -73,12 +68,7 @@ describe("holes", () => {
       /  \
     cons  Int:*
     
-    
-    TODO: We need to somehow return the hole substitution (+constraints) to
-    higher levels of the checker so that we can do substitutions there too.
-    Either that or we compute the substitutions in one pass, apply them and
-    check them in a subsequent pass.
-*/
+  */
 
   test("cons(▨, true, nil(▨))", () => {
     const expr = App(
@@ -86,10 +76,14 @@ describe("holes", () => {
       App(Ref("nil"), Hole(1))
     );
 
-    const result = ensure(
-      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
+    const result = infer(
+      defs([list, nil, cons, bool, tru, fls]),
+      adts(),
+      [],
+      expr,
+      0,
+      0
     );
-
     const filled = fill(result);
     expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
       "cons(Bool)(true)(nil(Bool)):List(Bool)"
@@ -102,10 +96,14 @@ describe("holes", () => {
       App(Ref("nil"), Ref("Bool"))
     );
 
-    const result = ensure(
-      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
+    const result = infer(
+      defs([list, nil, cons, bool, tru, fls]),
+      adts(),
+      [],
+      expr,
+      0,
+      0
     );
-
     const filled = fill(result);
     expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
       "cons(Bool)(true)(nil(Bool)):List(Bool)"
@@ -127,15 +125,20 @@ describe("holes", () => {
       )
     );
 
-    const result = ensure(
-      infer(defs([list, nil, cons, bool, tru, fls]), adts([]), [], expr, 0, 0)
+    const result = infer(
+      defs([list, nil, cons, bool, tru, fls]),
+      adts(),
+      [],
+      expr,
+      0,
+      0
     );
-
     const filled = fill(result);
     expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
       "cons(Bool)(true)(cons(Bool)(true)(cons(Bool)(true)(nil(Bool)))):List(Bool)"
     );
   });
+
   /*
   Note that the constructors for Maybe are defined as:
     null : (T *) → Maybe(T)
@@ -166,15 +169,13 @@ describe("holes", () => {
   test("null(▨):Maybe(Bool)", () => {
     const expr = Ann(App(Ref("null"), Hole(0)), App(Ref("Maybe"), Ref("Bool")));
 
-    const result = ensure(
-      infer(
-        defs([maybe, mnull, just, bool, tru, fls]),
-        adts([]),
-        [],
-        expr,
-        0,
-        0
-      )
+    const result = infer(
+      defs([maybe, mnull, just, bool, tru, fls]),
+      adts(),
+      [],
+      expr,
+      0,
+      0
     );
     const filled = fill(result);
     expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(

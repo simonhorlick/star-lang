@@ -1,7 +1,7 @@
 // build is a library for orchestrating builds of source files for this language.
 
 import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
-import { TypecheckError, infer } from "./typecheck";
+import { TypecheckError, fill, infer } from "./typecheck";
 import { foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
 import { processADTs, desugar } from "./process";
@@ -69,10 +69,11 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
     try {
       const result = infer(defsMap, adts, [], def.term, 0, src.length);
-      if (result.term._ != "ann") {
+      const filled = fill(result);
+      if (filled.term._ != "ann") {
         throw "expected annotated term for definition body";
       }
-      checkedMap.set(def.name, Def(def.name, result.term));
+      checkedMap.set(def.name, Def(def.name, filled.term));
     } catch (e) {
       const result = e as TypecheckError;
       console.error(typecheckErrorDiagnostic(src, result));

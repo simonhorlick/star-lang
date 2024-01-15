@@ -174,6 +174,14 @@ export const infer = (
     case "str": {
       return Result(term, Ref("String"), []);
     }
+    case "case": {
+      // TODO:
+      throw "TODO";
+    }
+    case "let": {
+      // TODO:
+      throw "TODO";
+    }
     default: {
       throw `infer: ${term._} ${pretty(term)} is not inferrable`;
     }
@@ -181,14 +189,14 @@ export const infer = (
 };
 
 // check the term val has the type typ.
-const check = (
+export const check = (
   defs: Map<string, Def>,
   adts: Map<string, ADT>,
   ctx: Context,
   val: Term,
   tty: Term,
-  os: number,
-  oe: number
+  os: number = 0,
+  oe: number = 0
 ): Result => {
   if (val._ == "orig") {
     return check(defs, adts, ctx, val.child, tty, val.start, val.end);
@@ -229,27 +237,29 @@ const check = (
       oe
     );
 
-    return Result(val, typ, c.holes);
+    return Result(val, tty, c.holes);
   } else if (val._ == "hole") {
     // Holes always check against their desired types.
     return Result(val, tty, []);
   } else {
-    // infer the type of the term and check this matches the supplied type.
-    var ii = infer(defs, adts, ctx, val, os, oe);
-    var inf = reduce(true, ctx, defs, ii.type);
-    var inf = inf._ == "self" ? substTop(val, inf.body, inf.name) : inf;
-    const eq = equate(ctx, defs, inf, typ);
+    // infer the type of the term and check that it's equal to the supplied
+    // type.
+    var inf = infer(defs, adts, ctx, val, os, oe);
+    const eq = equate(ctx, defs, inf.type, typ, val);
     if (!eq.eq) {
       const ptyp = pretty(tty);
-      const pinf = pretty(ii.type);
+      const pinf = pretty(inf.type);
       throw TypecheckError(`typecheck failed: ${ptyp} is not ${pinf}`, os, oe);
     }
-    return Result(val, typ, ii.holes.concat(eq.holes));
+    return Result(val, tty, inf.holes.concat(eq.holes));
   }
 };
 
+// fill attempts to consolidate holes. During typechecking we mark which holes
+// must be the same and when we encounter an equality between a hole and a term
+// we note down what the hole must contain. This function then substitutes those
+// inferred values into the AST.
 export const fill = (chk: Result): Result => {
-  // TODO: Do any hole filling now and return the filled subtree.
   let updtm = chk.term;
   let updty = chk.type;
 
@@ -266,6 +276,9 @@ export const fill = (chk: Result): Result => {
     }
   }
 
+  // TODO: Remove holes that just reference themselves - i.e. 0 => Hole(0). It's
+  // not incorrect but the substHoles below will do nothing.
+
   for (let i = 0; i < chk.holes.length; i++) {
     const hole = chk.holes[i];
     updtm = substHole(hole.id, hole.term, updtm);
@@ -277,27 +290,9 @@ export const fill = (chk: Result): Result => {
     }
   }
 
+  // TODO: Doesn't this require re-checking?
+
   return Result(updtm, updty, chk.holes);
-};
-
-// check that the given term has the expected type.
-export const typecheck = (
-  defs: Map<string, Def>,
-  adts: Map<string, ADT>,
-  ctx: Context,
-  tm: Term,
-  ty: Term,
-  os: number = 0,
-  oe: number = 0
-): Result => {
-  if (tm._ == "orig") {
-    const tc = typecheck(defs, adts, ctx, tm.child, ty, tm.start, tm.end);
-    return Result(Origin(tm.start, tm.end, tc.term), tc.type, tc.holes);
-  }
-
-  const chk = check(defs, adts, ctx, tm, ty, os, oe);
-
-  return fill(chk);
 };
 
 // aeq returns true if the two terms are alpha-equivalent, i.e. they are the
@@ -365,11 +360,18 @@ const aeq = (t1: Term, t2: Term): boolean => {
   }
 };
 
+// equate calculates whether two terms are equal. If there are any holes the
+// hole is considered to be filled by the term and is returned. If two holes
+// are compared then it's assumed they're the same and that fact is returned.
+// For example,
+//   null(▨0) == null(▨1) implies that ▨0 and ▨1 are the same hole
+//   f(Nat,Bool) == f(Nat,▨0) imples that ▨0 is Bool.
 export const equate = (
   ctx: Context,
   defs: Map<string, Def>,
   ty1: Term,
   ty2: Term,
+  val: Term,
   depth: number = 0
 ): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
   if (aeq(ty1, ty2)) {
@@ -388,16 +390,16 @@ export const equate = (
   }
 
   if (ty1._ == "app" && ty2._ == "app") {
-    const l = equate(ctx, defs, ty1.func, ty2.func, depth + 1);
-    const r = equate(ctx, defs, ty1.arg, ty2.arg, depth + 1);
+    const l = equate(ctx, defs, ty1.func, ty2.func, val, depth + 1);
+    const r = equate(ctx, defs, ty1.arg, ty2.arg, val, depth + 1);
     return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "lam" && ty2._ == "lam") {
-    return equate(ctx, defs, ty1.body, ty2.body, depth + 1);
+    return equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
   } else if (ty1._ == "self" && ty2._ == "self") {
-    return equate(ctx, defs, ty1.body, ty2.body, depth + 1);
+    return equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
   } else if (ty1._ == "pi" && ty2._ == "pi") {
-    const l = equate(ctx, defs, ty1.from, ty2.from, depth + 1);
-    const r = equate(ctx, defs, ty1.body, ty2.body, depth + 1);
+    const l = equate(ctx, defs, ty1.from, ty2.from, val, depth + 1);
+    const r = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
     return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "star" && ty2._ == "star") {
     return { eq: true, holes: [] };
@@ -406,18 +408,28 @@ export const equate = (
   } else if (ty1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
     // hole substitution.
+    console.log(`ho ${ty1.id}`);
+    console.log(`== ${rhs}`);
+    // It's important that we return the non-reduced term here, otherwise the
+    // hole filling will resolve some long term the user isn't expecting.
     return { eq: true, holes: [{ id: ty1.id, term: ty2 }] };
   } else if (ty2._ == "hole") {
+    console.log(`ho ${ty2.id}`);
+    console.log(`== ${lhs}`);
     return { eq: true, holes: [{ id: ty2.id, term: ty1 }] };
   } else {
-    const n1 = reduce(true, ctx, defs, ty1);
+    // Try and reduce the left hand side and compare again.
+    let n1 = reduce(true, ctx, defs, ty1);
+    n1 = n1._ == "self" ? substTop(val, n1.body, n1.name) : n1;
     if (n1 !== ty1) {
-      return equate(ctx, defs, n1, ty2, depth + 1);
+      return equate(ctx, defs, n1, ty2, val, depth + 1);
     }
 
-    const n2 = reduce(true, ctx, defs, ty2);
+    // Try and reduce the right hand side and compare again.
+    let n2 = reduce(true, ctx, defs, ty2);
+    n2 = n2._ == "self" ? substTop(val, n2.body, n2.name) : n2;
     if (n2 !== ty2) {
-      return equate(ctx, defs, ty1, n2, depth + 1);
+      return equate(ctx, defs, ty1, n2, val, depth + 1);
     }
 
     return { eq: false, holes: [] };
