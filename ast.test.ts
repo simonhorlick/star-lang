@@ -97,7 +97,7 @@ describe("ast", () => {
     ));
 
   test("should return an error node for unparseable subtrees", () =>
-    expect(st("λn &")).toBe('Abs("n", ParseError(expected term; got &))'));
+    expect(st("λn &")).toBe(`Abs("n", ParseError(expected term; got &))`));
 
   test("should parse package", () =>
     expect(stripAST(result(parsePackage(ts(`package abc`))))).toStrictEqual({
@@ -149,11 +149,11 @@ describe("ast", () => {
 
   test("should parse lambda abstraction", () =>
     expect(serialise(strip(result(abstraction(() => term)(ts("λx t")))))).toBe(
-      'Abs("x", Ref(t))'
+      `Abs("x", Ref("t"))`
     ));
 
   test("should parse function application", () =>
-    expect(st("f(x)")).toBe("App(Ref(f), Ref(x))"));
+    expect(st("f(x)")).toBe(`App(Ref("f"), Ref("x"))`));
 
   // want to parse `f(x)(y)` as the following tree:
   //
@@ -164,77 +164,79 @@ describe("ast", () => {
   //  f    x
   //
   test("should parse function application with two arguments", () =>
-    expect(st("f(x)(y)")).toBe("App(App(Ref(f), Ref(x)), Ref(y))"));
+    expect(st("f(x)(y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
 
   test("should parse function application with three arguments", () =>
     expect(st("f(x)(y)(z)")).toBe(
-      "App(App(App(Ref(f), Ref(x)), Ref(y)), Ref(z))"
+      `App(App(App(Ref("f"), Ref("x")), Ref("y")), Ref("z"))`
     ));
 
   test("should parse function application with additional parens", () =>
-    expect(st("(b(v))(w)")).toBe("App(App(Ref(b), Ref(v)), Ref(w))"));
+    expect(st("(b(v))(w)")).toBe(`App(App(Ref("b"), Ref("v")), Ref("w"))`));
 
   test("should parse true", () =>
-    expect(st("λt λf t")).toBe('Abs("t", Abs("f", Ref(t)))'));
+    expect(st("λt λf t")).toBe(`Abs("t", Abs("f", Ref("t")))`));
 
   test("should parse application with space", () =>
-    expect(st("f ( x )")).toBe("App(Ref(f), Ref(x))"));
+    expect(st("f ( x )")).toBe(`App(Ref("f"), Ref("x"))`));
 
   test("should parse application within application", () =>
-    expect(st("f(x(y))")).toBe("App(Ref(f), App(Ref(x), Ref(y)))"));
+    expect(st("f(x(y))")).toBe(`App(Ref("f"), App(Ref("x"), Ref("y")))`));
 
   test("should parse bracketed application", () =>
-    expect(st("x (y (z))")).toBe("App(Ref(x), App(Ref(y), Ref(z)))"));
+    expect(st("x (y (z))")).toBe(`App(Ref("x"), App(Ref("y"), Ref("z")))`));
 
   test("should parse term", () =>
     expect(st("λz λx λy x (y (z))")).toBe(
-      'Abs("z", Abs("x", Abs("y", App(Ref(x), App(Ref(y), Ref(z))))))'
+      `Abs("z", Abs("x", Abs("y", App(Ref("x"), App(Ref("y"), Ref("z"))))))`
     ));
 
-  test("should parse reference", () => expect(st("ex2")).toBe("Ref(ex2)"));
+  test("should parse reference", () => expect(st("ex2")).toBe(`Ref("ex2")`));
 
   test("should parse type reference", () =>
-    expect(serialise(strip(result(type(ts("Bool")))))).toBe("Ref(Bool)"));
+    expect(serialise(strip(result(type(ts("Bool")))))).toBe(`Ref("Bool")`));
 
   test("should parse reference in parenthesis", () =>
-    expect(serialise(strip(result(type(ts("(Bool)")))))).toBe("Ref(Bool)"));
+    expect(serialise(strip(result(type(ts("(Bool)")))))).toBe(`Ref("Bool")`));
 
   test("should parse arrow", () =>
-    expect(st("A->B")).toBe('Pi("", Ref(A), Ref(B))'));
+    expect(st("A->B")).toBe(`Pi("", Ref("A"), Ref("B"))`));
 
   test("should parse arrow with correct precedence", () =>
     expect(serialise(strip(result(type(ts("A->B->C")))))).toBe(
-      'Pi("", Ref(A), Pi("", Ref(B), Ref(C)))'
+      `Pi("", Ref("A"), Pi("", Ref("B"), Ref("C")))`
     ));
 
   test("should parse arrow type", () =>
     expect(serialise(strip(result(type(ts("B->C")))))).toBe(
-      'Pi("", Ref(B), Ref(C))'
+      `Pi("", Ref("B"), Ref("C"))`
     ));
 
   test("should parse arrow with bracketing", () =>
-    expect(st("A->(B->C)")).toBe('Pi("", Ref(A), Pi("", Ref(B), Ref(C)))'));
+    expect(st("A->(B->C)")).toBe(
+      `Pi("", Ref("A"), Pi("", Ref("B"), Ref("C")))`
+    ));
 
   test("should parse arrow with bracketing", () =>
     expect(serialise(strip(resultC(term(ts("(A->B)->C")))))).toStrictEqual(
-      'Pi("", Pi("", Ref(A), Ref(B)), Ref(C))'
+      `Pi("", Pi("", Ref("A"), Ref("B")), Ref("C"))`
     ));
 
   test("should parse arrow with bracketing", () =>
     expect(st("(A->B)->(C->D)")).toStrictEqual(
-      'Pi("", Pi("", Ref(A), Ref(B)), Pi("", Ref(C), Ref(D)))'
+      `Pi("", Pi("", Ref("A"), Ref("B")), Pi("", Ref("C"), Ref("D")))`
     ));
 
   test("should parse empty list", () =>
-    expect(st("[]")).toBe("App(Ref(nil), Hole())"));
+    expect(st("[]")).toBe(`App(Ref("nil"), Hole())`));
 
   test("should parse list literal with integers", () =>
     expect(st("[1,2,3]")).toBe(
-      "App(App(App(Ref(cons), Hole()), 1), App(App(App(Ref(cons), Hole()), 2), App(App(App(Ref(cons), Hole()), 3), App(Ref(nil), Hole()))))"
+      `App(App(App(Ref("cons"), Hole()), IntLit(1)), App(App(App(Ref("cons"), Hole()), IntLit(2)), App(App(App(Ref("cons"), Hole()), IntLit(3)), App(Ref("nil"), Hole()))))`
     ));
 
   test("should parse if statement", () => {
-    expect(st("if x then y else z")).toBe("If(Ref(x), Ref(y), Ref(z))");
+    expect(st("if x then y else z")).toBe(`If(Ref("x"), Ref("y"), Ref("z"))`);
   });
 
   test("should parse multiline if statement", () =>
@@ -252,55 +254,55 @@ describe("ast", () => {
           )
         )
       )
-    ).toBe("If(Ref(x), Ref(y), Ref(z))"));
+    ).toBe(`If(Ref("x"), Ref("y"), Ref("z"))`));
 
   test("should return an error node for unparseable if statement", () =>
     expect(st("if = then y else z")).toBe(
-      "If(ParseError(expected term; got =), Ref(y), Ref(z))"
+      `If(ParseError(expected term; got =), Ref("y"), Ref("z"))`
     ));
 
   test("should return an error node for unparseable true branch", () =>
     expect(st("if x then @ else z")).toBe(
-      "If(Ref(x), ParseError(expected term; got @), Ref(z))"
+      `If(Ref("x"), ParseError(expected term; got @), Ref("z"))`
     ));
 
   test("should return an error node for unparseable false branch", () =>
     expect(st("if x then y else @")).toBe(
-      "If(Ref(x), Ref(y), ParseError(expected term; got @))"
+      `If(Ref("x"), Ref("y"), ParseError(expected term; got @))`
     ));
 
   test("should parse type constructor", () =>
     expect(serialise(strip(result(type(ts("List(Nat)")))))).toBe(
-      "App(Ref(List), Ref(Nat))"
+      `App(Ref("List"), Ref("Nat"))`
     ));
 
   test("should parse type constructor on the left of an arrow", () =>
     expect(st("List(Nat)->Nat")).toBe(
-      'Pi("", App(Ref(List), Ref(Nat)), Ref(Nat))'
+      `Pi("", App(Ref("List"), Ref("Nat")), Ref("Nat"))`
     ));
 
   test("should parse arrow with lots of parenthesis", () =>
     expect(st("(x)((y)(z))->(x)")).toBe(
-      'Pi("", App(Ref(x), App(Ref(y), Ref(z))), Ref(x))'
+      `Pi("", App(Ref("x"), App(Ref("y"), Ref("z"))), Ref("x"))`
     ));
 
   test("pi: should parse named pi types", () => {
     const parser = pi(() => term);
     const res = parser(ts("ΠA:* A"));
-    expect(serialise(strip(result(res)))).toBe('Pi("A", Star, Ref(A))');
+    expect(serialise(strip(result(res)))).toBe(`Pi("A", Star(), Ref("A"))`);
   });
 
   test("pi: should expose ParseError for bad from annotation", () => {
     const parser = pi(() => term);
     const res = parser(ts("ΠA:(&) A"));
     expect(serialise(strip(result(res)))).toBe(
-      'Pi("A", ParseError(expected term; got &), Ref(A))'
+      `Pi("A", ParseError(expected term; got &), Ref("A"))`
     );
   });
 
   test("pi: should parse multiple named pi types", () =>
     expect(st("ΠA:* ΠB:* Πa:A Πb:B b")).toBe(
-      'Pi("A", Star, Pi("B", Star, Pi("a", Ref(A), Pi("b", Ref(B), Ref(b)))))'
+      `Pi("A", Star(), Pi("B", Star(), Pi("a", Ref("A"), Pi("b", Ref("B"), Ref("b")))))`
     ));
 
   test("should parse definition containing list literal", () => {
@@ -310,8 +312,8 @@ describe("ast", () => {
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.term.typ)).toBe("App(Ref(List), Ref(Nat))");
-    expect(serialise(ast.term.term)).toBe("Ref(zero)");
+    expect(serialise(ast.term.typ)).toBe(`App(Ref("List"), Ref("Nat"))`);
+    expect(serialise(ast.term.term)).toBe(`Ref("zero")`);
   });
 
   test("should parse case", () => {
@@ -320,7 +322,7 @@ describe("ast", () => {
       |  succ -> false`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      "Case(Par(n),[Branch(Identifier(zero), Ref(true)),Branch(Identifier(succ), Ref(false))])"
+      `Case(Par("n"),[Branch(Identifier("zero"), Ref("true")),Branch(Identifier("succ"), Ref("false"))])`
     );
   });
 
@@ -331,7 +333,7 @@ describe("ast", () => {
       ):Bool`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      "Ann(Case(Par(n),[Branch(Identifier(zero), Ref(true)),Branch(Identifier(succ), Ref(false))]), Ref(Bool))"
+      `Ann(Case(Par("n"),[Branch(Identifier("zero"), Ref("true")),Branch(Identifier("succ"), Ref("false"))]), Ref("Bool"))`
     );
   });
 
@@ -345,7 +347,7 @@ describe("ast", () => {
         | succ -> lt(n.x)(m.x))`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      "Case(Par(n),[Branch(Identifier(zero), Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), Ref(true))])),Branch(Identifier(succ), Case(Par(m),[Branch(Identifier(zero), Ref(false)),Branch(Identifier(succ), App(App(Ref(lt), Ref(n.x)), Ref(m.x)))]))])"
+      `Case(Par("n"),[Branch(Identifier("zero"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), Ref("true"))])),Branch(Identifier("succ"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), App(App(Ref("lt"), Ref("n.x")), Ref("m.x")))]))])`
     );
   });
 
@@ -366,7 +368,7 @@ describe("ast", () => {
       | succ -> `;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      "Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term; got ))])"
+      `Case(Par("n"),[Branch(Identifier("zero"), Ref("zero")),Branch(Identifier("succ"), ParseError(expected term; got ))])`
     );
   });
 
@@ -383,46 +385,46 @@ describe("ast", () => {
     }
 
     expect(serialiseAST(stripAST(ast.value.content[0]))).toBe(
-      `Def(name=abc, term=Ann(Abs("n", Case(Par(n),[Branch(Identifier(zero), Ref(zero)),Branch(Identifier(succ), ParseError(expected term; got ))])), Pi("", Ref(Bool), Ref(Bool))))`
+      `Def(name=abc, term=Ann(Abs("n", Case(Par("n"),[Branch(Identifier("zero"), Ref("zero")),Branch(Identifier("succ"), ParseError(expected term; got ))])), Pi("", Ref("Bool"), Ref("Bool"))))`
     );
     expect(serialiseAST(stripAST(ast.value.content[1]))).toBe(
-      `Def(name=def, term=Ann(Ref(zero), Ref(Nat)))`
+      `Def(name=def, term=Ann(Ref("zero"), Ref("Nat")))`
     );
   });
 
   test("should parse empty string literal", () => {
     const src = `""`;
     const ast = strip(result(term(ts(src))));
-    expect(serialise(ast)).toBe('""');
+    expect(serialise(ast)).toBe(`StringLit("")`);
   });
 
   test("should parse string literal", () => {
     const src = `"hello"`;
     const ast = strip(result(term(ts(src))));
-    expect(serialise(ast)).toBe('"hello"');
+    expect(serialise(ast)).toBe(`StringLit("hello")`);
   });
 
   test("should parse definition containing string literal", () => {
-    const ast = stripAST(result(definition(ts('func abc:String = ""'))));
+    const ast = stripAST(result(definition(ts(`func abc:String = ""`))));
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.term.typ)).toBe("Ref(String)");
-    expect(serialise(ast.term.term)).toBe('""');
+    expect(serialise(ast.term.typ)).toBe(`Ref("String")`);
+    expect(serialise(ast.term.term)).toBe(`StringLit("")`);
   });
 
   test("should include origins for type annotations of definitions", () => {
-    const ast = result(definition(ts('func abc:String = ""')));
+    const ast = result(definition(ts(`func abc:String = ""`)));
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.term.typ)).toBe("Origin(15, 21, Ref(String))");
+    expect(serialise(ast.term.typ)).toBe(`Origin(15, 21, Ref("String"))`);
   });
 
   test("should parse let expression", () => {
     const ast = strip(result(term(ts("let g = f(x) in h(g)(g)"))));
     expect(serialise(ast)).toBe(
-      "Let(Identifier(g), App(Ref(f), Ref(x)), App(App(Ref(h), Ref(g)), Ref(g)))"
+      `Let(Identifier("g"), App(Ref("f"), Ref("x")), App(App(Ref("h"), Ref("g")), Ref("g")))`
     );
   });
 
@@ -430,7 +432,7 @@ describe("ast", () => {
     const src = `f("hello )`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      `App(Ref(f), ParseError(failed to parse string literal))`
+      `App(Ref("f"), ParseError(failed to parse string literal))`
     );
   });
 
@@ -438,7 +440,7 @@ describe("ast", () => {
     const src = `elimIO(println("hello))`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
-      `App(Ref(elimIO), App(Ref(println), ParseError(failed to parse string literal)))`
+      `App(Ref("elimIO"), App(Ref("println"), ParseError(failed to parse string literal)))`
     );
   });
 
@@ -455,7 +457,7 @@ describe("ast", () => {
     // skip all the junk then parse a definition.
     const ast = stripAST(result(bind(resync, (_) => definition)(ts(src))));
     expect(serialiseAST(ast)).toBe(
-      `Def(name=x, term=Ann(Ref(zero), Ref(Nat)))`
+      `Def(name=x, term=Ann(Ref("zero"), Ref("Nat")))`
     );
   });
 
@@ -465,14 +467,14 @@ describe("ast", () => {
      *
     `;
     const tm = strip(result(type(ts(src))));
-    expect(serialise(tm)).toBe(`Pi("b", Ref(Bool), Star)`);
+    expect(serialise(tm)).toBe(`Pi("b", Ref("Bool"), Star())`);
   });
 
   test("should parse pi types correctly", () => {
     const src = `Πb:Bool ΠP:(Πx:Bool *) Πt:P(true) Πf:P(false) P(b)`;
     const tm = strip(result(type(ts(src))));
     expect(serialise(tm)).toBe(
-      `Pi("b", Ref(Bool), Pi("P", Pi("x", Ref(Bool), Star), Pi("t", App(Ref(P), Ref(true)), Pi("f", App(Ref(P), Ref(false)), App(Ref(P), Ref(b))))))`
+      `Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))`
     );
   });
 
@@ -500,7 +502,7 @@ describe("ast", () => {
     );
 
     expect(serialiseAST(ast)).toBe(
-      `Def(name=bool_match, term=Ann(Abs("b", Abs("P", Abs("t", Abs("f", App(App(App(Ref(b), Ref(P)), Ref(t)), Ref(f)))))), Pi("b", Ref(Bool), Pi("P", Pi("x", Ref(Bool), Star), Pi("t", App(Ref(P), Ref(true)), Pi("f", App(Ref(P), Ref(false)), App(Ref(P), Ref(b))))))))`
+      `Def(name=bool_match, term=Ann(Abs("b", Abs("P", Abs("t", Abs("f", App(App(App(Ref("b"), Ref("P")), Ref("t")), Ref("f")))))), Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))))`
     );
   });
 });

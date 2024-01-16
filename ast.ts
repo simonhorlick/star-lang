@@ -1036,10 +1036,13 @@ export function stripAST(t: ASTNode): ASTNode {
   }
 }
 
+// serialise outputs the term tree in the same syntax as the typescript
+// implementation. This is useful for quickly generating code for a term to be
+// used in tests.
 export function serialise(t: Term, d: number = 0): string {
   switch (t._) {
     case "var":
-      return `Var(${t.name})`;
+      return `Var("${t.name}",${t.index})`;
     case "lam":
       return `Abs("${identifier2str(t.name)}", ${serialise(t.body, d + 1)})`;
     case "self":
@@ -1054,13 +1057,13 @@ export function serialise(t: Term, d: number = 0): string {
         d + 1
       )})`;
     case "par":
-      return `Par(${t.name})`;
+      return `Par("${t.name}")`;
     case "star":
-      return `Star`;
+      return `Star()`;
     case "ref":
-      return `Ref(${t.name})`;
+      return `Ref("${t.name}")`;
     case "id":
-      return `Identifier(${t.name})`;
+      return `Identifier("${t.name}")`;
     case "orig":
       return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
     case "rel":
@@ -1088,9 +1091,9 @@ export function serialise(t: Term, d: number = 0): string {
     case "hole":
       return `Hole()`;
     case "int":
-      return `${t.num}`;
+      return `IntLit(${t.num})`;
     case "str":
-      return `"${t.str}"`;
+      return `StringLit("${t.str}")`;
     case "err":
       return `ParseError(${t.msg})`;
   }
