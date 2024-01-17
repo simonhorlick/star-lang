@@ -16,13 +16,13 @@ export const addTermToCtx = (
   name: string,
   type: Type
 ): Context => {
-  if (name != "" && name != "P" && ctxContains(name, ctx)) {
-    console.log(
-      `warning: variable ${name} shadows existing variable; context is ${printCtx(
-        ctx
-      )}`
-    );
-  }
+  // if (name != "" && name != "P" && ctxContains(name, ctx)) {
+  //   console.log(
+  //     `warning: variable ${name} shadows existing variable; context is ${printCtx(
+  //       ctx
+  //     )}`
+  //   );
+  // }
   dbgCheckIndices(ctx, 0, type);
   return [...ctx, { type: "bind", name: name, typ: type }];
 };
@@ -38,7 +38,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       // For debugging - this can only happen if the wrong index is used in a
       // hand-crafted expression.
       if (t.name && x.name != t.name) {
-        throw `name mismatch: got ${t.name}; expected ${
+        throw `name mismatch: looking up ${t.index} got ${t.name}; expected ${
           x.name
         }. ctx is ${printCtx(ctx)}`;
       }

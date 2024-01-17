@@ -204,6 +204,8 @@ export const check = (
 
   const pval = pretty(val);
   const ptty = pretty(tty);
+  const pctx = printCtx(ctx);
+  console.log(`cx ${pctx}`);
   console.log(`ch ${pval}`);
   console.log(`<= ${ptty}`);
 

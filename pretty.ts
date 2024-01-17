@@ -3,9 +3,34 @@ import { Context } from "./context";
 import * as Erased from "./erased";
 import { foldTree } from "./inspect";
 
+export function printCtxMultiline(
+  ctx: Context,
+  indices: boolean = false
+): string {
+  return (
+    "[" +
+    ctx
+      .map(
+        (v, i) => `\n ${ctx.length - i - 1} ${v.name}:${pretty(v.typ, indices)}`
+      )
+      .join("") +
+    "\n]"
+  );
+}
+
 export function printCtx(ctx: Context, indices: boolean = false): string {
   return (
-    "[" + ctx.map((v) => `${v.name}:${pretty(v.typ, indices)}`).join(", ") + "]"
+    "[" +
+    ctx
+      .map(
+        (v, i) =>
+          `${v.name}${indices ? `@${ctx.length - i - 1}` : ""}:${pretty(
+            v.typ,
+            indices
+          )}`
+      )
+      .join(", ") +
+    "]"
   );
 }
 

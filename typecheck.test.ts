@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vitest";
-import { Def, Identifier, Let, Self, Term, definition, stripAST } from "./ast";
+import {
+  Def,
+  Identifier,
+  Let,
+  Self,
+  Term,
+  definition,
+  serialise,
+  stripAST,
+} from "./ast";
 import { check, equate, infer, TypecheckError, defs, adts } from "./typecheck";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
@@ -906,6 +915,166 @@ describe("typechecker", () => {
       reflTrue.term.term,
       reflTrue.term.typ
     ));
+
+  // A vector is essentially a List, but with the length encoded as
+  // part of the type. In the following tests we hard-code the type argument of
+  // the Vector to be Bool as it slightly simplifies the tests.
+  //
+  // Vect : Πsz:Nat ★
+  //      = λsz ιt
+  //        ΠP:(Πn:Nat Vect(n)→★)
+  //        Πcnil:P(zero)(vnil)
+  //        Πcext:(Πn:Nat Πhead:Bool Πtail:Vect(n) P(succ(n))(ext(n)(head)(tail))
+  //        P(sz)(t)
+  // vnil : Vect(zero)
+  //      = λP λcnil λcext cnil
+  //  ext : Πn:Nat Πhead:Bool Πtail:Vect(n) Vect(succ(n))
+  //      = λn λhead λtail λP λcnil λcext cext(n)(head)(tail)
+  const vect = Def(
+    "Vect",
+    Ann(
+      // λsz
+      Abs(
+        "sz", // the length of the tail Vector
+        // ιt
+        Self(
+          "t",
+          // ΠP:(Πn:Nat Vect(n)→★)
+          Pi(
+            "P",
+            Pi("n", Ref("Nat"), Pi("x", App(Ref("Vect"), Var("n", 0)), Star())),
+            // Πcnil:P(zero)(vnil)
+            Pi(
+              "cnil",
+              App(App(Var("P", 0), Ref("zero")), Ref("vnil")),
+              // Πcext:(Πn:Nat Πhead:Bool Πtail:Vect(n) P(succ(n))(ext(n)(head)(tail))
+              Pi(
+                "cext",
+                Pi(
+                  "n",
+                  Ref("Nat"),
+                  Pi(
+                    "head",
+                    Ref("Bool"),
+                    Pi(
+                      "tail",
+                      App(Ref("Vect"), Var("n", 1)),
+                      // P(succ(n))(ext(n)(head)(tail))
+                      App(
+                        App(Var("P", 4), App(Ref("succ"), Var("n", 2))),
+                        App(
+                          App(App(Ref("ext"), Var("n", 2)), Var("head", 1)),
+                          Var("tail", 0)
+                        )
+                      )
+                    )
+                  )
+                ),
+                App(App(Var("P", 2), Var("sz", 4)), Var("t", 3))
+              )
+            )
+          )
+        )
+      ),
+      Pi("sz", Ref("Nat"), Star())
+    )
+  );
+
+  //  ext : Πn:Nat Πhead:Bool Πtail:Vect(n) Vect(succ(n))
+  //      = λn λhead λtail λP λcnil λcext cext(n)(head)(tail)
+  const ext = Def(
+    "ext",
+    Ann(
+      // λn λhead λtail λP λcnil λcext cext(n)(head)(tail)
+      Abs(
+        "n",
+        Abs(
+          "head",
+          Abs(
+            "tail",
+            Abs(
+              "P",
+              Abs(
+                "cnil",
+                Abs(
+                  "cext",
+                  App(
+                    App(App(Var("cext", 0), Var("n", 5)), Var("head", 4)),
+                    Var("tail", 3)
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      // Πn:Nat Πhead:Bool Πtail:Vect(n) Vect(succ(n))
+      Pi(
+        "n",
+        Ref("Nat"),
+        Pi(
+          "head",
+          Ref("Bool"),
+          Pi(
+            "tail",
+            App(Ref("Vect"), Var("n", 1)),
+            App(Ref("Vect"), App(Ref("succ"), Var("n", 2)))
+          )
+        )
+      )
+    )
+  );
+
+  // vnil : Vect(zero)
+  //      = λP λcnil λcext cnil
+  const vnil = Def(
+    "vnil",
+    Ann(
+      // λP λcnil λcext cnil
+      Abs("P", Abs("cnil", Abs("cext", Var("cnil", 1)))),
+      // Vect(zero)
+      App(Ref("Vect"), Ref("zero"))
+    )
+  );
+
+  test("vnil has type Vect(zero)", () =>
+    check(
+      defs([nat, zero, succ, vect, vnil, ext, bool, tru, fls]),
+      adts(),
+      [],
+      vnil.term.term,
+      vnil.term.typ
+    ));
+
+  test("ext has type Πn:Nat Πhead:Bool Πtail:Vect(n) Vect(succ(n))", () =>
+    check(
+      defs([nat, zero, succ, vect, vnil, ext, bool, tru, fls]),
+      adts(),
+      [],
+      ext.term.term,
+      ext.term.typ
+    ));
+
+  test("the type of ext(0)(true)(vnil) is Vect(1)", () => {
+    // The n in the argument to ext is the size of the tail vector, which as
+    // it's vnil gives 0.
+    const one = App(Ref("succ"), Ref("zero"));
+    const tm = App(App(App(Ref("ext"), Ref("zero")), Ref("true")), Ref("vnil"));
+    const ty = App(Ref("Vect"), one);
+
+    expect(
+      pretty(
+        infer(
+          defs([nat, zero, succ, vect, vnil, ext, bool, tru, fls]),
+          adts(),
+          [],
+          tm,
+          0,
+          0
+        ).type
+      )
+    ).toStrictEqual(pretty(ty));
+  });
 });
 
 describe("type equality", () => {
