@@ -1068,6 +1068,126 @@ describe("typechecker", () => {
       )
     ).toStrictEqual(pretty(ty));
   });
+
+  // vhead returns the first element of a Vector. If the vector is empty the
+  // return type is Unit - which gives a type error if the user attempts to use
+  // it where the element type is required.
+  const vhead = Def(
+    "vhead",
+    Ann(
+      // λn λxs xs(...)(unit)(λn λhead λtail head)
+      Abs(
+        "n",
+        Abs(
+          "xs",
+          App(
+            App(
+              App(
+                Var("xs", 0),
+                Abs(
+                  "n",
+                  Abs(
+                    "x",
+                    // return type needs to be a case statement:
+                    // n(λP *)(Unit)(λn Bool)
+                    App(
+                      App(App(Var("n", 1), Abs("P", Star())), Ref("Unit")),
+                      Abs("n", Ref("Bool"))
+                    )
+                  )
+                )
+              ),
+              Ref("unit")
+            ),
+            Abs("n", Abs("head", Abs("tail", Var("head", 1))))
+          )
+        )
+      ),
+      // Πn:Nat xs:Vect(n) n(λP *)(Unit)(λv Bool)
+      Pi(
+        "n",
+        Ref("Nat"),
+        Pi(
+          "xs",
+          App(Ref("Vect"), Var("n", 0)),
+          // n(λP *)(Unit)(λv Bool)
+          App(
+            App(App(Var("n", 1), Abs("P", Star())), Ref("Unit")),
+            Abs("v", Ref("Bool"))
+          )
+        )
+      )
+    )
+  );
+
+  test("vhead has type blah", () => {
+    check(
+      defs([nat, zero, succ, vect, vnil, ext, bool, tru, fls, unit, unt]),
+      adts(),
+      [],
+      vhead.term.term,
+      vhead.term.typ,
+      0
+    );
+  });
+
+  test("vhead allows non-empty Vectors", () => {
+    // vhead(1)(ext(0)(true)(vnil)) has type Bool
+    const tm = App(
+      App(Ref("vhead"), App(Ref("succ"), Ref("zero"))),
+      App(App(App(Ref("ext"), Ref("zero")), Ref("true")), Ref("vnil"))
+    );
+
+    check(
+      defs([
+        nat,
+        zero,
+        succ,
+        vect,
+        vnil,
+        ext,
+        bool,
+        tru,
+        fls,
+        unit,
+        unt,
+        vhead,
+      ]),
+      adts(),
+      [],
+      tm,
+      Ref("Bool"),
+      0
+    );
+  });
+
+  test("vhead rejects non-empty Vectors", () => {
+    // vhead(0)(vnil) has type Unit
+    const tm = App(App(Ref("vhead"), Ref("zero")), Ref("vnil"));
+
+    check(
+      defs([
+        nat,
+        zero,
+        succ,
+        vect,
+        vnil,
+        ext,
+        bool,
+        tru,
+        fls,
+        unit,
+        unt,
+        vhead,
+      ]),
+      adts(),
+      [],
+      tm,
+      Ref("Unit"),
+      0,
+      0
+    );
+  });
 });
 
 describe("type equality", () => {
