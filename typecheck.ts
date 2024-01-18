@@ -251,7 +251,11 @@ export const check = (
     if (!eq.eq) {
       const ptyp = pretty(tty);
       const pinf = pretty(inf.type);
-      throw TypecheckError(`typecheck failed: ${ptyp} is not ${pinf}`, os, oe);
+      throw TypecheckError(
+        `typecheck failed: ${ptyp} is not ${pinf} in ctx ${printCtx(ctx)}`,
+        os,
+        oe
+      );
     }
     return Result(val, tty, inf.holes.concat(eq.holes));
   }
