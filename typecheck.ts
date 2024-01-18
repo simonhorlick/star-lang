@@ -392,7 +392,7 @@ export const equate = (
   }
 
   if (depth > 1000) {
-    throw "equate depth exceeds limit";
+    throw TypecheckError("equate depth exceeds limit", 0, 0);
   }
 
   if (ty1._ == "app" && ty2._ == "app") {
