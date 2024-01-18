@@ -28,6 +28,18 @@ export const tru = Def(
   )
 );
 
+const unitConstructors = [{ name: Identifier("unit"), args: [] }];
+
+export const unit = buildType(Identifier("Unit"), [], unitConstructors);
+
+export const unt = Def(
+  "unit",
+  Ann(
+    GenerateConstructorTerm([], unitConstructors, 0),
+    GenerateConstructorType("Unit", [], unitConstructors[0])
+  )
+);
+
 const natConstructors = [
   { name: Identifier("zero"), args: [] },
   { name: Identifier("succ"), args: [{ name: "n", type: Ref("Nat") }] },
