@@ -1,14 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  Def,
-  Identifier,
-  Let,
-  Self,
-  Term,
-  definition,
-  serialise,
-  stripAST,
-} from "./ast";
+import { Def, Self, Term, definition, stripAST } from "./ast";
 import { check, equate, infer, TypecheckError, defs, adts } from "./typecheck";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
@@ -32,6 +23,8 @@ import {
   proj1,
   proj2,
   andCommutes,
+  unit,
+  unt,
 } from "./test_defs";
 import { reduce } from "./equal";
 import { Context } from "./context";
@@ -233,7 +226,7 @@ describe("typechecker", () => {
         );
       } catch (e) {
         const result = e as TypecheckError;
-        expect(result.msg).toBe(`typecheck failed: B is not A`);
+        expect(result.msg).toBe(`typecheck failed: B is not A in ctx [a:A]`);
         return;
       }
       throw "expected checker failure";
@@ -1090,6 +1083,7 @@ describe("type equality", () => {
   const ds = defs([
     Def("Nat", Ann(id.term, Star())),
     Def("Bool", Ann(id.term, Star())),
+    Def("Unit", Ann(id.term, Star())),
   ]);
 
   // The type Nat→Bool.
@@ -1149,6 +1143,31 @@ describe("type equality", () => {
     );
 
     expect(eq(one, two).eq).toBe(false);
+  });
+
+  // n(λP ★)(Unit)(λv Bool) == (λn λx n(λP ★)(Unit)(λn Bool))(n)(xs)
+  test("AbsApp terms are fully reduced", () => {
+    const lhs = App(
+      App(App(Var("n", 1), Abs("P", Star())), Ref("Unit")),
+      Abs("v", Ref("Bool"))
+    );
+    const rhs = App(
+      App(
+        Abs(
+          "n",
+          Abs(
+            "x",
+            App(
+              App(App(Var("n", 1), Abs("P", Star())), Ref("Unit")),
+              Abs("n", Ref("Bool"))
+            )
+          )
+        ),
+        Var("n", 1)
+      ),
+      Var("xs", 0)
+    );
+    expect(eq(lhs, rhs).eq).toBeTruthy();
   });
 });
 

@@ -4,16 +4,7 @@
 // terms, like lambdas, must be checked against a specified type. Others, like
 // applications can be inferred by looking up their definition.
 //
-import {
-  Term,
-  Type,
-  Def,
-  Star,
-  Origin,
-  ADT,
-  Ref,
-  identifier2str as id,
-} from "./ast";
+import { Term, Type, Def, Star, ADT, Ref, identifier2str as id } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
@@ -398,19 +389,28 @@ export const equate = (
   if (ty1._ == "app" && ty2._ == "app") {
     const l = equate(ctx, defs, ty1.func, ty2.func, val, depth + 1);
     const r = equate(ctx, defs, ty1.arg, ty2.arg, val, depth + 1);
-    return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
+    const e = l.eq && r.eq;
+    if (e) return { eq: true, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "lam" && ty2._ == "lam") {
-    return equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    if (e.eq) return e;
   } else if (ty1._ == "self" && ty2._ == "self") {
-    return equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    if (e.eq) return e;
   } else if (ty1._ == "pi" && ty2._ == "pi") {
     const l = equate(ctx, defs, ty1.from, ty2.from, val, depth + 1);
     const r = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
-    return { eq: l.eq && r.eq, holes: l.holes.concat(r.holes) };
+    const e = l.eq && r.eq;
+    if (e) return { eq: true, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "star" && ty2._ == "star") {
     return { eq: true, holes: [] };
   } else if (ty1._ == "var" && ty2._ == "var") {
     return { eq: ty1.index == ty2.index, holes: [] };
+  } else if (ty1._ == "ref" && ty2._ == "ref") {
+    // Comparing two definitions for equality returns false if they have
+    // different names. This ensures types with different meanings are not
+    // equal, even if their implementation is the same.
+    return { eq: ty1.name == ty2.name, holes: [] };
   } else if (ty1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
     // hole substitution.
@@ -423,23 +423,23 @@ export const equate = (
     console.log(`ho ${ty2.id}`);
     console.log(`== ${lhs}`);
     return { eq: true, holes: [{ id: ty2.id, term: ty1 }] };
-  } else {
-    // Try and reduce the left hand side and compare again.
-    let n1 = reduce(true, ctx, defs, ty1);
-    n1 = n1._ == "self" ? substTop(val, n1.body, n1.name) : n1;
-    if (n1 !== ty1) {
-      return equate(ctx, defs, n1, ty2, val, depth + 1);
-    }
-
-    // Try and reduce the right hand side and compare again.
-    let n2 = reduce(true, ctx, defs, ty2);
-    n2 = n2._ == "self" ? substTop(val, n2.body, n2.name) : n2;
-    if (n2 !== ty2) {
-      return equate(ctx, defs, ty1, n2, val, depth + 1);
-    }
-
-    return { eq: false, holes: [] };
   }
+
+  // Try and reduce the left hand side and compare again.
+  let n1 = reduce(true, ctx, defs, ty1);
+  n1 = n1._ == "self" ? substTop(val, n1.body, n1.name) : n1;
+  if (n1 !== ty1) {
+    return equate(ctx, defs, n1, ty2, val, depth + 1);
+  }
+
+  // Try and reduce the right hand side and compare again.
+  let n2 = reduce(true, ctx, defs, ty2);
+  n2 = n2._ == "self" ? substTop(val, n2.body, n2.name) : n2;
+  if (n2 !== ty2) {
+    return equate(ctx, defs, ty1, n2, val, depth + 1);
+  }
+
+  return { eq: false, holes: [] };
 };
 
 export const defs = (defs: Def[] = []): Map<string, Def> => {
