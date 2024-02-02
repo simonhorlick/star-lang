@@ -915,7 +915,7 @@ describe("typechecker", () => {
   //
   // Vect : Πsz:Nat ★
   //      = λsz ιt
-  //        ΠP:(Πn:Nat Vect(n)→★)
+  //        ΠP:(Πn:Nat Πx:Vect(n) ★)
   //        Πcnil:P(zero)(vnil)
   //        Πcext:(Πn:Nat Πhead:Bool Πtail:Vect(n) P(succ(n))(ext(n)(head)(tail))
   //        P(sz)(t)
