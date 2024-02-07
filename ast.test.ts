@@ -18,6 +18,7 @@ import {
   resync,
   pi,
   Def,
+  adt,
 } from "./ast";
 import {
   bind,
@@ -504,5 +505,35 @@ describe("ast", () => {
     expect(serialiseAST(ast)).toBe(
       `Def(name=bool_match, term=Ann(Abs("b", Abs("P", Abs("t", Abs("f", App(App(App(Ref("b"), Ref("P")), Ref("t")), Ref("f")))))), Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))))`
     );
+  });
+
+  test("should parse unannotated data types", () => {
+    const ast = stripAST(result(adt(ts(`type Bool = true | false`))));
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(Bool)`);
+  });
+
+  test("should parse data type with arguments", () => {
+    const ast = stripAST(
+      result(adt(ts(`type List(A *) = nil | cons(head A, tail List(A))`)))
+    );
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(List)`);
+  });
+
+  test("should parse data types with dependent annotations", () => {
+    // TODO: Figure out syntax.
+    //
+    // type Vector(T:★, n:Nat) =
+    //  | vnil(T:★) : Vector(T, 0)
+    //  | ext(T:★, n:Nat, head:T, tail:Vector(T, n)) : Vector(T, succ(n))
+    //
+    // type Vector(T:★, n:Nat) =
+    //  | vnil : (T:★) -> Vector(T, 0)
+    //  | ext : (T:★) -> (n:Nat) -> (head:T) -> (tail:Vector(T, n)) -> Vector(T, succ(n))
   });
 });

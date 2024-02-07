@@ -4,7 +4,7 @@ import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
 import { TypecheckError, fill, infer } from "./typecheck";
 import { foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
-import { processADTs, desugar } from "./process";
+import { processADTs, desugar } from "./adts";
 
 // What's the MVP for this?
 // - parse all files recursively
