@@ -369,8 +369,7 @@ const aeq = (t1: Term, t2: Term): boolean => {
         )
       );
     case "let":
-      throw "let not implemented";
-    // return t2._ == "let" && aeq(t1.expr, t2.expr) && aeq(t1.body, t2.body);
+      return t2._ == "let" && aeq(t1.expr, t2.expr) && aeq(t1.body, t2.body);
     case "if":
       throw "aeq: unexpected if";
     case "int":
@@ -441,6 +440,9 @@ export const equate = (
     // different names. This ensures types with different meanings are not
     // equal, even if their implementation is the same.
     return { eq: ty1.name == ty2.name, holes: [] };
+  } else if (ty1._ == "let" && ty2._ == "let") {
+    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    if (e.eq) return e;
   } else if (ty1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
     // hole substitution.

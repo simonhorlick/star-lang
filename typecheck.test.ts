@@ -730,6 +730,17 @@ describe("type equality", () => {
     expect(eq(one, two).eq).toBe(false);
   });
 
+  test("let equality", () => {
+    const one = Abs("s", Abs("z", App(Var("s", 1), Var("z", 0))));
+
+    // let x = one in x
+    const x = Let(Identifier("x"), one, Var("x", 0));
+    // let z = one in z
+    const z = Let(Identifier("z"), one, Var("z", 0));
+
+    expect(eq(x, z).eq).toBe(true);
+  });
+
   // n(λP ★)(Unit)(λv Bool) == (λn λx n(λP ★)(Unit)(λn Bool))(n)(xs)
   test("AbsApp terms are fully reduced", () => {
     const lhs = App(
