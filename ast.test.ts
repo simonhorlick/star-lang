@@ -18,6 +18,7 @@ import {
   resync,
   pi,
   Def,
+  adt,
 } from "./ast";
 import {
   bind,
@@ -504,5 +505,58 @@ describe("ast", () => {
     expect(serialiseAST(ast)).toBe(
       `Def(name=bool_match, term=Ann(Abs("b", Abs("P", Abs("t", Abs("f", App(App(App(Ref("b"), Ref("P")), Ref("t")), Ref("f")))))), Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))))`
     );
+  });
+
+  test("should parse unannotated data types", () => {
+    const ast = stripAST(result(adt(ts(`type Bool = true | false`))));
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(Bool)`);
+  });
+
+  test("should parse data type with arguments", () => {
+    const ast = stripAST(
+      result(adt(ts(`type List(A *) = nil | cons(head A, tail List(A))`)))
+    );
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(List)`);
+  });
+
+  test("should parse data types with annotations", () => {
+    const ast = stripAST(
+      result(
+        adt(
+          ts(
+            `type List(A *) = nil : List(A) | cons(head A, tail List(A)) : List(A)`
+          )
+        )
+      )
+    );
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(List)`);
+  });
+
+  test("should parse data types with dependent annotations", () => {
+    // TODO: Figure out syntax.
+    // TODO: Need the return type to be arguments to Vector, not some other random type.
+    const ast = stripAST(
+      result(
+        adt(
+          ts(`
+            type Vector(T ★, n Nat) =
+              | vnil : Vector(T, 0)
+              | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))`)
+        )
+      )
+    );
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(List)`);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, test } from "vitest";
 import { ADT, Def, parseFile, identifier2str, stripAST } from "./ast";
 import { relevance } from "./relevance";
-import { desugar, processADTs } from "./process";
+import { desugar, processADTs } from "./adts";
 
 const preCheck = (src: string) => {
   const t = parseFile({ src, idx: 0 });
