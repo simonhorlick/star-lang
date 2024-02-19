@@ -457,6 +457,24 @@ describe("adts", () => {
     // In List, A is static (i.e. not passed to P), but for Vector we have
     // different sz for each branch.
 
+    // const list = buildType(Identifier("List"), listParams, listConstructors);
+
+    // const nil = Def(
+    //   "nil",
+    //   Ann(
+    //     GenerateConstructorTerm(listParams, listConstructors, 0),
+    //     GenerateConstructorType("List", listParams, listConstructors[0])
+    //   )
+    // );
+
+    // const cons = Def(
+    //   "cons",
+    //   Ann(
+    //     GenerateConstructorTerm(listParams, listConstructors, 1),
+    //     GenerateConstructorType("List", listParams, listConstructors[1])
+    //   )
+    // );
+
     expect(true).toBe(false);
   });
 });

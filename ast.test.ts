@@ -525,15 +525,38 @@ describe("ast", () => {
     expect(serialiseAST(ast)).toBe(`ADT(List)`);
   });
 
+  test("should parse data types with annotations", () => {
+    const ast = stripAST(
+      result(
+        adt(
+          ts(
+            `type List(A *) = nil : List(A) | cons(head A, tail List(A)) : List(A)`
+          )
+        )
+      )
+    );
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(List)`);
+  });
+
   test("should parse data types with dependent annotations", () => {
     // TODO: Figure out syntax.
-    //
-    // type Vector(T:★, n:Nat) =
-    //  | vnil(T:★) : Vector(T, 0)
-    //  | ext(T:★, n:Nat, head:T, tail:Vector(T, n)) : Vector(T, succ(n))
-    //
-    // type Vector(T:★, n:Nat) =
-    //  | vnil : (T:★) -> Vector(T, 0)
-    //  | ext : (T:★) -> (n:Nat) -> (head:T) -> (tail:Vector(T, n)) -> Vector(T, succ(n))
+    // TODO: Need the return type to be arguments to Vector, not some other random type.
+    const ast = stripAST(
+      result(
+        adt(
+          ts(`
+            type Vector(T ★, n Nat) =
+              | vnil : Vector(T, 0)
+              | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))`)
+        )
+      )
+    );
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(`ADT(List)`);
   });
 });
