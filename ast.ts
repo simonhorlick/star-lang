@@ -219,6 +219,30 @@ export const Rel = (term: Term, uses: number): Rel => ({
   uses: uses,
 });
 
+// A keyword.
+export type Key = {
+  _: "key";
+  key: string;
+};
+
+export const Key = (key: string): Key => ({
+  _: "key",
+  key: key,
+});
+
+// Mark certain ranges as syntactic, for example the "if" or "case" keywords.
+export type Syntax = {
+  _: "syn";
+  syntax: Origin;
+  child: Term;
+};
+
+export const Syntax = (syntax: Origin, child: Term): Syntax => ({
+  _: "syn",
+  syntax: syntax,
+  child: child,
+});
+
 export type Term =
   | Abs
   | App
@@ -238,6 +262,8 @@ export type Term =
   | IntLit
   | StringLit
   | Rel
+  | Syntax
+  | Key
   | ParseError;
 export type Type = Term;
 
@@ -486,6 +512,9 @@ export const Origin2 = (
   child: child,
 });
 
+export const keyword = (kw: string): Parser<Origin> =>
+  block(map(str(kw), (x) => Key(x)));
+
 // parsePackage parses a package declaration such as `package abc`.
 export const parsePackage: Parser<ASTNode> = bind(str("package"), (_) =>
   bind(many1(whitespace), (_) =>
@@ -676,28 +705,34 @@ const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
 // case b of
 // | true -> false
 // | false -> true
-export const caseStatement: Parser<Case | Term> = bind(str("case"), (_) =>
-  orFail(
-    "case statment not well formed",
-    bind(spc1(par), (id) =>
-      bind(str("of"), (_) =>
-        bind(newline, (_) =>
-          bind(many1(caseBranch), (branches) => pure(Case(id, branches)))
+export const caseStatement: Parser<Case | Term> = bind(
+  keyword("case"),
+  (scase) =>
+    orFail(
+      "case statment not well formed",
+      bind(spc1(par), (id) =>
+        bind(keyword("of"), (sof) =>
+          bind(newline, (_) =>
+            bind(many1(caseBranch), (branches) =>
+              pure(Syntax(scase, Syntax(sof, Case(id, branches))))
+            )
+          )
         )
       )
     )
-  )
 );
 
 // let b = f(x) in ...
-export const letStatement: Parser<Let | Term> = bind(str("let"), (_) =>
+export const letStatement: Parser<Let | Term> = bind(keyword("let"), (slet) =>
   orFail(
     "let statment not well formed",
     bind(spc1(block(identifier2)), (id) =>
       bind(str("="), (_) =>
         bind(term, (expr) =>
-          bind(lspc(str("in")), (_) =>
-            bind(term, (body) => pure(Let(id, expr, body)))
+          bind(lspc(keyword("in")), (sin) =>
+            bind(term, (body) =>
+              pure(Syntax(slet, Syntax(sin, Let(id, expr, body))))
+            )
           )
         )
       )
@@ -707,15 +742,23 @@ export const letStatement: Parser<Let | Term> = bind(str("let"), (_) =>
 
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
-export const ifStatement: Parser<If | Term> = bind(str("if"), (_) =>
+export const ifStatement: Parser<If | Term> = bind(keyword("if"), (sif) =>
   orFail(
     "if statment not well formed",
     bind(spc(term), (condition) =>
-      bind(str("then"), (_) =>
+      bind(keyword("then"), (sthen) =>
         bind(spc(term), (trueBranch) =>
-          bind(str("else"), (_) =>
+          bind(keyword("else"), (selse) =>
             bind(spc(term), (falseBranch) =>
-              pure(If(condition, trueBranch, falseBranch))
+              pure(
+                Syntax(
+                  sif,
+                  Syntax(
+                    sthen,
+                    Syntax(selse, If(condition, trueBranch, falseBranch))
+                  )
+                )
+              )
             )
           )
         )
@@ -872,22 +915,24 @@ export const type: Parser<Type> = term;
 
 // definition parses a top-level function definition, for example
 // `func id: A->A = λx.x`.
-export const definition: Parser<ParseError | Def> = bind(str("func"), (_) =>
-  bind(orFail("expected space after func", many1(whitespace)), (_) =>
-    bind(identifier, (name) =>
-      bind(many(whitespace), (_) =>
-        bind(orFail("expected :", char(":")), (_) =>
-          bind(orFail("expected type", type), (typ) =>
-            bind(orFail("expected =", lspc(char("="))), (_) =>
-              bind(orFail("expected term", term), (tm) =>
-                pure(Def(name, Ann(tm, typ)))
+export const definition: Parser<ParseError | Def> = bind(
+  keyword("func"),
+  (sfunc) =>
+    bind(orFail("expected space after func", many1(whitespace)), (_) =>
+      bind(identifier, (name) =>
+        bind(many(whitespace), (_) =>
+          bind(orFail("expected :", char(":")), (_) =>
+            bind(orFail("expected type", type), (typ) =>
+              bind(orFail("expected =", lspc(char("="))), (_) =>
+                bind(orFail("expected term", term), (tm) =>
+                  pure(Def(name, Ann(Syntax(sfunc, tm), typ)))
+                )
               )
             )
           )
         )
       )
     )
-  )
 );
 
 // argument parses a single argument, i.e. `identifier Type`.
@@ -965,6 +1010,7 @@ export const identifier2str = (id: Term): string => {
   }
 };
 
+// strip removes origins and syntax nodes from the term tree.
 export function strip(t: Term): Term {
   switch (t._) {
     case "var":
@@ -986,9 +1032,11 @@ export function strip(t: Term): Term {
     case "hole":
     case "int":
     case "str":
+    case "key":
     case "err":
       return t;
     case "orig":
+    case "syn":
       return strip(t.child);
     case "case":
       return Case(
@@ -1064,8 +1112,15 @@ export function serialise(t: Term, d: number = 0): string {
       return `Ref("${t.name}")`;
     case "id":
       return `Identifier("${t.name}")`;
+    case "key":
+      return `Keyword("${t.key}")`;
     case "orig":
       return `Origin(${t.start}, ${t.end}, ${serialise(t.child, d + 1)})`;
+    case "syn":
+      return `Syntax(${serialise(t.syntax, d + 1)}, ${serialise(
+        t.child,
+        d + 1
+      )}`;
     case "rel":
       return `Rel(${serialise(t.term, d + 1)}, ${t.uses})`;
     case "case":

@@ -145,6 +145,11 @@ export const foldTree = <A>(
     case "orig": {
       return foldTree(f, x, t.child);
     }
+    case "syn": {
+      const syn = foldTree(f, x, t.syntax);
+      const child = foldTree(f, syn, t.child);
+      return child;
+    }
     case "pi": {
       const frm = foldTree(f, x, t.from);
       const to = foldTree(f, frm, t.body);
@@ -157,6 +162,7 @@ export const foldTree = <A>(
       return foldTree(f, x, t.body);
     }
     case "id":
+    case "key":
     case "int":
     case "par":
     case "hole":
@@ -289,6 +295,19 @@ export const foldTreeCtx = <A>(
       case "orig": {
         return doFold(x, { term: t.child, start: t.start, end: t.end });
       }
+      case "syn": {
+        const syn = doFold(x, {
+          term: t.syntax,
+          start: ctx.start,
+          end: ctx.end,
+        });
+        const child = doFold(syn, {
+          term: t.child,
+          start: ctx.start,
+          end: ctx.end,
+        });
+        return child;
+      }
       case "pi": {
         const frm = doFold(x, {
           term: t.from,
@@ -309,6 +328,7 @@ export const foldTreeCtx = <A>(
         return doFold(x, { term: t.body, start: ctx.start, end: ctx.end });
       }
       case "id":
+      case "key":
       case "int":
       case "par":
       case "hole":
@@ -470,6 +490,15 @@ export const inspect = (
         }
         return t;
       }
+      case "key": {
+        if (start != undefined && end != undefined && ty != undefined) {
+          spans.set(
+            { start: start, end: end },
+            { term: t, type: ty, ctx: ctx }
+          );
+        }
+        return t;
+      }
       case "var": {
         for (let i = 0; i < ctx.length; i++) {
           const binding = ctx[ctx.length - i - 1];
@@ -495,6 +524,9 @@ export const inspect = (
         } else {
           return t;
         }
+      }
+      case "syn": {
+        return traverse(t.child, ty, undefined, undefined, ctx, defs);
       }
       case "rel": {
         return traverse(t.term, ty, undefined, undefined, ctx, defs);

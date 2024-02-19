@@ -68,6 +68,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "star":
     case "ref":
     case "id":
+    case "key":
     case "par":
     case "hole":
     case "int":
@@ -83,6 +84,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "if":
       throw "dbgCheckIndices: unexpected if";
     case "orig":
+    case "syn":
       dbgCheckIndices(ctx, depth, t.child);
       return t;
     case "err":

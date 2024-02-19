@@ -296,10 +296,10 @@ export const fill = (chk: Result): Result => {
 // same up to renaming of bound variables.
 const aeq = (t1: Term, t2: Term): boolean => {
   // ignore origins
-  if (t1._ == "orig") {
+  if (t1._ == "orig" || t1._ == "syn") {
     return aeq(t1.child, t2);
   }
-  if (t2._ == "orig") {
+  if (t2._ == "orig" || t2._ == "syn") {
     return aeq(t1, t2.child);
   }
 
@@ -354,6 +354,8 @@ const aeq = (t1: Term, t2: Term): boolean => {
       return true;
     case "rel":
       throw "aeq: unexpected rel";
+    case "key":
+      throw "aeq: unexpected keyword";
   }
 };
 

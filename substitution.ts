@@ -13,6 +13,7 @@ import {
   Pi,
   Rel,
   Self,
+  Syntax,
   Term,
   Var,
 } from "./ast";
@@ -36,12 +37,15 @@ export function shift(d: number, c: number, t: Term): Term {
     case "ref":
     case "par":
     case "id":
+    case "key":
     case "hole":
     case "int":
     case "str":
       return t;
     case "orig":
       return Origin(t.start, t.end, shift(d, c, t.child));
+    case "syn":
+      return Syntax(t.syntax, shift(d, c, t.child));
     case "case":
       return Case(
         shift(d, c, t.name),
@@ -100,12 +104,15 @@ export function subst(
     case "star":
     case "ref":
     case "id":
+    case "key":
     case "hole":
     case "int":
     case "str":
       return t;
     case "orig":
       return Origin(t.start, t.end, subst(j, s, c, t.child, name));
+    case "syn":
+      return Syntax(t.syntax, subst(j, s, c, t.child, name));
     case "case":
       throw "subst: unexpected case";
     case "let":
@@ -152,6 +159,7 @@ export function substHole(j: number, s: Term, t: Term): Term {
     case "star":
     case "ref":
     case "id":
+    case "key":
     case "int":
     case "str":
       return t;
@@ -162,6 +170,8 @@ export function substHole(j: number, s: Term, t: Term): Term {
       return t;
     case "orig":
       return Origin(t.start, t.end, substHole(j, s, t.child));
+    case "syn":
+      return Syntax(t.syntax, substHole(j, s, t.child));
     case "case":
       throw "substHole: unexpected case";
     case "let":

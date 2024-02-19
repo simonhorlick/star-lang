@@ -62,6 +62,8 @@ export function pretty(
       case "ref":
       case "id":
         return term.name;
+      case "key":
+        return term.key;
       case "var":
         if (indices) {
           return `${term.name}@${term.index}`;
@@ -97,6 +99,8 @@ export function pretty(
           term.body
         )}`;
       case "orig":
+        return pretty(term.child);
+      case "syn":
         return pretty(term.child);
       case "rel":
         return pretty(term.term);

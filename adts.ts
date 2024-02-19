@@ -23,6 +23,7 @@ import {
   If,
   Let,
   identifier2str,
+  Syntax,
 } from "./ast";
 import { Context, addTermToCtx } from "./context";
 
@@ -304,6 +305,7 @@ export const desugarTerm = (
     case "star":
     case "var":
     case "id":
+    case "key":
     case "hole":
       return t;
     case "int": {
@@ -323,6 +325,8 @@ export const desugarTerm = (
     }
     case "orig":
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
+    case "syn":
+      return Syntax(t.syntax, desugarTerm(t.child, ann, adts, ctx));
     case "err":
       return t;
     case "rel":
@@ -368,6 +372,8 @@ export const processPars = (t: Term, ctx: Context): Term => {
       );
     case "orig":
       return Origin(t.start, t.end, processPars(t.child, ctx));
+    case "syn":
+      return Syntax(t.syntax, processPars(t.child, ctx));
     case "case":
       return Case(
         processPars(t.name, ctx),
@@ -392,6 +398,7 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "star":
     case "var":
     case "id":
+    case "key":
     case "hole":
     case "int":
     case "str":

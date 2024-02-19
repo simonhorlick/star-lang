@@ -39,12 +39,16 @@ export function erase(term: Term): Erased.Term {
       return Erased.Abs("erased", Erased.Var("erased", 0));
     case "orig":
       return erase(term.child);
+    case "syn":
+      return erase(term.child);
     case "rel":
       return erase(term.term);
     case "par":
       throw "erase: unexpected par";
     case "id":
       throw "erase: unexpected id";
+    case "key":
+      throw "erase: unexpected key";
     case "hole":
       throw "erase: unexpected hole";
     case "int":

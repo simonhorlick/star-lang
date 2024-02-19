@@ -1,4 +1,16 @@
-import { AbsI, Ann, App, If, Let, Origin, Pi, Rel, Self, Term } from "./ast";
+import {
+  AbsI,
+  Ann,
+  App,
+  If,
+  Let,
+  Origin,
+  Pi,
+  Rel,
+  Self,
+  Syntax,
+  Term,
+} from "./ast";
 
 // const addBinder = (env: number[]) = env
 const head = (l: number[]) => l[0];
@@ -93,6 +105,7 @@ export const relevance = (t: Term, env: number[]): Ret => {
     case "star":
     case "ref":
     case "id":
+    case "key":
     case "hole":
     case "int":
     case "str":
@@ -105,6 +118,14 @@ export const relevance = (t: Term, env: number[]): Ret => {
     case "orig": {
       const child = relevance(t.child, env);
       const upd = Origin(t.start, t.end, child.term);
+      return {
+        term: upd,
+        env: child.env,
+      };
+    }
+    case "syn": {
+      const child = relevance(t.child, env);
+      const upd = Syntax(t.syntax, child.term);
       return {
         term: upd,
         env: child.env,
