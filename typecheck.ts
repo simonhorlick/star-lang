@@ -4,7 +4,19 @@
 // terms, like lambdas, must be checked against a specified type. Others, like
 // applications can be inferred by looking up their definition.
 //
-import { Term, Type, Def, Star, ADT, Ref, identifier2str as id } from "./ast";
+import {
+  Term,
+  Type,
+  Def,
+  Star,
+  ADT,
+  Ref,
+  identifier2str as id,
+  App,
+  Ann,
+  AbsI,
+  Pi,
+} from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
@@ -169,10 +181,6 @@ export const infer = (
       // TODO:
       throw "TODO";
     }
-    case "let": {
-      // TODO:
-      throw "TODO";
-    }
     default: {
       throw `infer: ${term._} ${pretty(term)} is not inferrable`;
     }
@@ -199,6 +207,26 @@ export const check = (
   console.log(`cx ${pctx}`);
   console.log(`ch ${pval}`);
   console.log(`<= ${ptty}`);
+
+  // Desugar let expressions.
+  if (val._ == "let") {
+    // A let statement desugars to a lambda. For example:
+    //
+    //   let x = t1 in expr  ~>  (λx:T1 expr)(t1)
+    //
+    // The typechecker requires all lambdas to be annotated with a pi-type so
+    // we infer the type of x and annotate the lambda with the type T1->typ
+    // and check if it fits.
+
+    const expressionType = infer(defs, adts, ctx, val.expr, os, oe);
+
+    const desugared = App(
+      Ann(AbsI(val.name, val.body), Pi("", expressionType.type, tty)),
+      val.expr
+    );
+
+    return check(defs, adts, ctx, desugared, tty, os, oe);
+  }
 
   var typ = reduce(true, ctx, defs, tty);
 

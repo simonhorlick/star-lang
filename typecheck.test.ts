@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { Def, Self, Term, definition, stripAST } from "./ast";
+import { Def, Identifier, Let, Self, Term, definition, stripAST } from "./ast";
 import { check, equate, infer, TypecheckError, defs, adts } from "./typecheck";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
@@ -437,19 +437,18 @@ describe("typechecker", () => {
       App(App(Ref("Pair"), Ref("Bool")), Ref("Bool"))
     ));
 
-  // TODO:
-  // test("let statements should typecheck", () => {
-  //   // the typechecker should infer the expression of the let statement as Bool
-  //   // then with [x:Bool] check that the body of the let statement is of type
-  //   // Bool.
-  //   //
-  //   // func ex:Bool->Bool = λb let x = b in x
+  test("let statements should typecheck", () => {
+    // the typechecker should infer the expression of the let statement as Bool
+    // then with [x:Bool] check that the body of the let statement is of type
+    // Bool.
+    //
+    // func ex:Bool->Bool = λb let x = b in x
 
-  //   const term = Abs("b", Let(Identifier("x"), Var("b", 0), Var("x", 0)));
-  //   const type = Pi("", Ref("Bool"), Ref("Bool"));
-  //   const actual = check(defs([tru, fls, bool]), adts(), [], term, type, 0);
-  //   expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
-  // });
+    const term = Abs("b", Let(Identifier("x"), Var("b", 0), Var("x", 0)));
+    const type = Pi("", Ref("Bool"), Ref("Bool"));
+    const actual = check(defs([tru, fls, bool]), adts(), [], term, type, 0);
+    expect(pretty(actual.type)).toBe("Bool→Bool");
+  });
 
   test("correct self-type is inferred for Bool(Πx:Bool ★)", () => {
     // b:Bool, P:(Πx:Bool. ★), t:P(true), f:P(false)];
