@@ -95,7 +95,9 @@ describe("inspect", () => {
       | false -> true
     `;
     const result = build(src, false);
-    expect(result.checkerErrors).toStrictEqual([]);
+    expect(result.checkerErrors[0].msg).toBe(
+      "case statement doesn't handle all cases"
+    );
   });
 
   // // TODO: Implement this.
