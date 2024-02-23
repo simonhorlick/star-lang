@@ -16,11 +16,18 @@ import {
   Ann,
   AbsI,
   Pi,
+  Abs,
+  strip,
+  Constructor,
+  identifier2str,
+  Origin,
+  Syntax,
 } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
-import { substHole, substTop } from "./substitution";
+import { shift, substHole, substTop } from "./substitution";
+import { desugarTerm } from "./adts";
 
 const verbose = true;
 
@@ -141,7 +148,8 @@ export const infer = (
       const typ = check(defs, adts, ctx, term.typ, Star(), os, oe);
       // Check the annotated type matches the computed type.
       const c = check(defs, adts, ctx, term.term, term.typ, os, oe);
-      return Result(term, c.type, typ.holes.concat(c.holes));
+      // Return the desugared term.
+      return Result(Ann(c.term, c.type), c.type, typ.holes.concat(c.holes));
     }
     case "ref": {
       const match = defs.get(term.name);
@@ -171,6 +179,9 @@ export const infer = (
     case "orig": {
       return infer(defs, adts, ctx, term.child, term.start, term.end);
     }
+    case "syn": {
+      return infer(defs, adts, ctx, term.child, os, oe);
+    }
     case "int": {
       return Result(term, Ref("Nat"), []);
     }
@@ -197,8 +208,13 @@ export const check = (
   os: number = 0,
   oe: number = 0
 ): Result => {
+  // Keep origins and syntax nodes for inspection.
   if (val._ == "orig") {
-    return check(defs, adts, ctx, val.child, tty, val.start, val.end);
+    const x = check(defs, adts, ctx, val.child, tty, val.start, val.end);
+    return Result(Origin(val.start, val.end, x.term), x.type, x.holes);
+  } else if (val._ == "syn") {
+    const x = check(defs, adts, ctx, val.child, tty, os, oe);
+    return Result(Syntax(val.syntax, x.term), x.type, x.holes);
   }
 
   const pval = pretty(val);
@@ -224,6 +240,71 @@ export const check = (
       Ann(AbsI(val.name, val.body), Pi("", expressionType.type, tty)),
       val.expr
     );
+
+    return check(defs, adts, ctx, desugared, tty, os, oe);
+  }
+
+  // Desugar case expressions.
+  if (val._ == "case") {
+    const P = Abs("P", shift(1, 0, tty)); // P just returns the expected type
+
+    // We need to infer the type of x so that we can look up the constructors.
+    const xTyp = infer(defs, adts, ctx, val.name, os, oe);
+    let ref = strip(xTyp.type);
+    if (ref._ == "ref") {
+      // ok
+    } else if (ref._ == "app") {
+      // find the type
+      ref = getTypeNameFromTypeConstructor(ref);
+    } else {
+      throw TypecheckError(
+        `type of argument to case should be a reference; got ${ref._}`,
+        os,
+        oe
+      );
+    }
+
+    // Now look up the constructors for the type.
+    const adtDef = adts.get(ref.name);
+    if (adtDef == undefined) {
+      throw TypecheckError(`type not found: ${ref.name}`, os, oe);
+    }
+
+    // Ensure all branches are covered.
+    if (val.branches.length < adtDef.constructors.length) {
+      throw TypecheckError(`case statement doesn't handle all cases`, os, oe);
+    } else if (val.branches.length > adtDef.constructors.length) {
+      throw TypecheckError(`case statement has too many cases`, os, oe);
+    }
+
+    const branches = val.branches.reduce<Term>((acc: Term, curr) => {
+      var constructor: Constructor | undefined = undefined;
+      const constructorName = identifier2str(curr.constructor);
+      for (const con of adtDef.constructors) {
+        if (identifier2str(con.name) == constructorName) {
+          constructor = con;
+        }
+      }
+      if (constructor == undefined) {
+        throw TypecheckError(
+          `constructor not found: ${constructorName}`,
+          os,
+          oe
+        );
+      }
+
+      // Make any constructor arguments available using dot notation.
+      const absArgs = constructor.args.reduceRight(
+        (acc2, curr2) => Abs(`${pretty(val.name)}.${curr2.name}`, acc2),
+        shift(constructor.args.length, 0, curr.term)
+      );
+
+      return App(acc, absArgs);
+    }, App(val.name, P) as Term);
+
+    // desugarTerm ensures any Refs that reference constructor arguments
+    // are converted into Vars.
+    const desugared = desugarTerm(branches, undefined, adts, ctx);
 
     return check(defs, adts, ctx, desugared, tty, os, oe);
   }
@@ -258,7 +339,9 @@ export const check = (
       oe
     );
 
-    return Result(val, tty, c.holes);
+    // Return the desugared term. If the lambda body was a case statement then
+    // we need to return the desugared version.
+    return Result(AbsI(val.name, c.term), tty, c.holes);
   } else if (val._ == "hole") {
     // Holes always check against their desired types.
     return Result(val, tty, []);
@@ -276,9 +359,22 @@ export const check = (
         oe
       );
     }
+
     return Result(val, tty, inf.holes.concat(eq.holes));
   }
 };
+
+// given an ast of the form App(App(App(X,y),z),w) return the leftmost ref X.
+function getTypeNameFromTypeConstructor(t: Term): Ref {
+  switch (t._) {
+    case "ref":
+      return t;
+    case "app":
+      return getTypeNameFromTypeConstructor(t.func);
+    default:
+      throw `unexpected ${t._}`;
+  }
+}
 
 // fill attempts to consolidate holes. During typechecking we mark which holes
 // must be the same and when we encounter an equality between a hole and a term

@@ -1,5 +1,19 @@
 import { describe, expect, test } from "vitest";
-import { Def, Identifier, Let, Self, Term, definition, stripAST } from "./ast";
+import {
+  ADT,
+  Branch,
+  Case,
+  Def,
+  Identifier,
+  Key,
+  Let,
+  Origin,
+  Self,
+  Syntax,
+  Term,
+  definition,
+  stripAST,
+} from "./ast";
 import { check, equate, infer, TypecheckError, defs, adts } from "./typecheck";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
@@ -585,7 +599,7 @@ describe("typechecker", () => {
     )
   );
 
-  test("vhead has type blah", () => {
+  test("vhead has the correct type", () => {
     check(
       defs([nat, zero, succ, vect, vnil, ext, bool, tru, fls, unit, unt]),
       adts(),
@@ -652,6 +666,41 @@ describe("typechecker", () => {
       0,
       0
     );
+  });
+
+  test("should desugar case statement", () => {
+    // Desugar the boolean not function:
+    //   not = λb case b of true -> false | false -> true
+    // should desugar to:
+    //   not = λb b(λP Bool)(false)(true)
+    // * need to look up the constructors for b
+    //   ~> for that we need the type of b
+
+    const boolConstructors = [
+      { name: Identifier("true"), args: [] },
+      { name: Identifier("false"), args: [] },
+    ];
+
+    const dts = adts([ADT(Identifier("Bool"), [], boolConstructors)]);
+
+    const stmt = Abs(
+      "b",
+      Case(Var("b", 0), [
+        Branch(Identifier("true"), Ref("false")),
+        Branch(Identifier("false"), Ref("true")),
+      ])
+    );
+    const stmttyp = Pi("", Ref("Bool"), Ref("Bool"));
+
+    const expected = Abs(
+      "b",
+      App(
+        App(App(Var("b", 0), Abs("P", Ref("Bool"))), Ref("false")),
+        Ref("true")
+      )
+    );
+    const result = check(defs([bool, tru, fls]), dts, [], stmt, stmttyp);
+    expect(pretty(result.term)).toBe(pretty(expected));
   });
 });
 
@@ -838,6 +887,17 @@ describe("term reduction", () => {
         [],
         defs(),
         App(Abs("x", Var("x", 0)), Abs("x", Var("x", 0)))
+      )
+    ).toStrictEqual(Abs("x", Var("x", 0)));
+  });
+
+  test("should remove syn nodes", () => {
+    expect(
+      reduce(
+        false,
+        [],
+        defs(),
+        Syntax(Origin(0, 0, Key("key")), Abs("x", Var("x", 0)))
       )
     ).toStrictEqual(Abs("x", Var("x", 0)));
   });

@@ -45,6 +45,10 @@ export const reduce = (
       // remove origins
       return reduce(unfold, ctx, defs, t.child);
     }
+    case "syn": {
+      // remove syntax nodes
+      return reduce(unfold, ctx, defs, t.child);
+    }
     case "let": {
       throw "TODO - reduce let";
     }

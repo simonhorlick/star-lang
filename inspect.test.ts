@@ -6,15 +6,20 @@ import {
   hover,
   HoverInfo,
   hoverMessage,
+  map,
   printDiagnostic,
   printMultilineDiagnostic,
   Range,
 } from "./inspect";
 import { build, BuildResult } from "./build";
+import { Abs, Ann, App, Hole, Pi, Ref, Star, Var } from "./ast";
+import { pretty } from "./pretty";
 
 const ensureBuild = (src: string): BuildResult => {
   const result = build(src, false);
-  if (result.checkerErrors.length) throw "build failed";
+  if (result.checkerErrors.length) {
+    throw "build failed";
+  }
   return result;
 };
 
@@ -28,6 +33,16 @@ const debugPrintTokens = (src: string, br: BuildResult) => {
 };
 
 describe("inspect", () => {
+  test("should be able to map identity over an AST", () => {
+    // meaningless expression with a lot of different AST node types.
+    const t = Ann(
+      Abs("b", App(Var("b", 0), Ref("true"))),
+      Pi("P", Star(), Hole(0))
+    );
+    const actual = map((x) => x, t);
+    expect(pretty(actual)).toBe(pretty(t));
+  });
+
   test("should not display anything when hovering comments", () => {
     const result = ensureBuild(`// comment`);
     const expected = new Map<Range, HoverInfo>([
@@ -36,43 +51,52 @@ describe("inspect", () => {
     expect(hover("", result.file, result.defs, 5)).toEqual(expected);
   });
 
-  //FIXME
-  // test("should display the type when hovering a function definition", () => {
-  //   // hovering over `not` should return `Bool->Bool`
-  //   // hovering over `b` (the parameter and the case variable) should return `Bool`
-  //   // hovering over `false` should give a Ref back to the type definition
-  //   // hovering over `true` same as above
-  //   // hovering over `Bool` in the type annotation should Ref back to the type definition
-  //   const src = `
-  //   type Bool = false | true
-  //   func not:Bool->Bool = λb
-  //     case b of
-  //     | false -> true
-  //     | true -> false
-  //   `;
-  //   const result = ensureBuild(src);
-  //   const expected = new Map<Range, HoverInfo>([
-  //     // the argument b
-  //     [{ start: 57, end: 58 }, { msg: "id(Bool)" }],
-  //     // the b in case b
-  //     [{ start: 70, end: 71 }, { msg: "var(Bool)" }],
-  //     // the true in `false -> true`
-  //     [{ start: 91, end: 96 }, { msg: "ref(Bool)" }],
-  //     // the false in `true -> false`
-  //     [{ start: 112, end: 118 }, { msg: "ref(Bool)" }],
-  //     // the Bool in the type signature
-  //     [{ start: 43, end: 47 }, { msg: "ref(★)" }],
-  //     // the other Bool in the type signature
-  //     [{ start: 49, end: 53 }, { msg: "ref(★)" }],
-  //   ]);
-  //   const actual = hover(src, result.file, result.defs, undefined);
-  //   expect(actual).toEqual(expected);
+  test("should display the type when hovering a function definition", () => {
+    // hovering over `not` should return `Bool->Bool`
+    // hovering over `b` (the parameter and the case variable) should return `Bool`
+    // hovering over `false` should give a Ref back to the type definition
+    // hovering over `true` same as above
+    // hovering over `Bool` in the type annotation should Ref back to the type definition
+    const src = `
+    type Bool = false | true
+    func not:Bool->Bool = λb
+      case b of
+      | false -> true
+      | true -> false
+    `;
+    const result = ensureBuild(src);
+    const expected = new Map<Range, HoverInfo>([
+      // the argument b
+      [{ start: 57, end: 58 }, { msg: "id(Bool)" }],
+      // the b in case b
+      [{ start: 70, end: 71 }, { msg: "var(Bool)" }],
+      // the true in `false -> true`
+      [{ start: 91, end: 96 }, { msg: "ref(Bool)" }],
+      // the false in `true -> false`
+      [{ start: 112, end: 118 }, { msg: "ref(Bool)" }],
+      // the Bool in the type signature
+      [{ start: 43, end: 47 }, { msg: "ref(★)" }],
+      // the other Bool in the type signature
+      [{ start: 49, end: 53 }, { msg: "ref(★)" }],
+    ]);
+    const actual = hover(src, result.file, result.defs, undefined);
+    expect(actual).toEqual(expected);
 
-  //   expect(hoverMessage(src, result.file, result.defs, 70)).toEqual({
-  //     range: { start: 70, end: 71 },
-  //     msg: "var(Bool)",
-  //   });
-  // });
+    expect(hoverMessage(src, result.file, result.defs, 70)).toEqual({
+      range: { start: 70, end: 71 },
+      msg: "var(Bool)",
+    });
+  });
+
+  test("should give diagnostic that case isn't fully specified", () => {
+    const src = `
+    type Bool = true | false
+    func not:Bool->Bool = λb case b of
+      | false -> true
+    `;
+    const result = build(src, false);
+    expect(result.checkerErrors).toStrictEqual([]);
+  });
 
   // // TODO: Implement this.
   // test("should display the type when hovering a function definition Nat", () => {

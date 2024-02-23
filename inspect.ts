@@ -2,6 +2,7 @@ import {
   Ann,
   Star,
   Pi,
+  Ref,
   Self,
   Type,
   Term,
@@ -15,12 +16,20 @@ import {
   Hole,
   identifier2str,
   File,
+  Let,
+  Abs,
+  Case,
+  Branch,
+  If,
+  Syntax,
+  Rel,
 } from "./ast";
 import { TypecheckError } from "./typecheck";
 import { reduce } from "./equal";
 import { indexToLineCol, printLine } from "./parser";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx } from "./context";
+import { substTop } from "./substitution";
 
 export const printMultilineDiagnostic = (
   src: string,
@@ -95,6 +104,52 @@ export const inspectASTNodes = (n: ASTNode) => {
   };
   f(n, 0, 0);
   return spans;
+};
+
+// map a function over the AST.
+export const map = (
+  f: (curr: Term) => Term, // returns the new accumulator
+  t: Term // the root of the tree
+): Term => {
+  switch (t._) {
+    case "app":
+      return App(f(t.func), f(t.arg));
+    case "lam":
+      return AbsI(t.name, f(t.body));
+    case "ann":
+      return Ann(f(t.term), f(t.typ));
+    case "case":
+      return Case(
+        f(t.name),
+        t.branches.map((b) => Branch(b.constructor, f(b.term)))
+      );
+    case "if":
+      return If(f(t.condition), f(t.trueBranch), f(t.falseBranch));
+    case "let":
+      return Let(t.name, f(t.expr), f(t.body));
+    case "orig":
+      return Origin(t.start, t.end, f(t.child));
+    case "syn":
+      return Syntax(t.syntax, f(t.child));
+    case "pi":
+      return Pi(t.name, f(t.from), f(t.body));
+    case "rel":
+      return Rel(f(t.term), t.uses);
+    case "self":
+      return Self(t.name, f(t.body));
+    case "id":
+    case "key":
+    case "int":
+    case "par":
+    case "hole":
+    case "err":
+    case "star":
+    case "ref":
+    case "str":
+    case "var": {
+      return f(t);
+    }
+  }
 };
 
 // pre-order traversal of the term tree - visit the node itself, followed by
@@ -349,10 +404,13 @@ export const inspect = (
   defs: Map<string, Def>,
   offset: number | undefined = undefined
 ) => {
-  const spans = new Map<
-    { start: number; end: number },
-    { term: Term; type: Type; ctx: Context }
-  >();
+  const spans: {
+    start: number;
+    end: number;
+    term: Term;
+    type: Type;
+    ctx: Context;
+  }[] = [];
 
   const traverse = (
     t: Term,
@@ -362,19 +420,6 @@ export const inspect = (
     ctx: Context,
     defs: Map<string, Def>
   ): Term => {
-    // if (t._ != "orig") {
-    //   try {
-    //     console.log(
-    //       `traverse ${t._} (${pretty(t)}) has type ${
-    //         ty ? pretty(ty) : "none"
-    //       }; ctx=${printCtx(ctx)}`
-    //     );
-    //     console.log(serialise(strip(t)));
-    //   } catch (e) {
-    //     console.error(e);
-    //   }
-    // }
-
     switch (t._) {
       case "ann": {
         return Ann(
@@ -398,15 +443,17 @@ export const inspect = (
           // throw "inspect: type not present";
           return t;
         }
-        const typ = reduce(true, [], defs, ty);
+        let typ = reduce(true, [], defs, ty);
+
+        // If an expression has a self-type then the term we're checking must be
+        // substituted into the type before we can continue.
+        typ = typ._ == "self" ? substTop(t, typ.body, typ.name) : typ;
+
         if (typ._ != "pi") {
           throw "inspect: expected pi";
         }
         if (start != undefined && end != undefined) {
-          spans.set(
-            { start: start, end: end },
-            { term: t, type: typ, ctx: ctx }
-          );
+          spans.push({ start: start, end: end, term: t, type: typ, ctx: ctx });
         }
         return AbsI(
           traverse(t.name, typ.from, undefined, undefined, ctx, defs) as
@@ -426,7 +473,21 @@ export const inspect = (
         throw "inspect: unexpected par";
       }
       case "let": {
-        throw "inspect: unexpected let";
+        // FIXME: Need to add the type of the expression as an annotation so we can use it here.
+        return Let(
+          traverse(t.name, undefined, undefined, undefined, ctx, defs) as
+            | Origin
+            | Identifier,
+          traverse(t.expr, undefined, undefined, undefined, ctx, defs),
+          traverse(
+            t.body,
+            undefined,
+            undefined,
+            undefined,
+            addTermToCtx(ctx, identifier2str(t.name), Ref("TODO")),
+            defs
+          )
+        );
       }
       case "pi": {
         return Pi(
@@ -470,11 +531,14 @@ export const inspect = (
         // inspect to get the pi type.
         const ref = defs.get(t.name)!;
         // TODO: Add reference information.
-        if (start != undefined && end != undefined) {
-          spans.set(
-            { start: start, end: end },
-            { term: t, type: ref.term.typ, ctx: ctx }
-          );
+        if (ref && start != undefined && end != undefined) {
+          spans.push({
+            start: start,
+            end: end,
+            term: t,
+            type: ref.term.typ,
+            ctx: ctx,
+          });
         }
         return t;
       }
@@ -483,19 +547,13 @@ export const inspect = (
       }
       case "id": {
         if (start != undefined && end != undefined && ty != undefined) {
-          spans.set(
-            { start: start, end: end },
-            { term: t, type: ty, ctx: ctx }
-          );
+          spans.push({ start: start, end: end, term: t, type: ty, ctx: ctx });
         }
         return t;
       }
       case "key": {
         if (start != undefined && end != undefined && ty != undefined) {
-          spans.set(
-            { start: start, end: end },
-            { term: t, type: ty, ctx: ctx }
-          );
+          spans.push({ start: start, end: end, term: t, type: ty, ctx: ctx });
         }
         return t;
       }
@@ -504,10 +562,13 @@ export const inspect = (
           const binding = ctx[ctx.length - i - 1];
           if (binding.name == t.name) {
             if (start != undefined && end != undefined) {
-              spans.set(
-                { start: start, end: end },
-                { term: t, type: binding.typ, ctx: ctx }
-              );
+              spans.push({
+                start: start,
+                end: end,
+                term: t,
+                type: binding.typ,
+                ctx: ctx,
+              });
             }
             return Var(binding.name, i);
           }
@@ -542,10 +603,13 @@ export const inspect = (
       }
       case "err": {
         if (start != undefined && end != undefined) {
-          spans.set(
-            { start: start, end: end },
-            { term: t, type: ty == undefined ? Hole(0) : ty, ctx: ctx }
-          );
+          spans.push({
+            start: start,
+            end: end,
+            term: t,
+            type: ty == undefined ? Hole(0) : ty,
+            ctx: ctx,
+          });
         }
         return t;
       }
@@ -591,27 +655,22 @@ export const hover = (
     if (node._ == "def") {
       const def = node;
       const spans = inspect(def, defs, offset);
-      for (const [k, v] of spans) {
+      for (const v of spans) {
         switch (v.term._) {
           case "lam":
             break;
           default:
             hoverInfo.set(
-              { start: k.start, end: k.end },
+              { start: v.start, end: v.end },
               { msg: `${v.term._}(${pretty(v.type)})` }
             );
         }
-        const msg = `${k.start}-${k.end} is a ${v.term._} with type ${pretty(
+        const msg = `${v.start}-${v.end} is a ${v.term._} with type ${pretty(
           v.type
         )}; ctx at this location is ${printCtx(v.ctx)}`;
         console.debug(
-          printDiagnostic(src, TypecheckError(msg, k.start, k.end))
+          printDiagnostic(src, TypecheckError(msg, v.start, v.end))
         );
-        // console.log(
-        //   `[{ start: ${k.start}, end: ${k.end} }, { msg: "${`${
-        //     v.term._
-        //   }(${pretty(v.type)})`}" }],`
-        // );
       }
     } else {
       const spans = inspectASTNodes(node);
@@ -672,19 +731,19 @@ export const complete = (
       // const spans = inspect(def, defs, offset);
       const spans = inspect(def, defs);
 
-      for (const [k, v] of spans) {
+      for (const v of spans) {
         console.log(
           printMultilineDiagnostic(
             src,
             TypecheckError(
               `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
-              k.start,
-              k.end
+              v.start,
+              v.end
             )
           )
         );
 
-        if (!(k.start <= offset && k.end > offset)) {
+        if (!(v.start <= offset && v.end > offset)) {
           continue;
         }
 
