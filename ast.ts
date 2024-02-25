@@ -443,7 +443,7 @@ export const block2 =
 // resync is a parser that advances the stream until the
 // next sync character or keyword is observed.
 export const resync = skip(
-  until(either(str("func"), oneOf(`()" `))) // until fails iff the nested parser is successful.
+  until(either(str("func"), oneOf(`|()" `))) // until fails iff the nested parser is successful.
 );
 
 // skip forward and return a parse error in this position.
@@ -688,7 +688,7 @@ export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
   );
 
 // | true -> false
-const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
+export const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
   bind(str("|"), (_) =>
     bind(optional(spaces), (_) =>
       bind(block(identifier2), (id) =>

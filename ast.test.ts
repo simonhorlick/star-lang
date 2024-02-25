@@ -19,6 +19,8 @@ import {
   pi,
   Def,
   adt,
+  caseStatement,
+  caseBranch,
 } from "./ast";
 import {
   bind,
@@ -352,16 +354,26 @@ describe("ast", () => {
     );
   });
 
-  //   // test("should parse case with empty branch", () => {
-  //   //   const src = `case n of
-  //   //   | zero ->
-  //   //   | succ -> zero`;
-  //   //   // const ast = strip(result(term(ts(src))));
-  //   //   const ast = strip(result(caseStatement(ts(src))));
-  //   //   expect(serialise(ast)).toBe(
-  //   //     "Case(Par(n),[Branch(Identifier(zero), ParseError(expected term)),Branch(Identifier(succ), Ref(zero))])"
-  //   //   );
-  //   // });
+  test("should parse empty case branch", () => {
+    // The body of a case branch can be empty (for example when the user
+    // hasn't finished typing it) in this case the parser encounters a bar
+    // indicating the next case branch. Make sure the parser doesn't consume
+    // the bar and returns an empty error node for this case branch.
+    const src = `
+      | succ -> zero`;
+    const ast = strip(result(term(ts(src))));
+    expect(serialise(ast)).toBe("ParseError(expected term; got )");
+  });
+
+  test("should parse partial case branch", () => {
+    const src = `case b of
+      | zero ->
+      | succ -> zero`;
+    const ast = strip(result(caseStatement(ts(src))));
+    expect(serialise(ast)).toBe(
+      `Case(Par("b"),[Branch(Identifier("zero"), ParseError(expected term; got )),Branch(Identifier("succ"), Ref("zero"))])`
+    );
+  });
 
   test("should parse case with empty final branch", () => {
     const src = `case n of
