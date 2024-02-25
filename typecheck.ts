@@ -141,7 +141,7 @@ export const infer = (
       console.log(`------------------- app`);
       console.log(`Γ ⊢ ${pretty(term)} => ${pretty(typ)}`);
 
-      return Result(term, typ, arg.holes.concat(inf.holes));
+      return Result(App(inf.term, arg.term), typ, arg.holes.concat(inf.holes));
     }
     case "ann": {
       // Check the annotation is actually a type.
@@ -328,7 +328,7 @@ export const check = (
     // Γ ⊢ λx.a <= (x:A) -> B
 
     if (typ._ != "pi") {
-      throw `lam must have pi type; got ${pretty(typ)}`;
+      throw TypecheckError(`lam must have pi type; got ${pretty(typ)}`,os,oe);
     }
 
     // We add the bound variable x:A to the context then using that context we
@@ -349,6 +349,9 @@ export const check = (
   } else if (val._ == "hole") {
     // Holes always check against their desired types.
     return Result(val, tty, []);
+  } else if (val._ == "err") {
+    // Parse errors always check against their desired types.
+    return Result(Ann(val, tty), tty, []);
   } else {
     // infer the type of the term and check that it's equal to the supplied
     // type.
@@ -364,7 +367,7 @@ export const check = (
       );
     }
 
-    return Result(val, tty, inf.holes.concat(eq.holes));
+    return Result(inf.term, tty, inf.holes.concat(eq.holes));
   }
 };
 

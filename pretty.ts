@@ -36,11 +36,11 @@ export function printCtx(ctx: Context, indices: boolean = false): string {
 
 // pretty print a term
 export function pretty(
-  term: Term,
+  term?: Term,
   indices: boolean = false,
   annotate: boolean = false
 ): string {
-  const pretty = (term: Term): string => {
+  const pretty = (term?: Term): string => {
     if (term == undefined) {
       return "#undefined#";
     }

@@ -705,25 +705,28 @@ describe("typechecker", () => {
 });
 
 describe("type equality", () => {
-  const id = Def("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
-
-  const Nat: Term = Ref("Nat");
-  const Bool: Term = Ref("Bool");
+  const Nat: Term = nat.term;
+  const Bool: Term = bool.term;
 
   // The identity type operator λX.X: when applied to any type it gives back
   // the argument.
   const Id: Term = Abs("A", Var("A", 0));
 
-  const ds = defs([
-    Def("Nat", Ann(id.term, Star())),
-    Def("Bool", Ann(id.term, Star())),
-    Def("Unit", Ann(id.term, Star())),
-  ]);
+  const ds = defs([nat, bool, unit]);
 
   // The type Nat→Bool.
   const NatToBool: Term = Pi("", Nat, Bool);
 
   const eq = (a: Term, b: Term) => equate([], ds, a, b, Ref("unused"));
+
+  test("Bool→Bool != Bool", () =>
+    expect(eq(Pi("", Bool, Bool), Bool).eq).toBe(false));
+
+  test("Bool != Bool→★", () =>
+    expect(eq(Bool, Pi("", Bool, Star())).eq).toBe(false));
+
+  test("Bool→★ != Bool", () =>
+    expect(eq(Pi("", Bool, Star()), Bool).eq).toBe(false));
 
   test("Nat→Bool === Nat→Bool", () =>
     expect(eq(NatToBool, NatToBool).eq).toBe(true));

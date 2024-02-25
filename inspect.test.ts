@@ -1,19 +1,21 @@
 import { describe, expect, test } from "vitest";
 
-import { TypecheckError } from "./typecheck";
+import { equate, TypecheckError } from "./typecheck";
 import {
   complete,
   hover,
   HoverInfo,
   hoverMessage,
+  inferType,
   map,
   printDiagnostic,
   printMultilineDiagnostic,
   Range,
 } from "./inspect";
 import { build, BuildResult } from "./build";
-import { Abs, Ann, App, Hole, Pi, Ref, Star, Var } from "./ast";
+import { Abs, Ann, App, Hole, Pi, Ref, serialise, Star, Var } from "./ast";
 import { pretty } from "./pretty";
+import { reduce } from "./equal";
 
 const ensureBuild = (src: string): BuildResult => {
   const result = build(src, false);
@@ -98,6 +100,29 @@ describe("inspect", () => {
     expect(result.checkerErrors[0].msg).toBe(
       "case statement doesn't handle all cases"
     );
+  });
+
+  test("should provide suggestions that fit the expected type", () => {
+    const srcWithToken = `
+    type Bool = true | false
+    func not:Bool->Bool = λb case b of
+      | true -> $HERE$
+      | false -> true
+    `;
+    const src = srcWithToken.replace("$HERE$", "");
+    const tokenLocation = srcWithToken.indexOf("$HERE$");
+    const result = build(src, false);
+
+    // The space under the cursor should have type == Bool.
+    expect(
+      equate(
+        [],
+        result.defs,
+        inferType(src, result.file, result.defs, tokenLocation)!,
+        Ref("Bool"),
+        Ref("unused")
+      ).eq
+    ).toBeTruthy();
   });
 
   // // TODO: Implement this.
