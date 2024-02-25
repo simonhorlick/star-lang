@@ -193,7 +193,11 @@ export const infer = (
       throw "TODO";
     }
     default: {
-      throw `infer: ${term._} ${pretty(term)} is not inferrable`;
+      throw TypecheckError(
+        `infer: ${term._} ${pretty(term)} is not inferrable`,
+        os,
+        oe
+      );
     }
   }
 };
