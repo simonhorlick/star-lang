@@ -9,6 +9,7 @@
   "author": "Simon Horlick",
   "license": "MIT",
   "dependencies": {
+    "immutable": "^5.0.0-beta.5"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",

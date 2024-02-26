@@ -28,6 +28,7 @@ import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
 import { shift, substHole, substTop } from "./substitution";
 import { desugarTerm } from "./adts";
+import { Set } from "immutable";
 
 const verbose = true;
 
@@ -160,7 +161,8 @@ export const infer = (
           oe
         );
       }
-      return Result(match.term.term, match.term.typ, []);
+      // Do we need to return the looked up ref? Or can this be done in reduce?
+      return Result(term, match.term.typ, []);
     }
     case "self": {
       // Add the value being typed to the context (i.e. self-typing) and check the body has the correct type.
@@ -506,7 +508,8 @@ export const equate = (
   ty1: Term,
   ty2: Term,
   val: Term,
-  depth: number = 0
+  depth: number = 0,
+  checking: Set<string> = Set()
 ): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
   if (aeq(ty1, ty2)) {
     return { eq: true, holes: [] };
@@ -519,24 +522,31 @@ export const equate = (
     console.log(`== ${rhs}`);
   }
 
+  // FIXME: There must be a better way of doing this.
+  const current = `${lhs} == ${rhs}`;
+  if (checking.has(current)) {
+    return { eq: false, holes: [] };
+  }
+  const nc = checking.add(current);
+
   if (depth > 1000) {
     throw TypecheckError("equate depth exceeds limit", 0, 0);
   }
 
   if (ty1._ == "app" && ty2._ == "app") {
-    const l = equate(ctx, defs, ty1.func, ty2.func, val, depth + 1);
-    const r = equate(ctx, defs, ty1.arg, ty2.arg, val, depth + 1);
+    const l = equate(ctx, defs, ty1.func, ty2.func, val, depth + 1, nc);
+    const r = equate(ctx, defs, ty1.arg, ty2.arg, val, depth + 1, nc);
     const e = l.eq && r.eq;
     if (e) return { eq: true, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "lam" && ty2._ == "lam") {
-    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1, nc);
     if (e.eq) return e;
   } else if (ty1._ == "self" && ty2._ == "self") {
-    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1, nc);
     if (e.eq) return e;
   } else if (ty1._ == "pi" && ty2._ == "pi") {
-    const l = equate(ctx, defs, ty1.from, ty2.from, val, depth + 1);
-    const r = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    const l = equate(ctx, defs, ty1.from, ty2.from, val, depth + 1, nc);
+    const r = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1, nc);
     const e = l.eq && r.eq;
     if (e) return { eq: true, holes: l.holes.concat(r.holes) };
   } else if (ty1._ == "star" && ty2._ == "star") {
@@ -549,7 +559,7 @@ export const equate = (
     // equal, even if their implementation is the same.
     return { eq: ty1.name == ty2.name, holes: [] };
   } else if (ty1._ == "let" && ty2._ == "let") {
-    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1);
+    const e = equate(ctx, defs, ty1.body, ty2.body, val, depth + 1, nc);
     if (e.eq) return e;
   } else if (ty1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
@@ -569,14 +579,14 @@ export const equate = (
   let n1 = reduce(true, ctx, defs, ty1);
   n1 = n1._ == "self" ? substTop(val, n1.body, n1.name) : n1;
   if (n1 !== ty1) {
-    return equate(ctx, defs, n1, ty2, val, depth + 1);
+    return equate(ctx, defs, n1, ty2, val, depth + 1, nc);
   }
 
   // Try and reduce the right hand side and compare again.
   let n2 = reduce(true, ctx, defs, ty2);
   n2 = n2._ == "self" ? substTop(val, n2.body, n2.name) : n2;
   if (n2 !== ty2) {
-    return equate(ctx, defs, ty1, n2, val, depth + 1);
+    return equate(ctx, defs, ty1, n2, val, depth + 1, nc);
   }
 
   return { eq: false, holes: [] };
