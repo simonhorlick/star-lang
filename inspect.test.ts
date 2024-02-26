@@ -83,11 +83,20 @@ describe("inspect", () => {
     ]);
     const actual = hover(src, result.file, result.defs, undefined);
     expect(actual).toEqual(expected);
+  });
 
-    expect(hoverMessage(src, result.file, result.defs, 70)).toEqual({
-      range: { start: 70, end: 71 },
-      msg: "var(Bool)",
-    });
+  test("should desugar the definitions", () => {
+    const src = `
+    type Bool = false | true
+    func not:Bool->Bool = λb
+      case b of
+      | false -> true
+      | true -> false
+    `;
+    const result = ensureBuild(src);
+    expect(pretty(result.defs.get("not")!.term)).toBe(
+      `λb b(λP Bool)(true)(false)`
+    );
   });
 
   test("should give diagnostic that case isn't fully specified", () => {

@@ -177,7 +177,8 @@ export const infer = (
       return Result(term, Star(), c.holes);
     }
     case "orig": {
-      return infer(defs, adts, ctx, term.child, term.start, term.end);
+      const x = infer(defs, adts, ctx, term.child, term.start, term.end);
+      return Result(Origin(term.start, term.end, x.term), x.type, x.holes);
     }
     case "syn": {
       return infer(defs, adts, ctx, term.child, os, oe);
@@ -328,7 +329,7 @@ export const check = (
     // Γ ⊢ λx.a <= (x:A) -> B
 
     if (typ._ != "pi") {
-      throw TypecheckError(`lam must have pi type; got ${pretty(typ)}`,os,oe);
+      throw TypecheckError(`lam must have pi type; got ${pretty(typ)}`, os, oe);
     }
 
     // We add the bound variable x:A to the context then using that context we
@@ -367,7 +368,11 @@ export const check = (
       );
     }
 
-    return Result(inf.term, tty, inf.holes.concat(eq.holes));
+    // Don't return expanded refs - if they're expanded the reference
+    // information for the LSP isn't kept.
+    const rval = val._ == "ref" ? val : inf.term;
+
+    return Result(rval, tty, inf.holes.concat(eq.holes));
   }
 };
 
