@@ -189,6 +189,11 @@ describe("ast", () => {
   test("should parse bracketed application", () =>
     expect(st("x (y (z))")).toBe(`App(Ref("x"), App(Ref("y"), Ref("z")))`));
 
+  test("should include origins in function application", () =>
+    expect(serialise(result(term(ts("f(x)"))))).toBe(
+      `Origin(6, 10, App(Origin(6, 7, Ref("f")), Origin(8, 9, Origin(8, 9, Ref("x")))))`
+    ));
+
   test("should parse term", () =>
     expect(st("λz λx λy x (y (z))")).toBe(
       `Abs("z", Abs("x", Abs("y", App(Ref("x"), App(Ref("y"), Ref("z"))))))`

@@ -536,8 +536,8 @@ export const parseLineComment: Parser<ASTNode> = block2(
 );
 
 // reference parses a "variable" in the programming language.
-export const reference: Parser<Term> = map(identifier, (result: string) =>
-  Ref(result)
+export const reference: Parser<Term> = block(
+  map(identifier, (result: string) => Ref(result))
 );
 
 // par parses a "variable" in the programming language.

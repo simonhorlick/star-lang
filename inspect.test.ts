@@ -123,15 +123,9 @@ describe("inspect", () => {
     const result = build(src, false);
 
     // The space under the cursor should have type == Bool.
-    expect(
-      equate(
-        [],
-        result.defs,
-        inferType(src, result.file, result.defs, tokenLocation)!,
-        Ref("Bool"),
-        Ref("unused")
-      ).eq
-    ).toBeTruthy();
+    const typ = inferType(src, result.file, result.defs, tokenLocation);
+    const equ = equate([], result.defs, typ!, Ref("Bool"), Ref("unused"));
+    expect(equ.eq).toBeTruthy();
   });
 
   // // TODO: Implement this.
@@ -153,56 +147,58 @@ describe("inspect", () => {
   // });
 
   // FIXME:
-  // test("should return a list of available completions for partial def", () => {
-  //   const src = `
-  //   type Nat = zero | succ(x Nat)
-  //   func prev:Nat->Nat = λn
-  //     case n of
-  //     | zero -> zero
-  //     | succ -> x`;
-  //   const result = build(src, false);
-  //   expect(result.defs.size).toBe(3);
-  // });
+  test("should return a list of available completions", () => {
+    const srcWithToken = `
+    type Nat = zero | succ(x Nat)
+    func prev:Nat->Nat = λn
+      case n of
+      | zero -> zero
+      | succ -> $HERE$
+    func f:Nat = zero`;
+    const src = srcWithToken.replace("$HERE$", "");
+    const tokenLocation = srcWithToken.indexOf("$HERE$");
+    const result = build(src, false);
 
-  // FIXME:
-  // test("should return a list of available completions", () => {
-  //   const srcWithToken = `
-  //   type Nat = zero | succ(x Nat)
-  //   func prev:Nat->Nat = λn
-  //     case n of
-  //     | zero -> zero
-  //     | succ -> $HERE$
-  //   func f:Nat = zero`;
-  //   const src = srcWithToken.replace("$HERE$", "");
-  //   const tokenLocation = srcWithToken.indexOf("$HERE$");
-  //   const result = build(src, false);
+    for (let err of result.checkerErrors) {
+      console.error(printDiagnostic(src, err));
+    }
 
-  //   for (let err of result.checkerErrors) {
-  //     console.error(printDiagnostic(src, err));
-  //   }
+    console.log(
+      "finding completions at location: " +
+        printDiagnostic(
+          src,
+          TypecheckError("", tokenLocation, tokenLocation + 1)
+        )
+    );
 
-  //   console.log(
-  //     "finding completions at location: " +
-  //       printDiagnostic(
-  //         src,
-  //         TypecheckError("", tokenLocation, tokenLocation + 1)
-  //       )
-  //   );
+    // in the succ branch of the case
+    const typ = inferType(src, result.file, result.defs, tokenLocation);
+    expect(
+      complete(src, result.file, result.defs, tokenLocation, typ)
+    ).toStrictEqual([
+      {
+        kind: 1,
+        label: "n",
+        sortText: "0",
+      },
+      {
+        kind: 1,
+        label: "n.x",
+        sortText: "0",
+      },
+    ]);
+  });
 
-  //   // in the succ branch of the case
-  //   expect(
-  //     complete(src, result.file, result.defs, tokenLocation)
-  //   ).toStrictEqual([
-  //     {
-  //       kind: 1,
-  //       label: "n",
-  //       sortText: "0",
-  //     },
-  //     {
-  //       kind: 1,
-  //       label: "n.x",
-  //       sortText: "0",
-  //     },
-  //   ]);
-  // });
+  test("should display type of function on hover", () => {
+    const srcWithToken = `
+    type Nat = zero | succ(x Nat)
+    func f:Nat = su$HERE$cc(zero)`;
+    const src = srcWithToken.replace("$HERE$", "");
+    const tokenLocation = srcWithToken.indexOf("$HERE$");
+    const result = build(src, false);
+    expect(hoverMessage(src, result.file, result.defs, tokenLocation)).toEqual({
+      range: { start: 52, end: 56 },
+      msg: "ref((Πx:Nat Nat))",
+    });
+  });
 });
