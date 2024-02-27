@@ -3,6 +3,7 @@ import {
   ADT,
   Branch,
   Case,
+  Constructor,
   Def,
   Identifier,
   Key,
@@ -700,7 +701,39 @@ describe("typechecker", () => {
       )
     );
     const result = check(defs([bool, tru, fls]), dts, [], stmt, stmttyp);
-    expect(pretty(result.term)).toBe(pretty(expected));
+    expect(pretty(result.term, false, true)).toBe(
+      pretty(expected, false, true)
+    );
+  });
+
+  test("should annotate lambdas in desugared case branches", () => {
+    const natConstructors: Constructor[] = [
+      { name: Identifier("zero"), args: [] },
+      { name: Identifier("succ"), args: [{ name: "x", type: Ref("Nat") }] },
+    ];
+
+    const dts = adts([ADT(Identifier("Nat"), [], natConstructors)]);
+
+    const stmt = Abs(
+      "n",
+      Case(Var("n", 0), [
+        Branch(Identifier("zero"), Ref("zero")),
+        Branch(Identifier("succ"), Var("n.x", 0)),
+      ])
+    );
+    const stmttyp = Pi("", Ref("Nat"), Ref("Nat"));
+
+    const expected = Abs(
+      "n",
+      App(
+        App(App(Var("n", 0), Abs("P", Ref("Nat"))), Ref("zero")),
+        Var("n.x", 0)
+      )
+    );
+    const result = check(defs([nat, zero, succ]), dts, [], stmt, stmttyp);
+    expect(pretty(result.term, false, true)).toBe(
+      pretty(expected, false, true)
+    );
   });
 });
 

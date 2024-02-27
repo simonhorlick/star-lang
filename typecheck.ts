@@ -300,20 +300,25 @@ export const check = (
         );
       }
 
-      // Make any constructor arguments available using dot notation.
-      const absArgs = constructor.args.reduceRight(
-        (acc2, curr2) => Abs(`${pretty(val.name)}.${curr2.name}`, acc2),
-        shift(constructor.args.length, 0, curr.term)
-      );
+      // Make any constructor arguments available using dot notation. The
+      // parser outputs Refs instead of Vars so we must also make sure to
+      // desugar them here.
+      const absArgs = constructor.args.reduceRight((acc2, curr2) => {
+        const arg = `${pretty(val.name)}.${curr2.name}`;
+
+        const newctx = cons(ctx, arg, curr2.type);
+        const desugared = desugarTerm(acc2, undefined, adts, newctx);
+
+        const inf = infer(defs, adts, newctx, desugared, os, oe);
+
+        // Annotate the lambda with the correct type. This is for inspection.
+        return Ann(Abs(arg, desugared), Pi("", curr2.type, inf.type));
+      }, shift(constructor.args.length, 0, curr.term));
 
       return App(acc, absArgs);
     }, App(val.name, P) as Term);
 
-    // desugarTerm ensures any Refs that reference constructor arguments
-    // are converted into Vars.
-    const desugared = desugarTerm(branches, undefined, adts, ctx);
-
-    return check(defs, adts, ctx, desugared, tty, os, oe);
+    return check(defs, adts, ctx, branches, tty, os, oe);
   }
 
   var typ = reduce(true, ctx, defs, tty);
