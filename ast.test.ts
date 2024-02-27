@@ -269,6 +269,11 @@ describe("ast", () => {
       `If(ParseError(expected term; got =), Ref("y"), Ref("z"))`
     ));
 
+  test("should return an error node for if statement with empty condition", () =>
+    expect(st("if then y else z")).toBe(
+      `If(ParseError(expected term; got ), Ref("y"), Ref("z"))`
+    ));
+
   test("should return an error node for unparseable true branch", () =>
     expect(st("if x then @ else z")).toBe(
       `If(Ref("x"), ParseError(expected term; got @), Ref("z"))`
