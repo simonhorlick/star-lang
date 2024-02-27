@@ -128,6 +128,21 @@ describe("inspect", () => {
     expect(equ.eq).toBeTruthy();
   });
 
+  test("should provide suggestions for if condition", () => {
+    const srcWithToken = `
+    type Bool = true | false
+    func not:Bool->Bool = λb if $HERE$ then todo else todo
+    `;
+
+    const src = srcWithToken.replace("$HERE$", "");
+    const tokenLocation = srcWithToken.indexOf("$HERE$");
+    const result = build(src, false);
+
+    // The space under the cursor should have type == Bool.
+    const typ = inferType(src, result.file, result.defs, tokenLocation);
+    expect(pretty(typ)).toBe("Bool");
+  });
+
   // // TODO: Implement this.
   // test("should display the type when hovering a function definition Nat", () => {
   //   const srcWithToken = `

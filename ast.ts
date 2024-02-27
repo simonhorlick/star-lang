@@ -443,7 +443,7 @@ export const block2 =
 // resync is a parser that advances the stream until the
 // next sync character or keyword is observed.
 export const resync = skip(
-  until(either(str("func"), oneOf(`|()" `))) // until fails iff the nested parser is successful.
+  until(any(str("func"), str("then"), oneOf(`|()" `))) // until fails iff the nested parser is successful.
 );
 
 // skip forward and return a parse error in this position.
@@ -455,7 +455,16 @@ const resync2 = (msg: string): Parser<ParseError> =>
 export const orFail = <A>(msg: string, p: Parser<A>): Parser<A | Term> =>
   either(p, block(resync2(msg)));
 
-const reserved = new Set(["func", "import", "let", "case", "if"]);
+const reserved = new Set([
+  "func",
+  "import",
+  "let",
+  "case",
+  "of",
+  "if",
+  "then",
+  "else",
+]);
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.
@@ -745,17 +754,24 @@ export const letStatement: Parser<Let | Term> = bind(keyword("let"), (slet) =>
 export const ifStatement: Parser<If | Term> = bind(keyword("if"), (sif) =>
   orFail(
     "if statment not well formed",
-    bind(spc(term), (condition) =>
-      bind(keyword("then"), (sthen) =>
-        bind(spc(term), (trueBranch) =>
-          bind(keyword("else"), (selse) =>
-            bind(spc(term), (falseBranch) =>
+    bind(term, (condition) =>
+      bind(lspc(keyword("then")), (sthen) =>
+        bind(term, (trueBranch) =>
+          bind(lspc(keyword("else")), (selse) =>
+            bind(term, (falseBranch) =>
               pure(
                 Syntax(
                   sif,
                   Syntax(
                     sthen,
-                    Syntax(selse, If(condition, trueBranch, falseBranch))
+                    Syntax(
+                      selse,
+                      // Annotate the condition as a Bool. This is necessary
+                      // to ensure any error nodes for condition have the
+                      // right type so that the tooling can suggest useful
+                      // completions.
+                      If(Ann(condition, Ref("Bool")), trueBranch, falseBranch)
+                    )
                   )
                 )
               )

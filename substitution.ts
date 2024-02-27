@@ -126,7 +126,7 @@ export function subst(
     case "rel":
       return Rel(subst(j, s, c, t.term, name), t.uses);
     case "err":
-      throw "subst: unexpected parse error";
+      return t;
   }
 }
 

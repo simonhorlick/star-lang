@@ -269,6 +269,12 @@ describe("ast", () => {
       `If(ParseError(expected term; got =), Ref("y"), Ref("z"))`
     ));
 
+  test("should return an error node for then keyword if a term was expected", () =>
+    // When parsing the condition of an if statement, if it's empty we'll
+    // immediately hit "then" so make sure this is parsed correctly as a
+    // missing term.
+    expect(st(" then y else z")).toBe(`ParseError(expected term; got )`));
+
   test("should return an error node for if statement with empty condition", () =>
     expect(st("if then y else z")).toBe(
       `If(ParseError(expected term; got ), Ref("y"), Ref("z"))`
