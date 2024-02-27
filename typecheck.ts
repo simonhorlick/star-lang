@@ -315,7 +315,7 @@ export const check = (
         return Ann(Abs(arg, desugared), Pi("", curr2.type, inf.type));
       }, shift(constructor.args.length, 0, curr.term));
 
-      return App(acc, absArgs);
+      return App(acc, Syntax(curr.constructor as Origin, absArgs));
     }, App(val.name, P) as Term);
 
     return check(defs, adts, ctx, branches, tty, os, oe);
