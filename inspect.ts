@@ -688,12 +688,19 @@ export const hover = (
     } else {
       const spans = inspectASTNodes(node);
       for (const [k, v] of spans) {
-        hoverInfo.set({ start: k.start, end: k.end }, { msg: "" });
 
         const msg = `${k.start}-${k.end} is a ${v.term._}`;
         console.debug(
           printDiagnostic(src, TypecheckError(msg, k.start, k.end))
         );
+
+        switch (v.term._) {
+          case "com":
+            hoverInfo.set({ start: k.start, end: k.end }, { msg: v.term.text });
+            break;
+          default:
+            hoverInfo.set({ start: k.start, end: k.end }, { msg: msg });
+          }
       }
     }
   }
@@ -709,10 +716,10 @@ export const hoverMessage = (
 ): { range: { start: number; end: number }; msg: string } | null => {
   const hoverInfo = hover(src, f, defs, offset);
 
-  // const overlappingSpans = [...hoverInfo].filter(
-  //   ([k, v]) => k.start <= offset && k.end > offset
-  // );
-  const overlappingSpans = [...hoverInfo];
+  const overlappingSpans = [...hoverInfo].filter(
+    ([k, v]) => k.start <= offset && k.end > offset
+  );
+  // const overlappingSpans = [...hoverInfo];
 
   // find the shortest node that overlaps this offset
   overlappingSpans.sort(([a], [b]) => a.end - a.start - (b.end - b.start));
