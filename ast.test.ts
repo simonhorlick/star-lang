@@ -286,7 +286,7 @@ describe("ast", () => {
     expect(st(" then y else z")).toBe(`ParseError(expected term; got )`));
 
   test("should return an error node for else keyword if a term was expected", () =>
-    expect(st(" else z")).toBe(`ParseError(expected term; got else)`));
+    expect(st(" else z")).toBe(`ParseError(expected term; got )`));
 
   test("should return an error node for if statement with empty condition", () =>
     expect(st("if then y else z")).toBe(
