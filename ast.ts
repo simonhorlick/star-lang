@@ -440,21 +440,6 @@ export const block2 =
     return pure(Origin2(start, result.stream.idx, result.value))(result.stream);
   };
 
-// resync is a parser that advances the stream until the
-// next sync character or keyword is observed.
-export const resync = skip(
-  until(any(str("func"), str("then"), oneOf(`|()" `))) // until fails iff the nested parser is successful.
-);
-
-// skip forward and return a parse error in this position.
-const resync2 = (msg: string): Parser<ParseError> =>
-  map(resync, (skipped) => ParseError(`${msg}; got ${skipped.join("")}`));
-
-// orFail returns A if the parser succeeds, or ParseError if the parser fails.
-// Either way it returns successfully.
-export const orFail = <A>(msg: string, p: Parser<A>): Parser<A | Term> =>
-  either(p, block(resync2(msg)));
-
 const reserved = new Set([
   "func",
   "import",
@@ -465,6 +450,23 @@ const reserved = new Set([
   "then",
   "else",
 ]);
+
+// resync is a parser that advances the stream until the
+// next sync character or keyword is observed.
+export const resync = skip(
+  until(
+    any(...Array.from(reserved.values()).map((v) => str(v)), oneOf(`|()" `))
+  ) // until fails iff the nested parser is successful.
+);
+
+// skip forward and return a parse error in this position.
+const resync2 = (msg: string): Parser<ParseError> =>
+  map(resync, (skipped) => ParseError(`${msg}; got ${skipped.join("")}`));
+
+// orFail returns A if the parser succeeds, or ParseError if the parser fails.
+// Either way it returns successfully.
+export const orFail = <A>(msg: string, p: Parser<A>): Parser<A | Term> =>
+  either(p, block(resync2(msg)));
 
 // identifier parses a letter from the alphabet followed by letters, numbers and
 // other allowed special characters.

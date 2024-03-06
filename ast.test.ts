@@ -266,7 +266,17 @@ describe("ast", () => {
 
   test("should return an error node for unparseable if statement", () =>
     expect(st("if = then y else z")).toBe(
-      `If(ParseError(expected term; got =), Ref("y"), Ref("z"))`
+      `If(Ann(ParseError(expected term; got =), Ref("Bool")), Ref("y"), Ref("z"))`
+    ));
+
+  test("should return error nodes for unparseable if statement", () =>
+    expect(st("if = then = else =")).toBe(
+      `If(Ann(ParseError(expected term; got =), Ref("Bool")), ParseError(expected term; got =), ParseError(expected term; got =))`
+    ));
+
+  test("should return error nodes for empty if statement", () =>
+    expect(st("if  then  else ")).toBe(
+      `If(Ann(ParseError(expected term; got ), Ref("Bool")), ParseError(expected term; got ), ParseError(expected term; got ))`
     ));
 
   test("should return an error node for then keyword if a term was expected", () =>
@@ -275,19 +285,22 @@ describe("ast", () => {
     // missing term.
     expect(st(" then y else z")).toBe(`ParseError(expected term; got )`));
 
+  test("should return an error node for else keyword if a term was expected", () =>
+    expect(st(" else z")).toBe(`ParseError(expected term; got else)`));
+
   test("should return an error node for if statement with empty condition", () =>
     expect(st("if then y else z")).toBe(
-      `If(ParseError(expected term; got ), Ref("y"), Ref("z"))`
+      `If(Ann(ParseError(expected term; got ), Ref("Bool")), Ref("y"), Ref("z"))`
     ));
 
   test("should return an error node for unparseable true branch", () =>
     expect(st("if x then @ else z")).toBe(
-      `If(Ref("x"), ParseError(expected term; got @), Ref("z"))`
+      `If(Ann(Ref("x"), Ref("Bool")), ParseError(expected term; got @), Ref("z"))`
     ));
 
   test("should return an error node for unparseable false branch", () =>
     expect(st("if x then y else @")).toBe(
-      `If(Ref("x"), Ref("y"), ParseError(expected term; got @))`
+      `If(Ann(Ref("x"), Ref("Bool")), Ref("y"), ParseError(expected term; got @))`
     ));
 
   test("should parse type constructor", () =>
