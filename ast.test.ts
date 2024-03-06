@@ -244,7 +244,9 @@ describe("ast", () => {
     ));
 
   test("should parse if statement", () => {
-    expect(st("if x then y else z")).toBe(`If(Ref("x"), Ref("y"), Ref("z"))`);
+    expect(st("if x then y else z")).toBe(
+      `If(Ann(Ref("x"), Ref("Bool")), Ref("y"), Ref("z"))`
+    );
   });
 
   test("should parse multiline if statement", () =>
@@ -262,7 +264,7 @@ describe("ast", () => {
           )
         )
       )
-    ).toBe(`If(Ref("x"), Ref("y"), Ref("z"))`));
+    ).toBe(`If(Ann(Ref("x"), Ref("Bool")), Ref("y"), Ref("z"))`));
 
   test("should return an error node for unparseable if statement", () =>
     expect(st("if = then y else z")).toBe(
