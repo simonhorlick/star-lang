@@ -22,6 +22,7 @@ import {
   identifier2str,
   Origin,
   Syntax,
+  Hole,
 } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -194,6 +195,12 @@ export const infer = (
     case "case": {
       // TODO:
       throw "TODO";
+    }
+    case "err": {
+      // Sometimes it's necessary to infer the type of an error node. This can
+      // happen as part of the case desugaring. In this case we return a hole
+      // and attempt to fill it.
+      return Result(term, Hole(Math.random()), []);
     }
     default: {
       throw TypecheckError(

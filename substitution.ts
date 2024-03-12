@@ -162,6 +162,7 @@ export function substHole(j: number, s: Term, t: Term): Term {
     case "key":
     case "int":
     case "str":
+    case "err":
       return t;
     case "hole":
       if (t.id == j) {
@@ -180,7 +181,5 @@ export function substHole(j: number, s: Term, t: Term): Term {
       throw "substHole: unexpected if";
     case "rel":
       return Rel(substHole(j, s, t.term), t.uses);
-    case "err":
-      throw "substHole: unexpected parse error";
   }
 }
