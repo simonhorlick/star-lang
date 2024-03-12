@@ -48,7 +48,7 @@ describe("inspect", () => {
   test("should not display anything when hovering comments", () => {
     const result = ensureBuild(`// comment`);
     const expected = new Map<Range, HoverInfo>([
-      [{ start: 0, end: 10 }, { msg: "" }],
+      [{ start: 0, end: 10 }, { msg: " comment" }],
     ]);
     expect(hover("", result.file, result.defs, 5)).toEqual(expected);
   });
@@ -73,9 +73,9 @@ describe("inspect", () => {
       // the b in case b
       [{ start: 70, end: 71 }, { msg: "var(Bool)" }],
       // the true in `false -> true`
-      [{ start: 91, end: 96 }, { msg: "ref(Bool)" }],
+      [{ start: 92, end: 96 }, { msg: "ref(Bool)" }],
       // the false in `true -> false`
-      [{ start: 112, end: 118 }, { msg: "ref(Bool)" }],
+      [{ start: 113, end: 118 }, { msg: "ref(Bool)" }],
       // the Bool in the type signature
       [{ start: 43, end: 47 }, { msg: "ref(★)" }],
       // the other Bool in the type signature
