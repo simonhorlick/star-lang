@@ -9,6 +9,7 @@ import {
   Key,
   Let,
   Origin,
+  Par,
   Self,
   Syntax,
   Term,
@@ -718,7 +719,7 @@ describe("typechecker", () => {
       "n",
       Case(Var("n", 0), [
         Branch(Identifier("zero"), Ref("zero")),
-        Branch(Identifier("succ"), Var("n.x", 0)),
+        Branch(Identifier("succ"), Par("n.x")),
       ])
     );
     const stmttyp = Pi("", Ref("Nat"), Ref("Nat"));
@@ -727,7 +728,7 @@ describe("typechecker", () => {
       "n",
       App(
         App(App(Var("n", 0), Abs("P", Ref("Nat"))), Ref("zero")),
-        Var("n.x", 0)
+        Ann(Abs("n.x", Var("n.x", 0)), Pi("", Ref("Nat"), Ref("Nat")))
       )
     );
     const result = check(defs([nat, zero, succ]), dts, [], stmt, stmttyp);
