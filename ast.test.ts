@@ -497,7 +497,7 @@ describe("ast", () => {
   });
 
   test("should resync to next keyword", () => {
-    const src = `loadsofstuffherethenfunc x:Nat = zero`;
+    const src = `junkherefunc x:Nat = zero`;
     // skip all the junk then parse a definition.
     const ast = stripAST(result(bind(resync, (_) => definition)(ts(src))));
     expect(serialiseAST(ast)).toBe(
