@@ -1,4 +1,5 @@
 import {
+  ADT,
   Abs,
   Ann,
   App,
@@ -22,7 +23,9 @@ const boolConstructors = [
   { name: Identifier("true"), args: [] },
 ];
 
-export const bool = buildType(Identifier("Bool"), [], boolConstructors);
+export const boolADT = ADT(Identifier("Bool"), [], boolConstructors);
+
+export const bool = buildType(boolADT);
 
 export const fls = Def(
   "false",
@@ -42,7 +45,9 @@ export const tru = Def(
 
 const unitConstructors = [{ name: Identifier("unit"), args: [] }];
 
-export const unit = buildType(Identifier("Unit"), [], unitConstructors);
+export const unitADT = ADT(Identifier("Unit"), [], unitConstructors);
+
+export const unit = buildType(unitADT);
 
 export const unt = Def(
   "unit",
@@ -57,7 +62,9 @@ const natConstructors = [
   { name: Identifier("succ"), args: [{ name: "n", type: Ref("Nat") }] },
 ];
 
-export const nat = buildType(Identifier("Nat"), [], natConstructors);
+export const natADT = ADT(Identifier("Nat"), [], natConstructors);
+
+export const nat = buildType(natADT);
 
 export const zero = Def(
   "zero",
@@ -94,7 +101,9 @@ const listConstructors = [
   },
 ];
 
-export const list = buildType(Identifier("List"), listParams, listConstructors);
+export const listADT = ADT(Identifier("List"), listParams, listConstructors);
+
+export const list = buildType(listADT);
 
 export const nil = Def(
   "nil",
@@ -127,11 +136,13 @@ const maybeConstructors = [
   },
 ];
 
-export const maybe = buildType(
+export const maybeADT = ADT(
   Identifier("Maybe"),
   maybeParams,
   maybeConstructors
 );
+
+export const maybe = buildType(maybeADT);
 
 export const mnull = Def(
   "null",
@@ -170,7 +181,9 @@ const pairConstructors = [
   },
 ];
 
-export const pair = buildType(Identifier("Pair"), pairParams, pairConstructors);
+export const pairADT = ADT(Identifier("Pair"), pairParams, pairConstructors);
+
+export const pair = buildType(pairADT);
 export const ppair = Def(
   "pair",
   Ann(

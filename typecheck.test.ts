@@ -16,7 +16,15 @@ import {
   definition,
   stripAST,
 } from "./ast";
-import { check, equate, infer, TypecheckError, defs, adts } from "./typecheck";
+import {
+  check,
+  equate,
+  infer,
+  TypecheckError,
+  defs,
+  adts,
+  desugarCaseStatement,
+} from "./typecheck";
 import { Abs, Ann, App, Pi, Ref, Star, Var } from "./ast";
 import { pretty } from "./pretty";
 import {
@@ -44,6 +52,7 @@ import {
   vect,
   vnil,
   ext,
+  listADT,
 } from "./test_defs";
 import { reduce } from "./equal";
 import { Context } from "./context";
@@ -735,6 +744,41 @@ describe("typechecker", () => {
     expect(pretty(result.term, false, true)).toBe(
       pretty(expected, false, true)
     );
+  });
+
+  test("ensure constructor arguments are bound in the correct order in case destructuring", () => {
+    /*
+    type List(A *) = nil | cons(head A, tail List(A))
+
+    type Bool = true | false
+
+    func head:List(Bool)->Bool = λxs
+      case xs of
+      | nil -> false
+      | cons -> xs.head
+    */
+    const ctx: Context = [
+      { type: "bind", name: "xs", typ: App(Ref("List"), Ref("Bool")) },
+    ];
+
+    const term = Case(Var("xs", 0), [
+      Branch(Identifier("nil"), Ref("false")),
+      Branch(Identifier("cons"), Var("xs.head", 0)),
+    ]);
+    const typ = Ref("Bool");
+
+    const actual = desugarCaseStatement(
+      defs([bool, list]),
+      adts([listADT]),
+      ctx,
+      term,
+      0,
+      0,
+      typ
+    );
+    const expected = Star();
+
+    expect(pretty(actual.term)).toBe(pretty(expected));
   });
 });
 

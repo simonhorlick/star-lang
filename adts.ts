@@ -41,7 +41,8 @@ const processNode = (n: ASTNode): ASTNode[] => {
   switch (n._) {
     case "adt":
       // Generates type definition and constructors for an ADT.
-      const td = buildType(n.name, n.params, n.constructors);
+      const adt = ADT(n.name, n.params, n.constructors);
+      const td = buildType(adt);
       const defs = n.constructors.map((con, i) => {
         return Def(
           identifier2str(con.name),
@@ -141,14 +142,12 @@ const buildTypeArgSignature = (
     P(t)
   */
 export const buildType = (
-  name: Origin | Identifier,
-  parameters: Argument[],
-  constructors: Constructor[]
+  adt: ADT
 ): Def => {
   // T(A,B,C)
-  const typ = parameters.reduce<Term>(
+  const typ = adt.params.reduce<Term>(
     (acc, paramN) => App(acc, Par(paramN.name)),
-    Ref(identifier2str(name))
+    Ref(identifier2str(adt.name))
   );
 
   const self = // ιt.
@@ -159,10 +158,10 @@ export const buildType = (
         // ΠP:T→*.
         Pi("", typ, Star()),
         // P(constructor1) → (Πa:A. P(constructor2(a))) → ... P(constructorN) → P(t)
-        reverse(constructors).reduce<Term>(
+        reverse(adt.constructors).reduce<Term>(
           (acc, constructorN) =>
             buildTypeArgSignature(
-              parameters,
+              adt.params,
               identifier2str(constructorN.name),
               constructorN.args,
               acc
@@ -173,7 +172,7 @@ export const buildType = (
     );
 
   return Def(
-    identifier2str(name),
+    identifier2str(adt.name),
     // This is used for tooling to be able to provide jump-to-definition for
     // types. `name` contains the source location where the constructor was
     // defined, so any refs that mention this constructor can follow this origin
@@ -181,17 +180,17 @@ export const buildType = (
     Ann(
       wrapOrigin(
         processPars(
-          parameters.reduceRight<Term>(
+          adt.params.reduceRight<Term>(
             (acc, paramN) => Abs(paramN.name, acc),
             self
           ),
           []
         ),
-        name
+        adt.name
       ),
       // Ensure that type-constructors such as Maybe have type arguments here.
       // Maybe does not have type * - instead it has type A->*.
-      parameters.reduceRight<Term>(
+      adt.params.reduceRight<Term>(
         (acc, curr) => Pi(curr.name, curr.type, acc),
         Star()
       )
