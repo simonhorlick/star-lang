@@ -688,7 +688,6 @@ export const hover = (
     } else {
       const spans = inspectASTNodes(node);
       for (const [k, v] of spans) {
-
         const msg = `${k.start}-${k.end} is a ${v.term._}`;
         console.debug(
           printDiagnostic(src, TypecheckError(msg, k.start, k.end))
@@ -700,7 +699,7 @@ export const hover = (
             break;
           default:
             hoverInfo.set({ start: k.start, end: k.end }, { msg: msg });
-          }
+        }
       }
     }
   }
