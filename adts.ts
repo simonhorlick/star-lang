@@ -141,9 +141,7 @@ const buildTypeArgSignature = (
     P(constructorN) →
     P(t)
   */
-export const buildType = (
-  adt: ADT
-): Def => {
+export const buildType = (adt: ADT): Def => {
   // T(A,B,C)
   const typ = adt.params.reduce<Term>(
     (acc, paramN) => App(acc, Par(paramN.name)),
@@ -250,6 +248,9 @@ export const desugarTerm = (
         desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
       );
     case "case":
+      // We can't desugar case expressions at this point because we need to
+      // infer the type of the term we're destructuring. This can only happen
+      // while we're typechecking.
       return Case(
         desugarTerm(t.name, undefined, adts, ctx),
         t.branches.map((b) =>

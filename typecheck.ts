@@ -24,13 +24,14 @@ import {
   Syntax,
   Hole,
   Case,
+  Argument,
 } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
 import { shift, substHole, substTop } from "./substitution";
-import { desugarTerm } from "./adts";
 import { Set } from "immutable";
+import { desugarTerm } from "./adts";
 
 const verbose = true;
 
@@ -326,6 +327,15 @@ export const check = (
   }
 };
 
+const findConstructor = (name: string, adt: ADT, os: number, oe: number) => {
+  for (const con of adt.constructors) {
+    if (identifier2str(con.name) == name) {
+      return con;
+    }
+  }
+  throw TypecheckError(`constructor not found: ${name}`, os, oe);
+};
+
 // The case statement is used for destructuring ADTs. Syntactically, we
 // specify what should happen for every constructor, then when the statement
 // is evaluated one of the branches is picked.
@@ -360,18 +370,19 @@ export const desugarCaseStatement = (
   defs: Map<string, Def>,
   adts: Map<string, ADT>,
   ctx: Context,
-  val: Case,
+  caseStmt: Case,
   os: number,
   oe: number,
   tty: Term
 ): Result => {
   // We need to infer the type of x so that we can look up the constructors.
-  const xTyp = infer(defs, adts, ctx, val.name, os, oe);
+  const xTyp = infer(defs, adts, ctx, caseStmt.name, os, oe);
   let ref = strip(xTyp.type);
   if (ref._ == "ref") {
     // ok
   } else if (ref._ == "app") {
-    // find the type
+    // This may be a type constructor such as List. We don't need the
+    // arguments to look up the ADT definition.
     ref = getTypeNameFromTypeConstructor(ref);
   } else {
     throw TypecheckError(
@@ -388,50 +399,52 @@ export const desugarCaseStatement = (
   }
 
   // Ensure all branches are covered.
-  if (val.branches.length < adtDef.constructors.length) {
+  if (caseStmt.branches.length < adtDef.constructors.length) {
     throw TypecheckError(`case statement doesn't handle all cases`, os, oe);
-  } else if (val.branches.length > adtDef.constructors.length) {
+  } else if (caseStmt.branches.length > adtDef.constructors.length) {
     throw TypecheckError(`case statement has too many cases`, os, oe);
   }
 
+  const caseName = pretty(caseStmt.name);
+
+  // Desugar each branch of the case statement and emit lambdas for the
+  // constructor arguments.
+  const branches = caseStmt.branches.map((branch) => {
+    var constructor: Constructor | undefined = findConstructor(
+      identifier2str(branch.constructor),
+      adtDef,
+      os,
+      oe
+    );
+
+    // Make constructor arguments available on each branch.
+    const branchBodyWithArgs = constructor.args.reduceRight(
+      (acc: Term, arg: Argument) => Abs(`${caseName}.${arg.name}`, acc),
+      branch.term
+    );
+
+    // Desugar the branch body - at this point the body still contains Refs that
+    // reference the constructor arguments. Turn these into Vars.
+    const branchBodyWithArgsDesugared = desugarTerm(
+      branchBodyWithArgs,
+      undefined,
+      adts,
+      ctx
+    );
+
+    return Syntax(branch.constructor as Origin, branchBodyWithArgsDesugared);
+  });
+
+  // The case statement desugars to
+  //  val(λP tty)(λval.arg1 ... λval.argN branch1)...(λval.arg1 ... λval.argN branchN)
+
   const P = Abs("P", shift(1, 0, tty)); // P just returns the expected type
 
-  const branches = val.branches.reduce<Term>((acc: Term, curr) => {
-    var constructor: Constructor | undefined = undefined;
-    const constructorName = identifier2str(curr.constructor);
-    for (const con of adtDef.constructors) {
-      if (identifier2str(con.name) == constructorName) {
-        constructor = con;
-      }
-    }
-    if (constructor == undefined) {
-      throw TypecheckError(`constructor not found: ${constructorName}`, os, oe);
-    }
+  const desugared = branches.reduce<Term>((acc: Term, branch) => {
+    return App(acc, branch);
+  }, App(caseStmt.name, P) as Term);
 
-    // Make any constructor arguments available using dot notation. The
-    // parser outputs Refs instead of Vars so we must also make sure to
-    // desugar them here.
-    const absArgs = constructor.args.reduceRight((acc2, curr2) => {
-      const arg = `${pretty(val.name)}.${curr2.name}`;
-
-      const newctx = cons(ctx, arg, curr2.type);
-      const desugared = desugarTerm(acc2, undefined, adts, newctx);
-
-      // FIXME:
-      //  - xs.head is not in the ctx, but it should be
-      //  - there is: xs, xs.tail
-      //  - constructor.args is: head, tail
-      //  - I think the ctx must be constructed left-to-right.
-      const inf = infer(defs, adts, newctx, desugared, os, oe);
-
-      // Annotate the lambda with the correct type. This is for inspection.
-      return Ann(Abs(arg, desugared), Pi("", curr2.type, inf.type));
-    }, shift(constructor.args.length, 0, curr.term));
-
-    return App(acc, Syntax(curr.constructor as Origin, absArgs));
-  }, App(val.name, P) as Term);
-
-  return check(defs, adts, ctx, branches, tty, os, oe);
+  return check(defs, adts, ctx, desugared, tty, os, oe);
 };
 
 // given an ast of the form App(App(App(X,y),z),w) return the leftmost ref X.

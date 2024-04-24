@@ -746,7 +746,7 @@ describe("typechecker", () => {
     );
   });
 
-  test("ensure constructor arguments are bound in the correct order in case destructuring", () => {
+  test("should desugar case statement", () => {
     /*
     type List(A *) = nil | cons(head A, tail List(A))
 
@@ -768,7 +768,7 @@ describe("typechecker", () => {
     const typ = Ref("Bool");
 
     const actual = desugarCaseStatement(
-      defs([bool, list]),
+      defs([]),
       adts([listADT]),
       ctx,
       term,
@@ -776,7 +776,13 @@ describe("typechecker", () => {
       0,
       typ
     );
-    const expected = Star();
+
+    // We expect the case statement to desugar to:
+    //   xs(λP Bool)(false)(λxs.head λxs.tail xs.head)
+    const expected = App(
+      App(App(Var("xs", 0), Abs("P", Ref("Bool"))), Ref("false")),
+      Abs("xs.head", Abs("xs.tail", Var("xs.head", 1)))
+    );
 
     expect(pretty(actual.term)).toBe(pretty(expected));
   });

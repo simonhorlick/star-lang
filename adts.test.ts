@@ -6,13 +6,29 @@ import {
   fls,
   just,
   list,
+  listADT,
   maybe,
   mnull,
   nat,
   nil,
   tru,
 } from "./test_defs";
-import { Abs, App, Pi, Ref, Self, Star, Var } from "./ast";
+import {
+  Abs,
+  App,
+  Branch,
+  Case,
+  Hole,
+  Identifier,
+  Pi,
+  Ref,
+  Self,
+  Star,
+  Var,
+} from "./ast";
+import { desugarTerm } from "./adts";
+import { Context } from "./context";
+import { adts, defs } from "./typecheck";
 
 describe("adts", () => {
   /*
