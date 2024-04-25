@@ -28,7 +28,12 @@ import {
 } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
-import { Context, addTermToCtx as cons, lookupType } from "./context";
+import {
+  Context,
+  addTermToCtx as cons,
+  dbgCheckIndices,
+  lookupType,
+} from "./context";
 import { shift, substHole, substTop } from "./substitution";
 import { Set } from "immutable";
 import { desugarTerm } from "./adts";
@@ -297,7 +302,10 @@ export const check = (
 
     // Return the desugared term. If the lambda body was a case statement then
     // we need to return the desugared version.
-    return Result(AbsI(val.name, c.term), tty, c.holes);
+    // Annotate the AST with the type of the lambda. This is so the tooling has
+    // access to these types for inspection.
+    const annotated = Ann(AbsI(val.name, c.term), Pi("", typ.from, c.type));
+    return Result(annotated, tty, c.holes);
   } else if (val._ == "hole") {
     // Holes always check against their desired types.
     return Result(val, tty, []);
@@ -417,10 +425,11 @@ export const desugarCaseStatement = (
       oe
     );
 
-    // Make constructor arguments available on each branch.
+    // Make constructor arguments available on each branch. Any Vars inside the
+    // branch term must be bumped as we add these Abs nodes to the tree.
     const branchBodyWithArgs = constructor.args.reduceRight(
       (acc: Term, arg: Argument) => Abs(`${caseName}.${arg.name}`, acc),
-      branch.term
+      shift(constructor.args.length, 0, branch.term)
     );
 
     // Desugar the branch body - at this point the body still contains Refs that
