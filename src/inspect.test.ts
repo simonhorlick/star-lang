@@ -211,4 +211,19 @@ describe("inspect", () => {
       msg: "ref((Πx:Nat Nat))",
     });
   });
+
+  test("should display type of case branch argument on hover", () => {
+    const srcWithToken = `
+    type Nat = zero | succ(x Nat)
+    func add:Nat->Nat->Nat = λn λm case n of
+      | zero -> m
+      | succ -> succ(add(n$HERE$.x)(m))`;
+    const src = srcWithToken.replace("$HERE$", "");
+    const tokenLocation = srcWithToken.indexOf("$HERE$");
+    const result = build(src, false);
+
+    expect(
+      hoverMessage(src, result.file, result.defs, tokenLocation)?.msg
+    ).toEqual("var(Nat)");
+  });
 });

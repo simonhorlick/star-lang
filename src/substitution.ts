@@ -18,7 +18,7 @@ import {
   Var,
 } from "./ast";
 
-// by d.
+// Shift all Var indices up by d.
 export function shift(d: number, c: number, t: Term): Term {
   switch (t._) {
     case "var":

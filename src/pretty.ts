@@ -80,8 +80,9 @@ export function pretty(
         }
       case "ann":
         if (annotate) {
-          const begin = "\x1b[34m";
-          const end = "\x1b[0m";
+          const consoleColours = false;
+          const begin = consoleColours ? "\x1b[34m" : "";
+          const end = consoleColours ? "\x1b[0m" : "";
           return (
             `(` + pretty(term.term) + `:${begin}` + pretty(term.typ) + `${end})`
           );

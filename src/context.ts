@@ -37,7 +37,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       let x = ctx[ctx.length - t.index - 1];
       // For debugging - this can only happen if the wrong index is used in a
       // hand-crafted expression.
-      if (t.name && x.name != t.name) {
+      if (t.name && x.name && x.name != t.name) {
         throw `name mismatch: looking up ${t.index} got ${x.name}; expected ${
           t.name
         }. ctx is ${printCtx(ctx, true)}`;
@@ -73,6 +73,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "hole":
     case "int":
     case "str":
+    case "err":
       return t;
     case "case":
       // FIXME: Improve the types here.
@@ -87,8 +88,6 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "syn":
       dbgCheckIndices(ctx, depth, t.child);
       return t;
-    case "err":
-      throw "dbgCheckIndices: unexpected parse error";
   }
 };
 

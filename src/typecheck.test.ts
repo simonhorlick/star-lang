@@ -684,8 +684,6 @@ describe("typechecker", () => {
     //   not = λb case b of true -> false | false -> true
     // should desugar to:
     //   not = λb b(λP Bool)(false)(true)
-    // * need to look up the constructors for b
-    //   ~> for that we need the type of b
 
     const boolConstructors = [
       { name: Identifier("true"), args: [] },
@@ -703,16 +701,9 @@ describe("typechecker", () => {
     );
     const stmttyp = Pi("", Ref("Bool"), Ref("Bool"));
 
-    const expected = Abs(
-      "b",
-      App(
-        App(App(Var("b", 0), Abs("P", Ref("Bool"))), Ref("false")),
-        Ref("true")
-      )
-    );
     const result = check(defs([bool, tru, fls]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      pretty(expected, false, true)
+      "(λb b((λP Bool:Bool→★))(false)(true):Bool→Bool)"
     );
   });
 
@@ -733,20 +724,13 @@ describe("typechecker", () => {
     );
     const stmttyp = Pi("", Ref("Nat"), Ref("Nat"));
 
-    const expected = Abs(
-      "n",
-      App(
-        App(App(Var("n", 0), Abs("P", Ref("Nat"))), Ref("zero")),
-        Ann(Abs("n.x", Var("n.x", 0)), Pi("", Ref("Nat"), Ref("Nat")))
-      )
-    );
     const result = check(defs([nat, zero, succ]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      pretty(expected, false, true)
+      "(λn n((λP Nat:Nat→★))(zero)((λn.x n.x:Nat→(λP Nat:Nat→★)(succ(n)))):Nat→Nat)"
     );
   });
 
-  test("should desugar case statement", () => {
+  test("should desugar case statement with bound constructor arguments", () => {
     /*
     type List(A *) = nil | cons(head A, tail List(A))
 
@@ -763,12 +747,14 @@ describe("typechecker", () => {
 
     const term = Case(Var("xs", 0), [
       Branch(Identifier("nil"), Ref("false")),
-      Branch(Identifier("cons"), Var("xs.head", 0)),
+      // Note that xs.head is still a Ref at this point, only after desugaring
+      // it turns into a Var.
+      Branch(Identifier("cons"), Ref("xs.head")),
     ]);
     const typ = Ref("Bool");
 
     const actual = desugarCaseStatement(
-      defs([]),
+      defs([bool, list, tru, fls]),
       adts([listADT]),
       ctx,
       term,
