@@ -73,6 +73,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "hole":
     case "int":
     case "str":
+    case "err":
       return t;
     case "case":
       // FIXME: Improve the types here.
@@ -87,8 +88,6 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "syn":
       dbgCheckIndices(ctx, depth, t.child);
       return t;
-    case "err":
-      throw "dbgCheckIndices: unexpected parse error";
   }
 };
 

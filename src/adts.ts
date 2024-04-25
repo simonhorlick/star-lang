@@ -402,9 +402,8 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "hole":
     case "int":
     case "str":
-      return t;
     case "err":
-      throw "processPars: unexpected parse error";
+      return t;
     case "rel":
       throw "processPars: unexpected Rel";
   }
