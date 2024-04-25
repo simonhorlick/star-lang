@@ -221,6 +221,7 @@ describe("inspect", () => {
     const src = srcWithToken.replace("$HERE$", "");
     const tokenLocation = srcWithToken.indexOf("$HERE$");
     const result = build(src, false);
+
     expect(
       hoverMessage(src, result.file, result.defs, tokenLocation)?.msg
     ).toEqual("var(Nat)");
