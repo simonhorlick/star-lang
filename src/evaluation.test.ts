@@ -434,7 +434,7 @@ describe("runtime evaluation", () => {
     let printed = "";
     const mr = {
       getChar: () => "c",
-      println: (s: string) => {
+      print: (s: string) => {
         printed = s;
       },
     };
