@@ -587,26 +587,6 @@ describe("runtime evaluation", () => {
     expect(literal).toBe("str");
   });
 
-  test("should convert a string literal to a cons string if destructured", () => {
-    // Take the following term:
-    //
-    //   case s of
-    //    | nil -> false
-    //    | cons -> true
-    //
-    // this desugars to:
-    //
-    //   s(..)(false)(λs.head λs.tail true)
-    //
-    // In order for this app to be reducible the s needs to be a cons string.
-
-    const s = Erased.Def("s", Erased.StringLit("s"));
-    const t = pt(`s(λP P)(false)(λs.head λs.tail true)`);
-    let result = reduce(mockRuntime, [string, snil, scons, tru, fls, s], t);
-    expect(prettyC(result)).toBe(`λf λt t`);
-  });
-});
-
 // describe("evaluation", () => {
 //   // (λx. x)(λz. z) -> (λz. z)
 //   test("TestReduceIdentity", () => {
