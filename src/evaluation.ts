@@ -282,8 +282,6 @@ const byteFromNumber = (num: number): Erased.Term => {
   );
 };
 
-const trace = false;
-
 //
 //
 // Definition : A lambda expression is in normal form if it contains no β-redexes, so that it cannot be further reduced using the β-rule. An expression in normal form has no more function applications to evaluate.
@@ -318,7 +316,8 @@ const trace = false;
 export function reduceOnce3(
   rt: Runtime,
   defs: Erased.Def[],
-  term: Erased.Term
+  term: Erased.Term,
+  trace: boolean = false
 ): Step {
   // A term has one of three forms (x, λx M, and M(N)), and given each form, you
   // look for a rule that has the form in the conclusion.
@@ -519,7 +518,8 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}`);
 export function reduce(
   rt: Runtime,
   defs: Erased.Def[],
-  t: Erased.Term
+  t: Erased.Term,
+  trace: boolean = false
 ): Erased.Term {
   let normalForm = false;
   let prev: Erased.Term = t;
@@ -527,7 +527,7 @@ export function reduce(
     if (trace) {
       console.log(prettyC(t, false));
     }
-    const result = reduceOnce3(rt, defs, t);
+    const result = reduceOnce3(rt, defs, t, trace);
     normalForm = result._ == "nf";
 
     // debug check
