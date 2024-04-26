@@ -482,6 +482,7 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}`);
       // λn pair(String)(Unit)(Erased.StringLit("result"))(n)
       //
       // pair = λA λB λa λb λP λpair pair(a)(b)
+      const str = rt.getChar();
       return Redex(
         Erased.Abs(
           "n",
@@ -491,7 +492,7 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}`);
                 Erased.App(Erased.Ref("pair"), Erased.Ref("String")),
                 Erased.Ref("Unit")
               ),
-              Erased.StringLit(rt.getChar())
+              Erased.StringLit(str)
             ),
             Erased.Var("n", 0)
           )
