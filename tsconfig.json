@@ -11,6 +11,7 @@
     "sourceMap": true,
     "declaration": true,
     "outDir": "dist",
+    "esModuleInterop": true,
     "skipLibCheck": true, // fixes build failures due to dependencies
   }
 }

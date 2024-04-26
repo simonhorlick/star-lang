@@ -586,6 +586,7 @@ describe("runtime evaluation", () => {
     const literal = consStringToLiteral(result as Erased.Abs);
     expect(literal).toBe("str");
   });
+});
 
 // describe("evaluation", () => {
 //   // (λx. x)(λz. z) -> (λz. z)

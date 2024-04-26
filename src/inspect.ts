@@ -59,17 +59,36 @@ export const printMultilineDiagnostic = (
   return msg;
 };
 
-export const typecheckErrorDiagnostic = (src: string, err: TypecheckError) => {
+export const errorDiagnostic = (
+  src: string,
+  err: TypecheckError,
+  category: string,
+  uri: string | undefined
+) => {
   const startlc = indexToLineCol(src, err.start);
   const endlc = indexToLineCol(src, err.end);
+
+  const loc = uri ? uri : `<file>`;
+
   return (
-    `typecheck error at line ${startlc.line} col ${startlc.col}: ${err.msg}\n` +
+    `${loc}:${startlc.line + 1}:${startlc.col + 1} ${category} error: ${
+      err.msg
+    }\n` +
     `  ${printLine(src, startlc.line)}\n` +
     `  ${" ".repeat(startlc.col)}${"^".repeat(
       Math.max(0, endlc.col - startlc.col)
     )}`
   );
 };
+
+export const typecheckErrorDiagnostic = (src: string, err: TypecheckError) =>
+  errorDiagnostic(src, err, "typecheck", undefined);
+
+export const parseErrorDiagnostic = (
+  src: string,
+  err: TypecheckError,
+  uri: string
+) => errorDiagnostic(src, err, "parse", uri);
 
 export const inspectASTNodes = (n: ASTNode) => {
   const spans = new Map<

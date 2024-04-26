@@ -86,12 +86,9 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
 
   const parseErrors: TypecheckError[] = [];
   for (const def of defs) {
-    // FIXME: need source locations.
-    console.log(`checking for parse errors in tree`);
     const errs = foldTreeCtx(
       (acc, curr) => {
         if (curr.term._ !== "err") return acc;
-        console.log(`curr is ${JSON.stringify(curr)}`);
         return acc.concat({
           msg: curr.term.msg,
           start: curr.start ?? 0,
