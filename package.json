@@ -25,6 +25,7 @@
   },
   "scripts": {
     "test": "vitest",
+    "test:ci": "vitest --coverage.enabled true",
     "build": "tsc"
   },
   "author": "Simon Horlick",
@@ -33,6 +34,7 @@
     "immutable": "^5.0.0-beta.5"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^1.5.2",
     "ts-node": "^10.9.1",
     "typescript": "^5.4.5",
     "vitest": "^1.5.0"
