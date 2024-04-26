@@ -186,17 +186,17 @@ const HasFreeVariables = (t: Erased.Term, n: number = 0): boolean => {
 
 interface Runtime {
   getChar: () => string;
-  println: (s: string) => void;
+  print: (s: string) => void;
 }
 
 export const nodeJsRuntime: Runtime = {
   getChar: getChar,
-  println: (s: string) => console.log(s),
+  print: (s: string) => process.stdout.write(s),
 };
 
 export const mockRuntime: Runtime = {
   getChar: () => "c",
-  println: (s: string) => {},
+  print: (s: string) => {},
 };
 
 // stringLiteralToTerm expands the given string literal into calls to scons
@@ -428,10 +428,10 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}`);
         let argument = M.right;
         if (argument._ == "str") {
           // string literal
-          rt.println(argument.str);
+          rt.print(argument.str);
         } else if (argument._ == "lam") {
           // cons string
-          rt.println(consStringToLiteral(argument));
+          rt.print(consStringToLiteral(argument));
         } else {
           throw "runtime error: unexpected argument to printf";
         }
