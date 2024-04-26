@@ -348,9 +348,10 @@ describe("runtime evaluation", () => {
     expect(result.term).toStrictEqual(pt("λs λz s(λs λz z)"));
   });
 
+  const tru = Erased.Def("true", pt("λf λt t"));
+  const fls = Erased.Def("false", pt("λf λt f"));
+
   test("should do beta reduction (substitution) before evaluating parameters", () => {
-    const tru = Erased.Def("true", pt("λf λt t"));
-    const fls = Erased.Def("false", pt("λf λt f"));
     const zero = Erased.Def("zero", pt("λs λz z"));
     const succ = Erased.Def("succ", pt("λn λs λz s(n)"));
     const iszero = Erased.Def("iszero", pt("λn n(true)(λn.x false)"));
@@ -389,8 +390,6 @@ describe("runtime evaluation", () => {
   });
 
   test("should reduce string if it's being eliminated", () => {
-    const tru = Erased.Def("true", pt("λf λt t"));
-    const fls = Erased.Def("false", pt("λf λt f"));
     let result = reduceOnce3(
       mockRuntime,
       [tru, fls],
@@ -518,18 +517,19 @@ describe("runtime evaluation", () => {
     expect(result.term).toStrictEqual(pt("λs λz z"));
   });
 
+  const string = Erased.Def("String", pt(`λx x`));
+  const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
+  const scons = Erased.Def(
+    "scons",
+    pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
+  );
+
   test("concatenate two empty strings", () => {
     const cat = Erased.Def(
       "cat",
       pt(
         `λas λbs as(λerased String)(bs)(λas.head λas.tail scons(as.head)(cat(as.tail)(bs)))`
       )
-    );
-    const string = Erased.Def("String", pt(`λx x`));
-    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
-    const scons = Erased.Def(
-      "scons",
-      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
     );
     const defs = [cat, string, snil, scons];
     const t = pt(`cat(snil)(snil)`);
@@ -549,12 +549,6 @@ describe("runtime evaluation", () => {
         `λas λbs as(λerased String)(bs)(λas.head λas.tail scons(as.head)(cat(as.tail)(bs)))`
       )
     );
-    const string = Erased.Def("String", pt(`λx x`));
-    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
-    const scons = Erased.Def(
-      "scons",
-      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
-    );
     const defs = [cat, string, snil, scons];
     const t = pt(`cat(snil)("a")`);
     let result = reduceOnce3(mockRuntime, defs, t);
@@ -566,21 +560,17 @@ describe("runtime evaluation", () => {
     expect(prettyC(result.term)).toBe(ppt(`"a"`));
   });
 
+  const byte = Erased.Def(
+    "byte",
+    pt(
+      `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
+    )
+  );
+
+  const o = Erased.Def("o", pt(`λP λo λi o`));
+  const i = Erased.Def("i", pt(`λP λo λi i`));
+
   test("convert a nil string to string literal", () => {
-    const string = Erased.Def("String", pt(`λx x`));
-    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
-    const scons = Erased.Def(
-      "scons",
-      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
-    );
-    const byte = Erased.Def(
-      "byte",
-      pt(
-        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
-      )
-    );
-    const o = Erased.Def("o", pt(`λP λo λi o`));
-    const i = Erased.Def("i", pt(`λP λo λi i`));
     const t = pt(`snil`);
     let result = reduce(mockRuntime, [string, snil, scons, byte, o, i], t);
     const literal = consStringToLiteral(result as Erased.Abs);
@@ -588,21 +578,6 @@ describe("runtime evaluation", () => {
   });
 
   test("convert a cons string to string literal", () => {
-    const string = Erased.Def("String", pt(`λx x`));
-    const snil = Erased.Def("snil", pt(`λP λsnil λscons snil`));
-    const scons = Erased.Def(
-      "scons",
-      pt(`λhead λtail λP λsnil λscons scons(head)(tail)`)
-    );
-    const byte = Erased.Def(
-      "byte",
-      pt(
-        `λb0 λb1 λb2 λb3 λb4 λb5 λb6 λb7 λP λbyte byte(b0)(b1)(b2)(b3)(b4)(b5)(b6)(b7)`
-      )
-    );
-    const o = Erased.Def("o", pt(`λP λo λi o`));
-    const i = Erased.Def("i", pt(`λP λo λi i`));
-
     // 01110011 = 115 = "s"
     const t = pt(
       `scons(byte(o)(i)(i)(i)(o)(o)(i)(i))(scons(byte(o)(i)(i)(i)(o)(i)(o)(o))(scons(byte(o)(i)(i)(i)(o)(o)(i)(o))(snil)))`
@@ -610,6 +585,25 @@ describe("runtime evaluation", () => {
     let result = reduce(mockRuntime, [string, snil, scons, byte, o, i], t);
     const literal = consStringToLiteral(result as Erased.Abs);
     expect(literal).toBe("str");
+  });
+
+  test("should convert a string literal to a cons string if destructured", () => {
+    // Take the following term:
+    //
+    //   case s of
+    //    | nil -> false
+    //    | cons -> true
+    //
+    // this desugars to:
+    //
+    //   s(..)(false)(λs.head λs.tail true)
+    //
+    // In order for this app to be reducible the s needs to be a cons string.
+
+    const s = Erased.Def("s", Erased.StringLit("s"));
+    const t = pt(`s(λP P)(false)(λs.head λs.tail true)`);
+    let result = reduce(mockRuntime, [string, snil, scons, tru, fls, s], t);
+    expect(prettyC(result)).toBe(`λf λt t`);
   });
 });
 

@@ -419,7 +419,10 @@ ${prettyC(Erased.App(M, N))} → ${prettyC(Erased.App(M, Nprime.term))}`);
     // pl  String
     if (M._ == "app" && M.left._ == "ref" && M.left.name == "println") {
       // Ensure everything is fully normalised first
-      if (!HasFreeVariables(term)) {
+      if (HasFreeVariables(term)) {
+        // debug check:
+        throw "argument to print has free variables";
+      } else {
         // beta-reduce the App, returning Unit -> Pair(String)(Unit)
         //
         // λs λn pair(String)(Unit)(Erased.StringLit("result"))(n)
