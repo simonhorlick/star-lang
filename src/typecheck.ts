@@ -589,6 +589,14 @@ export const equate = (
   depth: number = 0,
   checking: Set<string> = Set()
 ): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
+  // Ignore origins.
+  if (ty1._ == "orig" || ty1._ == "syn") {
+    return equate(ctx, defs, ty1.child, ty2, val, depth + 1, checking);
+  }
+  if (ty2._ == "orig" || ty2._ == "syn") {
+    return equate(ctx, defs, ty1, ty2.child, val, depth + 1, checking);
+  }
+
   if (aeq(ty1, ty2)) {
     return { eq: true, holes: [] };
   }
@@ -601,6 +609,7 @@ export const equate = (
   }
 
   // FIXME: There must be a better way of doing this.
+  // FIXME: This also simplifies expressions (no indices, no annotations)
   const current = `${lhs} == ${rhs}`;
   if (checking.has(current)) {
     return { eq: false, holes: [] };

@@ -5,6 +5,7 @@ import {
   Case,
   Constructor,
   Def,
+  Hole,
   Identifier,
   Key,
   Let,
@@ -973,5 +974,12 @@ describe("term reduction", () => {
         Syntax(Origin(0, 0, Key("key")), Abs("x", Var("x", 0)))
       )
     ).toStrictEqual(Abs("x", Var("x", 0)));
+  });
+
+  test("equate should ignore origins for non ⍺-eq terms", () => {
+    const t1 = Origin(0, 1, Origin(0, 1, Hole(1)));
+    const t2 = Origin(0, 1, Origin(0, 1, Origin(0, 1, Hole(2))));
+    const e = equate([], defs(), t1, t2, Ref("y"));
+    expect(e.eq).toBeTruthy();
   });
 });
