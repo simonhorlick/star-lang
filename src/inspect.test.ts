@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { equate, TypecheckError } from "./typecheck";
 import {
   complete,
+  definitionLocation,
   hover,
   HoverInfo,
   hoverMessage,
@@ -225,5 +226,33 @@ describe("inspect", () => {
     expect(
       hoverMessage(src, result.file, result.defs, tokenLocation)?.msg
     ).toEqual("var(Nat)");
+  });
+
+  test("should provide source location of func reference", () => {
+    const srcWithToken = `
+    type Nat = zero | succ(x Nat)
+    func add:Nat->Nat->Nat = λn λm case n of
+      | zero -> m
+      | succ -> succ(a$1$dd(n.x)(m))`;
+    const src = srcWithToken.replace("$1$", "");
+    const tokenLocation = srcWithToken.indexOf("$1$");
+    const result = build(src, false);
+
+    const actual = definitionLocation(
+      src,
+      result.file,
+      result.defs,
+      tokenLocation
+    );
+    console.log(
+      "ref at location: " +
+        printDiagnostic(src, TypecheckError("", actual[0].start, actual[0].end))
+    );
+    expect(actual).toEqual([
+      {
+        end: 131,
+        start: 63,
+      },
+    ]);
   });
 });

@@ -797,6 +797,73 @@ export const inferType = (
   return undefined;
 };
 
+export const findOrigin = (term: Term): Origin | null => {
+  if (term._ == "orig") {
+    return term;
+  } else if (term._ == "ann") {
+    return findOrigin(term.term);
+  } else if (term._ == "syn") {
+    return findOrigin(term.child);
+  }
+  return null;
+};
+
+export const definitionLocation = (
+  src: string,
+  f: File,
+  defs: Map<string, Def>,
+  offset: number
+): { start: number; end: number }[] => {
+  var spans: Span[] = [];
+  for (const [_, def] of defs) {
+    const spans1 = inspect(def, defs);
+    spans = [...spans, ...spans1];
+  }
+
+  const overlappingSpans = [...spans].filter(
+    (v) => v.start <= offset && v.end > offset
+  );
+  overlappingSpans.sort((a, b) => a.end - a.start - (b.end - b.start));
+
+  for (const v of overlappingSpans) {
+    console.log(
+      printMultilineDiagnostic(
+        src,
+        TypecheckError(
+          `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
+          v.start,
+          v.end
+        )
+      )
+    );
+  }
+
+  if (overlappingSpans.length == 0) {
+    return [];
+  }
+
+  const what = overlappingSpans[0];
+  const term = what.term;
+  switch (term._) {
+    case "ref":
+      const def = defs.get(term.name);
+      const tm = def?.term;
+      if (tm) {
+        const orig = findOrigin(tm);
+        if (orig) {
+          return [
+            {
+              start: orig.start,
+              end: orig.end,
+            },
+          ];
+        }
+      }
+    default:
+  }
+  return [];
+};
+
 const CompletionText = 1;
 const CompletionMethod = 2;
 const CompletionFunction = 3;
