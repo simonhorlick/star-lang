@@ -243,6 +243,20 @@ export const Syntax = (syntax: Origin, child: Term): Syntax => ({
   child: child,
 });
 
+// A Label is a way of annotating terms with a string. This allows us to
+// determine which branch of an if statement a node belongs to, for example.
+export type Label = {
+  _: "label";
+  label: string;
+  child: Term;
+};
+
+export const Label = (label: string, child: Term): Label => ({
+  _: "label",
+  label,
+  child,
+});
+
 export type Term =
   | Abs
   | App
@@ -264,6 +278,7 @@ export type Term =
   | Rel
   | Syntax
   | Key
+  | Label
   | ParseError;
 export type Type = Term;
 
@@ -1055,6 +1070,7 @@ export function strip(t: Term): Term {
       return t;
     case "orig":
     case "syn":
+    case "label":
       return strip(t.child);
     case "case":
       return Case(
@@ -1169,5 +1185,7 @@ export function serialise(t: Term, d: number = 0): string {
       return `StringLit("${t.str}")`;
     case "err":
       return `ParseError(${t.msg})`;
+    case "label":
+      return `Label(${t.label}, ${serialise(t.child)})`;
   }
 }

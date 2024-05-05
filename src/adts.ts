@@ -24,6 +24,7 @@ import {
   Let,
   identifier2str,
   Syntax,
+  Label,
 } from "./ast";
 import { Context, addTermToCtx } from "./context";
 
@@ -327,6 +328,8 @@ export const desugarTerm = (
       return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
     case "syn":
       return Syntax(t.syntax, desugarTerm(t.child, ann, adts, ctx));
+    case "label":
+      return Label(t.label, desugarTerm(t.child, ann, adts, ctx));
     case "err":
       return t;
     case "rel":
@@ -394,6 +397,8 @@ export const processPars = (t: Term, ctx: Context): Term => {
         processPars(t.trueBranch, ctx),
         processPars(t.falseBranch, ctx)
       );
+    case "label":
+      return Label(t.label, processPars(t.child, ctx));
     case "ref":
     case "star":
     case "var":

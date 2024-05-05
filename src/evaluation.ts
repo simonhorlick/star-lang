@@ -57,6 +57,8 @@ export function erase(term: Term): Erased.Term {
       return Erased.StringLit(term.str);
     case "err":
       throw "erase: unexpected parse error";
+    case "label":
+      return erase(term.child);
   }
 }
 

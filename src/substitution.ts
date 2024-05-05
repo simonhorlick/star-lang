@@ -8,6 +8,7 @@ import {
   Branch,
   Case,
   If,
+  Label,
   Let,
   Origin,
   Pi,
@@ -121,6 +122,8 @@ export function subst(
         subst(j, s, c, t.expr, name),
         subst(j, s, c + 1, t.body, name)
       );
+    case "label":
+      return Label(t.label, subst(j, s, c, t.child, name));
     case "if":
       throw "subst: unexpected if";
     case "rel":
@@ -179,6 +182,8 @@ export function substHole(j: number, s: Term, t: Term): Term {
       throw "substHole: unexpected let";
     case "if":
       throw "substHole: unexpected if";
+    case "label":
+      return Label(t.label, substHole(j, s, t.child));
     case "rel":
       return Rel(substHole(j, s, t.term), t.uses);
   }

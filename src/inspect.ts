@@ -23,6 +23,7 @@ import {
   If,
   Syntax,
   Rel,
+  Label,
 } from "./ast";
 import { TypecheckError, equate } from "./typecheck";
 import { reduce } from "./equal";
@@ -154,6 +155,8 @@ export const map = (
       return Pi(t.name, f(t.from), f(t.body));
     case "rel":
       return Rel(f(t.term), t.uses);
+    case "label":
+      return Label(t.label, f(t.child));
     case "self":
       return Self(t.name, f(t.body));
     case "id":
@@ -223,6 +226,9 @@ export const foldTree = <A>(
       const syn = foldTree(f, x, t.syntax);
       const child = foldTree(f, syn, t.child);
       return child;
+    }
+    case "label": {
+      return foldTree(f, x, t.child);
     }
     case "pi": {
       const frm = foldTree(f, x, t.from);
@@ -397,6 +403,9 @@ export const foldTreeCtx = <A>(
       }
       case "rel": {
         return doFold(x, { term: t.term, start: ctx.start, end: ctx.end });
+      }
+      case "label": {
+        return doFold(x, { term: t.child, start: ctx.start, end: ctx.end });
       }
       case "self": {
         return doFold(x, { term: t.body, start: ctx.start, end: ctx.end });
@@ -622,6 +631,9 @@ export const inspect = (
       }
       case "rel": {
         return traverse(t.term, ty, undefined, undefined, ctx, defs);
+      }
+      case "label": {
+        return traverse(t.child, ty, undefined, undefined, ctx, defs);
       }
       case "hole": {
         return t;

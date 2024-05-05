@@ -25,6 +25,7 @@ import {
   Hole,
   Case,
   Argument,
+  Label,
 } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -193,6 +194,9 @@ export const infer = (
     case "syn": {
       return infer(defs, adts, ctx, term.child, os, oe);
     }
+    case "label": {
+      return infer(defs, adts, ctx, term.child, os, oe);
+    }
     case "int": {
       return Result(term, Ref("Nat"), []);
     }
@@ -236,6 +240,9 @@ export const check = (
   } else if (val._ == "syn") {
     const x = check(defs, adts, ctx, val.child, tty, os, oe);
     return Result(Syntax(val.syntax, x.term), x.type, x.holes);
+  } else if (val._ == "label") {
+    const x = check(defs, adts, ctx, val.child, tty, os, oe);
+    return Result(Label(val.label, x.term), x.type, x.holes);
   }
 
   const pval = pretty(val);
@@ -512,10 +519,10 @@ export const fill = (chk: Result): Result => {
 // same up to renaming of bound variables.
 const aeq = (t1: Term, t2: Term): boolean => {
   // ignore origins
-  if (t1._ == "orig" || t1._ == "syn") {
+  if (t1._ == "orig" || t1._ == "syn" || t1._ == "label") {
     return aeq(t1.child, t2);
   }
-  if (t2._ == "orig" || t2._ == "syn") {
+  if (t2._ == "orig" || t2._ == "syn" || t2._ == "label") {
     return aeq(t1, t2.child);
   }
 

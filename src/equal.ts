@@ -52,6 +52,10 @@ export const reduce = (
     case "let": {
       throw "TODO - reduce let";
     }
+    case "label": {
+      // remove labels
+      return reduce(unfold, ctx, defs, t.child);
+    }
     default: {
       return t;
     }

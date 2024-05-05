@@ -115,6 +115,8 @@ export function pretty(
         return `${term.num}`;
       case "str":
         return `"${term.str}"`;
+      case "label":
+        return pretty(term.child);
       case "err":
         return `##${term.msg}##`;
     }
@@ -243,6 +245,10 @@ export const printNodeAsDotGraph = (term: Term): string => {
           break;
         case "orig":
           node = `  "${uid(curr)}" [label="orig ${curr.start}-${curr.end}"];\n`;
+          edges += `  "${uid(curr)}" -> "${uid(curr.child)}";\n`;
+          break;
+        case "label":
+          node = `  "${uid(curr)}" [label="${curr.label}"];\n`;
           edges += `  "${uid(curr)}" -> "${uid(curr.child)}";\n`;
           break;
         case "pi":
