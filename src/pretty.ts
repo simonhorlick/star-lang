@@ -92,9 +92,9 @@ export function pretty(
       case "star":
         return "★";
       case "case":
-        return `case ${pretty(term.name)} of ${term.branches
-          .map((b) => `${pretty(b.constructor)} -> ${pretty(b.term)}`)
-          .join(" | ")}`;
+        return `case ${pretty(term.name)} of${term.branches
+          .map((b) => `\n|  ${pretty(b.constructor)} -> ${pretty(b.term)}`)
+          .join("")}`;
       case "let":
         return `let ${pretty(term.name)} = ${pretty(term.expr)} in ${pretty(
           term.body
