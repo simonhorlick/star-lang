@@ -72,7 +72,9 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "par":
     case "hole":
     case "int":
+    case "int":
     case "str":
+    case "label":
     case "err":
       return t;
     case "case":

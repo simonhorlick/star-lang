@@ -109,6 +109,7 @@ export const relevance = (t: Term, env: number[]): Ret => {
     case "hole":
     case "int":
     case "str":
+    case "label":
     case "err": {
       return {
         term: t,

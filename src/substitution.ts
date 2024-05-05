@@ -47,6 +47,8 @@ export function shift(d: number, c: number, t: Term): Term {
       return Origin(t.start, t.end, shift(d, c, t.child));
     case "syn":
       return Syntax(t.syntax, shift(d, c, t.child));
+    case "label":
+      return Label(t.label, shift(d, c, t.child));
     case "case":
       return Case(
         shift(d, c, t.name),
