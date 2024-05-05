@@ -53,7 +53,7 @@ export function pretty(
         let l = pretty(term.func);
         let r = "(" + pretty(term.arg) + ")";
 
-        if (term.func._ == "lam") {
+        if (term.func._ == "lam" || term.func._ == "ann") {
           l = "(" + l + ")";
         }
 
