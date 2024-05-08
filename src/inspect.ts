@@ -31,6 +31,7 @@ import { indexToLineCol, printLine } from "./parser";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx } from "./context";
 import { substTop } from "./substitution";
+import { BuildResult } from "./build";
 
 export const printMultilineDiagnostic = (
   src: string,
@@ -1012,4 +1013,101 @@ export const complete = (
   }
 
   return completionList;
+};
+
+// astToHtml outputs a html file that can be used to debug the AST along with
+// the source.
+export const astToHtml = (src: string, built: BuildResult): string => {
+  // Loop over every def in the source and compute all of the spans.
+  const spans: Span[] = [];
+  for (const node of built.file.content) {
+    if (node._ == "def") {
+      const def = node;
+      const spans1 = inspect(def, built.defs);
+      spans.push(...spans1);
+    }
+  }
+
+  const lines = src.split("\n");
+
+  const mapWhitespace = (c: string) => (c == " " ? "&nbsp;" : c);
+
+  const lineColToOffset = (line: number, col: number) =>
+    lines
+      .slice(0, line)
+      .map((s) => s.length + 1) // add 1 for newline
+      .reduce((a, b) => a + b, 0) + col;
+
+  return `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="utf-8">
+  <title></title>
+  <style>
+    body { font-family: monospace; padding-bottom: 500px; }
+    .tooltip-wrap {
+      position: relative;
+      cursor: crosshair;
+    }
+    .tooltip-wrap .tooltip-content {
+      display: none;
+      position: absolute;
+      bottom: 0%;
+      left: 50px;
+      right: 0%;
+      top: 50px;
+      width: 500px;
+      height: 400px;
+      overflow-y: scroll;
+      background-color: #fff;
+      padding: .5em;
+      min-width: 10rem;
+      border: 1px solid #000;
+      z-index: 1;
+    }
+    .tooltip-wrap:hover {
+      background-color: #0000ff;
+      color: #fff;
+    }
+    .tooltip-wrap:hover .tooltip-content {
+      display: block;
+      color: #000;
+    }
+    .line {
+      display: flex;
+      flex-direction: row;
+    }
+  </style>
+  </head>
+  <body>
+  ${lines
+    .map(
+      (l, linenum) =>
+        `<div class="line l${linenum + 1}"><span style="width: 50px;">${
+          linenum + 1
+        }</span>${l
+          .split("")
+          .map((c, colnum) => {
+            const offset = lineColToOffset(linenum, colnum);
+            return `<div class="col c${
+              colnum + 1
+            } tooltip-wrap">${mapWhitespace(
+              c
+            )}<div class="tooltip-content"><div>offset=${offset}</div>${spans
+              .filter((s) => s.start <= offset && s.end >= offset)
+              .map(
+                (s) =>
+                  `<div>${s.term._}  ${pretty(s.term)} type: ${pretty(
+                    s.type
+                  )}</div>`
+              )
+              .join("")}</div></div>`;
+          })
+          .join("")}</div>`
+    )
+    .join("")}
+  </body>
+  </html>
+  `;
 };

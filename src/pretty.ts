@@ -116,7 +116,7 @@ export function pretty(
       case "str":
         return `"${term.str}"`;
       case "label":
-        return pretty(term.child);
+        return `@${term.label} ${pretty(term.child)}`;
       case "err":
         return `##${term.msg}##`;
     }
