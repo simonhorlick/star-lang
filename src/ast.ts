@@ -766,16 +766,20 @@ export const letStatement: Parser<Let | Term> = bind(keyword("let"), (slet) =>
   )
 );
 
+// Wrap the label with an Origin so we can know what it refers to.
+export const label = (name: string, p: Parser<Term>): Parser<Term> =>
+  block(map(p, (t) => Label(name, t)));
+
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
 export const ifStatement: Parser<If | Term> = bind(keyword("if"), (sif) =>
   orFail(
     "if statment not well formed",
-    bind(term, (condition) =>
+    bind(label("if-condition", term), (condition) =>
       bind(lspc(keyword("then")), (sthen) =>
-        bind(term, (trueBranch) =>
+        bind(label("if-true", term), (trueBranch) =>
           bind(lspc(keyword("else")), (selse) =>
-            bind(term, (falseBranch) =>
+            bind(label("if-false", term), (falseBranch) =>
               pure(
                 Syntax(
                   sif,
