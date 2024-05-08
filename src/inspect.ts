@@ -633,6 +633,16 @@ export const inspect = (
         return traverse(t.term, ty, undefined, undefined, ctx, defs);
       }
       case "label": {
+        if (start != undefined && end != undefined) {
+          spans.push({
+            start: start,
+            end: end,
+            term: t,
+            type: ty,
+            ctx: ctx,
+          });
+        }
+
         return traverse(t.child, ty, undefined, undefined, ctx, defs);
       }
       case "hole": {
