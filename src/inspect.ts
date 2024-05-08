@@ -1096,11 +1096,17 @@ export const astToHtml = (src: string, built: BuildResult): string => {
               c
             )}<div class="tooltip-content"><div>offset=${offset}</div>${spans
               .filter((s) => s.start <= offset && s.end >= offset)
+              // sort by length of span
+              .toSorted((a, b) => {
+                const lenA = a.end - a.start;
+                const lenB = b.end - b.start;
+                return lenA - lenB;
+              })
               .map(
                 (s) =>
-                  `<div>${s.term._}  ${pretty(s.term)} type: ${pretty(
-                    s.type
-                  )}</div>`
+                  `<div>(${s.start}-${s.end}) ${s.term._}  ${pretty(
+                    s.term
+                  )} type: ${pretty(s.type)}</div>`
               )
               .join("")}</div></div>`;
           })
