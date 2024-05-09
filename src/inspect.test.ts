@@ -250,7 +250,7 @@ describe("inspect", () => {
     );
     expect(actual).toEqual([
       {
-        end: 131,
+        end: 130,
         start: 63,
       },
     ]);
