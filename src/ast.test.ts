@@ -389,7 +389,7 @@ describe("ast", () => {
         | succ -> true)
       | succ -> (case m of
         | zero -> false
-        | succ -> lt(n.x)(m.x))`;
+        | succ -> lt(n.x,m.x))`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), Ref("true"))])),Branch(Identifier("succ"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), App(App(Ref("lt"), Ref("n.x")), Ref("m.x")))]))])`
