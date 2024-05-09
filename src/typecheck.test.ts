@@ -489,15 +489,15 @@ describe("typechecker", () => {
     expect(pretty(actual.type)).toBe("P(false)→P(true)→P(b)");
   });
 
-  const not = pdef(`func not:Bool->Bool = λb b(λx Bool)(true)(false)`);
+  const not = pdef(`func not:Bool->Bool = λb b(λx Bool,true,false)`);
 
   // A value of type equal(A)(a)(b) can only be constructed if a == b.
   const equal = pdef(
     `func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)`
   );
-  const refl = pdef(`func refl: ΠA:* Πx:A equal(A)(x)(x) = λA λx λP λp p`);
+  const refl = pdef(`func refl: ΠA:* Πx:A equal(A,x,x) = λA λx λP λp p`);
   const nn = pdef(
-    `func nn: Πb:Bool equal(Bool)(not(not(b)))(b) = λb b(λx equal(Bool)(not(not(x)))(x))(refl(Bool)(false))(refl(Bool)(true))`
+    `func nn: Πb:Bool equal(Bool,not(not(b)),b) = λb b(λx equal(Bool,not(not(x)),x),refl(Bool,false),refl(Bool,true))`
   );
 
   test("double negation proof", () =>
@@ -510,9 +510,9 @@ describe("typechecker", () => {
       nn.term.typ
     ));
 
-  const reflTrue = pdef(`func rt: equal(Bool)(true)(true) = refl(Bool)(true)`);
+  const reflTrue = pdef(`func rt: equal(Bool,true,true) = refl(Bool,true)`);
 
-  test("reflexivity of true has type equal(Bool)(true)(true)", () =>
+  test("reflexivity of true has type equal(Bool,true,true)", () =>
     check(
       defs([bool, tru, fls, not, equal, refl]),
       adts(),
@@ -539,7 +539,7 @@ describe("typechecker", () => {
       ext.term.typ
     ));
 
-  test("the type of ext(0)(true)(vnil) is Vect(1)", () => {
+  test("the type of ext(0,true,vnil) is Vect(1)", () => {
     // The n in the argument to ext is the size of the tail vector, which as
     // it's vnil gives 0.
     const one = App(Ref("succ"), Ref("zero"));
@@ -566,7 +566,7 @@ describe("typechecker", () => {
   const vhead = Def(
     "vhead",
     Ann(
-      // λn λxs xs(...)(unit)(λn λhead λtail head)
+      // λn λxs xs(...,unit,λn λhead λtail head)
       Abs(
         "n",
         Abs(
@@ -580,7 +580,7 @@ describe("typechecker", () => {
                   Abs(
                     "x",
                     // return type needs to be a case statement:
-                    // n(λP *)(Unit)(λn Bool)
+                    // n(λP *,Unit,λn Bool)
                     App(
                       App(App(Var("n", 1), Abs("P", Star())), Ref("Unit")),
                       Abs("n", Ref("Bool"))
@@ -594,14 +594,14 @@ describe("typechecker", () => {
           )
         )
       ),
-      // Πn:Nat xs:Vect(n) n(λP *)(Unit)(λv Bool)
+      // Πn:Nat xs:Vect(n) n(λP *,Unit,λv Bool)
       Pi(
         "n",
         Ref("Nat"),
         Pi(
           "xs",
           App(Ref("Vect"), Var("n", 0)),
-          // n(λP *)(Unit)(λv Bool)
+          // n(λP *,Unit,λv Bool)
           App(
             App(App(Var("n", 1), Abs("P", Star())), Ref("Unit")),
             Abs("v", Ref("Bool"))
@@ -623,7 +623,7 @@ describe("typechecker", () => {
   });
 
   test("vhead allows non-empty Vectors", () => {
-    // vhead(1)(ext(0)(true)(vnil)) has type Bool
+    // vhead(1,ext(0,true,vnil)) has type Bool
     const tm = App(
       App(Ref("vhead"), App(Ref("succ"), Ref("zero"))),
       App(App(App(Ref("ext"), Ref("zero")), Ref("true")), Ref("vnil"))
@@ -653,7 +653,7 @@ describe("typechecker", () => {
   });
 
   test("vhead rejects non-empty Vectors", () => {
-    // vhead(0)(vnil) has type Unit
+    // vhead(0,vnil) has type Unit
     const tm = App(App(Ref("vhead"), Ref("zero")), Ref("vnil"));
 
     check(
@@ -684,7 +684,7 @@ describe("typechecker", () => {
     // Desugar the boolean not function:
     //   not = λb case b of true -> false | false -> true
     // should desugar to:
-    //   not = λb b(λP Bool)(false)(true)
+    //   not = λb b(λP Bool,false,true)
 
     const boolConstructors = [
       { name: Identifier("true"), args: [] },
@@ -704,7 +704,7 @@ describe("typechecker", () => {
 
     const result = check(defs([bool, tru, fls]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      "(λb b((λP Bool:Bool→★))(false)(true):Bool→Bool)"
+      "(λb b((λP Bool):Bool→★)(false)(true)):Bool→Bool"
     );
   });
 
@@ -727,7 +727,7 @@ describe("typechecker", () => {
 
     const result = check(defs([nat, zero, succ]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      "(λn n((λP Nat:Nat→★))(zero)((λn.x n.x:Nat→(λP Nat:Nat→★)(succ(n)))):Nat→Nat)"
+      "(λn n((λP Nat):Nat→★)(zero)((λn.x n.x):Nat→((λP Nat):Nat→★)(succ(n)))):Nat→Nat"
     );
   });
 
@@ -765,7 +765,7 @@ describe("typechecker", () => {
     );
 
     // We expect the case statement to desugar to:
-    //   xs(λP Bool)(false)(λxs.head λxs.tail xs.head)
+    //   xs(λP Bool,false,λxs.head λxs.tail xs.head)
     const expected = App(
       App(App(Var("xs", 0), Abs("P", Ref("Bool"))), Ref("false")),
       Abs("xs.head", Abs("xs.tail", Var("xs.head", 1)))
@@ -864,7 +864,7 @@ describe("type equality", () => {
     expect(eq(x, z).eq).toBe(true);
   });
 
-  // n(λP ★)(Unit)(λv Bool) == (λn λx n(λP ★)(Unit)(λn Bool))(n)(xs)
+  // n(λP ★,Unit,λv Bool) == (λn λx n(λP ★,Unit,λn Bool),n,xs)
   test("AbsApp terms are fully reduced", () => {
     const lhs = App(
       App(App(Var("n", 1), Abs("P", Star())), Ref("Unit")),
