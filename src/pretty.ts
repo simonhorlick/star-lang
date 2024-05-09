@@ -84,7 +84,7 @@ export function pretty(
           const begin = consoleColours ? "\x1b[34m" : "";
           const end = consoleColours ? "\x1b[0m" : "";
           return (
-            `(` + pretty(term.term) + `:${begin}` + pretty(term.typ) + `${end})`
+            `(` + pretty(term.term) + `):${begin}` + pretty(term.typ) + `${end}`
           );
         } else {
           return pretty(term.term);
