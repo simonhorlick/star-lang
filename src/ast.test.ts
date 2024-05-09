@@ -477,7 +477,7 @@ describe("ast", () => {
   });
 
   test("should parse let expression", () => {
-    const ast = strip(result(term(ts("let g = f(x) in h(g)(g)"))));
+    const ast = strip(result(term(ts("let g = f(x) in h(g,g)"))));
     expect(serialise(ast)).toBe(
       `Let(Identifier("g"), App(Ref("f"), Ref("x")), App(App(Ref("h"), Ref("g")), Ref("g")))`
     );
