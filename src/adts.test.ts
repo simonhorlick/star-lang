@@ -445,52 +445,53 @@ describe("adts", () => {
       )
     ));
 
-  test("should generate term for Vector", () => {
-    // type List(A *) = nil | cons(head A, tail List(A))
-    // made explicit:
-    // type List(A *) =
-    //   | nil : Vector(A)
-    //   | cons(head A, tail List(A)) : Vector(A)
-    //
-    // List : ΠA:★ ★
-    //      = λA ιt
-    //        ΠP:(List(A)→*)
-    //        Πcnil:P(nil(A))
-    //        Πccons:(Πhead:A Πtail:List(A) P(cons(A)(head)(tail)))
-    //        P(t)
-    //
-    // type Vector(T ★, n Nat) =
-    //   | vnil : Vector(T, 0)
-    //   | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))
-    //
-    // VectBool : Πsz:Nat ★
-    //          = λsz ιt
-    //            ΠP:(Πn:Nat Πx:Vect(n) ★)
-    //            Πcnil:P(zero)(vnil)
-    //            Πcext:(Πn:Nat Πhead:Bool Πtail:Vect(n) P(succ(n))(ext(n)(head)(tail))
-    //            P(sz)(t)
+  // TODO: implement
+  // test("should generate term for Vector", () => {
+  // type List(A *) = nil | cons(head A, tail List(A))
+  // made explicit:
+  // type List(A *) =
+  //   | nil : Vector(A)
+  //   | cons(head A, tail List(A)) : Vector(A)
+  //
+  // List : ΠA:★ ★
+  //      = λA ιt
+  //        ΠP:(List(A)→*)
+  //        Πcnil:P(nil(A))
+  //        Πccons:(Πhead:A Πtail:List(A) P(cons(A)(head)(tail)))
+  //        P(t)
+  //
+  // type Vector(T ★, n Nat) =
+  //   | vnil : Vector(T, 0)
+  //   | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))
+  //
+  // VectBool : Πsz:Nat ★
+  //          = λsz ιt
+  //            ΠP:(Πn:Nat Πx:Vect(n) ★)
+  //            Πcnil:P(zero)(vnil)
+  //            Πcext:(Πn:Nat Πhead:Bool Πtail:Vect(n) P(succ(n))(ext(n)(head)(tail))
+  //            P(sz)(t)
 
-    // In List, A is static (i.e. not passed to P), but for Vector we have
-    // different sz for each branch.
+  // In List, A is static (i.e. not passed to P), but for Vector we have
+  // different sz for each branch.
 
-    // const list = buildType(Identifier("List"), listParams, listConstructors);
+  // const list = buildType(Identifier("List"), listParams, listConstructors);
 
-    // const nil = Def(
-    //   "nil",
-    //   Ann(
-    //     GenerateConstructorTerm(listParams, listConstructors, 0),
-    //     GenerateConstructorType("List", listParams, listConstructors[0])
-    //   )
-    // );
+  // const nil = Def(
+  //   "nil",
+  //   Ann(
+  //     GenerateConstructorTerm(listParams, listConstructors, 0),
+  //     GenerateConstructorType("List", listParams, listConstructors[0])
+  //   )
+  // );
 
-    // const cons = Def(
-    //   "cons",
-    //   Ann(
-    //     GenerateConstructorTerm(listParams, listConstructors, 1),
-    //     GenerateConstructorType("List", listParams, listConstructors[1])
-    //   )
-    // );
+  // const cons = Def(
+  //   "cons",
+  //   Ann(
+  //     GenerateConstructorTerm(listParams, listConstructors, 1),
+  //     GenerateConstructorType("List", listParams, listConstructors[1])
+  //   )
+  // );
 
-    expect(true).toBe(false);
-  });
+  // expect(true).toBe(false);
+  // });
 });

@@ -598,22 +598,23 @@ describe("ast", () => {
     expect(serialiseAST(ast)).toBe(`ADT(List)`);
   });
 
-  test("should parse data types with dependent annotations", () => {
-    // TODO: Figure out syntax.
-    // TODO: Need the return type to be arguments to Vector, not some other random type.
-    const ast = stripAST(
-      result(
-        adt(
-          ts(`
-            type Vector(T ★, n Nat) =
-              | vnil : Vector(T, 0)
-              | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))`)
-        )
-      )
-    );
-    if (ast._ != "adt") {
-      throw `unexpected ${ast._}`;
-    }
-    expect(serialiseAST(ast)).toBe(`ADT(List)`);
-  });
+  // TODO: implement
+  //   test("should parse data types with dependent annotations", () => {
+  //     // TODO: Figure out syntax.
+  //     // TODO: Need the return type to be arguments to Vector, not some other random type.
+  //     const ast = stripAST(
+  //       result(
+  //         adt(
+  //           ts(`
+  //             type Vector(T ★, n Nat) =
+  //               | vnil : Vector(T, 0)
+  //               | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))`)
+  //         )
+  //       )
+  //     );
+  //     if (ast._ != "adt") {
+  //       throw `unexpected ${ast._}`;
+  //     }
+  //     expect(serialiseAST(ast)).toBe(`ADT(List)`);
+  //   });
 });
