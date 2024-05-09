@@ -233,7 +233,7 @@ describe("inspect", () => {
     type Nat = zero | succ(x Nat)
     func add:Nat->Nat->Nat = λn λm case n of
       | zero -> m
-      | succ -> succ(a$1$dd(n.x)(m))`;
+      | succ -> succ(a$1$dd(n.x,m))`;
     const src = srcWithToken.replace("$1$", "");
     const tokenLocation = srcWithToken.indexOf("$1$");
     const result = build(src, false);
