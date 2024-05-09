@@ -473,7 +473,10 @@ describe("ast", () => {
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.term.typ)).toBe(`Origin(15, 21, Ref("String"))`);
+    // Here there are two origins - one for the term and one for the Ref.
+    expect(serialise(ast.term.typ)).toBe(
+      `Origin(15, 21, Origin(15, 21, Ref("String")))`
+    );
   });
 
   test("should parse let expression", () => {

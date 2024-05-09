@@ -703,8 +703,8 @@ export const hover = (
   f: File,
   defs: Map<string, Def>,
   offset: number | undefined
-): Map<Range, HoverInfo> => {
-  let hoverInfo = new Map<Range, HoverInfo>();
+): Array<Range & HoverInfo> => {
+  let hoverInfo = new Array<Range & HoverInfo>();
 
   for (const node of f.content) {
     if (node._ == "def") {
@@ -715,10 +715,11 @@ export const hover = (
           case "lam":
             break;
           default:
-            hoverInfo.set(
-              { start: v.start, end: v.end },
-              { msg: `${v.term._}(${pretty(v.type)})` }
-            );
+            hoverInfo.push({
+              start: v.start,
+              end: v.end,
+              msg: `${v.term._}(${pretty(v.type)})`,
+            });
         }
         const msg = `${v.start}-${v.end} is a ${v.term._} with type ${pretty(
           v.type
@@ -737,16 +738,27 @@ export const hover = (
 
         switch (v.term._) {
           case "com":
-            hoverInfo.set({ start: k.start, end: k.end }, { msg: v.term.text });
+            hoverInfo.push({ start: k.start, end: k.end, msg: v.term.text });
             break;
           default:
-            hoverInfo.set({ start: k.start, end: k.end }, { msg: msg });
+            hoverInfo.push({ start: k.start, end: k.end, msg: msg });
         }
       }
     }
   }
 
-  return hoverInfo;
+  // Remove any duplicates. This may happen because of nested Origin nodes in
+  // the AST.
+  let result = new Array<Range & HoverInfo>();
+  for (const hi of hoverInfo) {
+    if (
+      result.find((x) => x.start == hi.start && x.end == hi.end) == undefined
+    ) {
+      result.push(hi);
+    }
+  }
+
+  return result;
 };
 
 export const hoverMessage = (
@@ -757,24 +769,25 @@ export const hoverMessage = (
 ): { range: { start: number; end: number }; msg: string } | null => {
   const hoverInfo = hover(src, f, defs, offset);
 
-  const overlappingSpans = [...hoverInfo].filter(
-    ([k, v]) => k.start <= offset && k.end > offset
+  const overlappingSpans = hoverInfo.filter(
+    (hi) => hi.start <= offset && hi.end > offset
   );
-  // const overlappingSpans = [...hoverInfo];
 
   // find the shortest node that overlaps this offset
-  overlappingSpans.sort(([a], [b]) => a.end - a.start - (b.end - b.start));
+  overlappingSpans.sort((a, b) => a.end - a.start - (b.end - b.start));
 
-  // console.log(`the following nodes overlap ${offset}:`);
   for (const span of overlappingSpans) {
-    console.log(`  span(${span[0].start}-${span[0].end}): ${span[1].msg}`);
+    console.log(`  span(${span.start}-${span.end}): ${span.msg}`);
   }
 
   if (overlappingSpans.length == 0) {
     return null;
   }
 
-  return { range: overlappingSpans[0][0], msg: overlappingSpans[0][1].msg };
+  return {
+    range: { start: overlappingSpans[0].start, end: overlappingSpans[0].end },
+    msg: overlappingSpans[0].msg,
+  };
 };
 
 // Finds the type of the hole at this offset in the AST.

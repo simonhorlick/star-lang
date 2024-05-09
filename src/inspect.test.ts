@@ -28,9 +28,9 @@ const ensureBuild = (src: string): BuildResult => {
 
 const debugPrintTokens = (src: string, br: BuildResult) => {
   const hoverInfo = hover(src, br.file, br.defs, undefined);
-  for (const [k, v] of hoverInfo) {
+  for (const hi of hoverInfo) {
     console.debug(
-      printMultilineDiagnostic(src, TypecheckError(v.msg, k.start, k.end))
+      printMultilineDiagnostic(src, TypecheckError(hi.msg, hi.start, hi.end))
     );
   }
 };
@@ -48,9 +48,7 @@ describe("inspect", () => {
 
   test("should not display anything when hovering comments", () => {
     const result = ensureBuild(`// comment`);
-    const expected = new Map<Range, HoverInfo>([
-      [{ start: 0, end: 10 }, { msg: " comment" }],
-    ]);
+    const expected = [{ start: 0, end: 10, msg: " comment" }];
     expect(hover("", result.file, result.defs, 5)).toEqual(expected);
   });
 
@@ -68,20 +66,20 @@ describe("inspect", () => {
       | true -> false
     `;
     const result = ensureBuild(src);
-    const expected = new Map<Range, HoverInfo>([
+    const expected = [
       // the argument b
-      [{ start: 57, end: 58 }, { msg: "id(Bool)" }],
+      { start: 57, end: 58, msg: "id(Bool)" },
       // the b in case b
-      [{ start: 70, end: 71 }, { msg: "var(Bool)" }],
-      // the true in `false -> true`
-      [{ start: 92, end: 96 }, { msg: "ref(Bool)" }],
-      // the false in `true -> false`
-      [{ start: 113, end: 118 }, { msg: "ref(Bool)" }],
+      { start: 70, end: 71, msg: "var(Bool)" },
       // the Bool in the type signature
-      [{ start: 43, end: 47 }, { msg: "ref(★)" }],
+      { start: 49, end: 53, msg: "ref(★)" },
+      // the true in `false -> true`
+      { start: 92, end: 96, msg: "ref(Bool)" },
+      // the false in `true -> false`
+      { start: 113, end: 118, msg: "ref(Bool)" },
       // the other Bool in the type signature
-      [{ start: 49, end: 53 }, { msg: "ref(★)" }],
-    ]);
+      { start: 43, end: 47, msg: "ref(★)" },
+    ];
     const actual = hover(src, result.file, result.defs, undefined);
     expect(actual).toEqual(expected);
   });
