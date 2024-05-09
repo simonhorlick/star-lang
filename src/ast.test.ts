@@ -535,7 +535,7 @@ describe("ast", () => {
 
   test("should parse pi types in function type", () => {
     const src = `func bool_match : Πb:Bool ΠP:(Πx:Bool *) Πt:P(true) Πf:P(false) P(b) =
-    λb λP λt λf b(P)(t)(f)
+    λb λP λt λf b(P,t,f)
 `;
     const ast = stripAST(result(definition(ts(src)))) as Def;
     // const ast = result(definition(ts(src))) as Def;
