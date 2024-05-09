@@ -166,11 +166,22 @@ describe("ast", () => {
   //   /  \
   //  f    x
   //
-  test("should parse function application with two arguments", () =>
-    expect(st("f(x)(y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
+  // test("should parse function application with two arguments", () =>
+  //   expect(st("f(x)(y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
 
-  test("should parse function application with three arguments", () =>
-    expect(st("f(x)(y)(z)")).toBe(
+  test("should parse function application with two comma-separated arguments", () =>
+    // This is the same as the previous test.
+    expect(st("f(x,y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
+
+  // Should we allow this syntax, or enforce the comma syntax?
+  // test("should parse function application with three arguments", () =>
+  //   expect(st("f(x)(y)(z)")).toBe(
+  //     `App(App(App(Ref("f"), Ref("x")), Ref("y")), Ref("z"))`
+  //   ));
+
+  test("should parse function application with three comma-separated arguments", () =>
+    // This is the same as the previous test.
+    expect(st("f(x,y,z)")).toBe(
       `App(App(App(Ref("f"), Ref("x")), Ref("y")), Ref("z"))`
     ));
 

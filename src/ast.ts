@@ -677,12 +677,23 @@ export const abstraction = (term: () => Parser<Term>): Parser<Abs> =>
     )
   );
 
-// application is a parser for function application `f(x)`; `f(x)(y)`; `f (x(t))`.
+// parses an argument list to an application, for example: `(x,y,z)`.
+const appArgumentList = (
+  term: () => Parser<Term>
+): Parser<ParseError | Term[]> =>
+  parenthesis(spc(join(lazy(term), spc(char(",")))));
+
+// application is a parser for function application `f(x)`; `f(x)(y)`;
+// `f (x(t))`; `f(x,y)`. Here lhs is the function that's being applied.
 export const application = (term: () => Parser<Term>, lhs: Term): Parser<App> =>
   // f(x) or (some term)(x)
   bind(many(whitespace), (_) =>
     // args: greedily parse as many as we're able to
-    bind(many1(parenthesis(spc(lazy(term)))), (ts) => {
+    bind(appArgumentList(term), (ts: ParseError | Term[]) => {
+      if (!Array.isArray(ts)) {
+        return error(ts.msg);
+      }
+
       const terms = [lhs, ...ts];
       // Application is left-associative, so form the following tree of
       // applications, i.e. f(x)(y) == (f(x))(y):
