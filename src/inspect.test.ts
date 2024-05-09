@@ -218,7 +218,7 @@ describe("inspect", () => {
     type Nat = zero | succ(x Nat)
     func add:Nat->Nat->Nat = λn λm case n of
       | zero -> m
-      | succ -> succ(add(n$HERE$.x)(m))`;
+      | succ -> succ(add(n$HERE$.x,m))`;
     const src = srcWithToken.replace("$HERE$", "");
     const tokenLocation = srcWithToken.indexOf("$HERE$");
     const result = build(src, false);
