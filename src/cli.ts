@@ -3,7 +3,6 @@
 // The star command line interface.
 //
 
-import yargs from "yargs/yargs";
 import { promises as fs } from "fs";
 import { BuildResult, build } from "./build";
 import { pretty, prettyC } from "./pretty";
@@ -12,7 +11,7 @@ import { erase, nodeJsRuntime, reduce } from "./evaluation";
 import { parseErrorDiagnostic, typecheckErrorDiagnostic } from "./inspect";
 
 // Parses, builds and runs the given star source file.
-async function run(uri: string): Promise<void> {
+async function run(uri: string, trace: boolean): Promise<void> {
   let src: string;
   try {
     src = await fs.readFile(uri, "utf8");
@@ -69,17 +68,43 @@ async function run(uri: string): Promise<void> {
     return;
   }
 
-  let evaluated = reduce(nodeJsRuntime, erased, main.term);
-  //console.log(prettyC(evaluated, false));
+  let evaluated = reduce(nodeJsRuntime, erased, main.term, trace);
+  if (trace) {
+    console.log(prettyC(evaluated, false));
+  }
 }
 
-yargs(process.argv.slice(2))
-  .command(
-    "run [file]",
-    "evaluate the main function of the file",
-    {},
-    (argv) => {
-      run(argv.file as string);
-    }
-  )
-  .parse();
+const usage = () => console.log(`usage: star run <options> <file>`);
+
+const handleCommandLineArgs = (args: string[]) => {
+  if (args.length == 0) {
+    usage();
+    return;
+  }
+
+  const command = args[0];
+  switch (command) {
+    case "run":
+      let remainingArgs: string[] = [];
+      let trace = false;
+      for (const arg of args.slice(1)) {
+        if (arg == "-t") {
+          trace = true;
+        } else {
+          // not handled
+          remainingArgs.push(arg);
+        }
+      }
+      // require file argument
+      if (remainingArgs.length != 1) {
+        usage();
+        return;
+      }
+      run(remainingArgs[0], trace);
+      break;
+    default:
+      usage();
+  }
+};
+
+handleCommandLineArgs(process.argv.slice(2));
