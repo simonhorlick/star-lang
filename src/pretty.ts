@@ -1,4 +1,4 @@
-import { Term, identifier2str } from "./ast";
+import { App, Term, identifier2str } from "./ast";
 import { Context } from "./context";
 import * as Erased from "./erased";
 import { foldTree } from "./inspect";
@@ -34,6 +34,20 @@ export function printCtx(ctx: Context, indices: boolean = false): string {
   );
 }
 
+// Turns a tree of App nodes into a list, with the innermost App node at the
+// head of the list.
+//
+// App(App(f,a),b) => [f,a,b]
+//
+const collectApps = (term: App): Term[] => {
+  if (term.func._ == "app") {
+    return collectApps(term.func).concat(term.arg);
+  } else {
+    // base case: innermost app f(a)
+    return [term.func, term.arg];
+  }
+};
+
 // pretty print a term
 export function pretty(
   term?: Term,
@@ -50,14 +64,32 @@ export function pretty(
       case "self":
         return `ι${term.name}. ${pretty(term.body)}`;
       case "app": {
-        let l = pretty(term.func);
-        let r = "(" + pretty(term.arg) + ")";
+        // App(f,a) => f(a)
+        // App(App(f,a),b) => f(a,b)
 
-        if (term.func._ == "lam" || term.func._ == "ann") {
-          l = "(" + l + ")";
-        }
+        // Does the left hand side of the app require parenthesis for
+        // disambiguation?
+        const needsParens = (t: Term): boolean => {
+          switch (t._) {
+            case "lam":
+            case "self":
+            case "pi":
+            case "ann":
+              return true;
+            case "orig":
+            case "syn":
+              return needsParens(t.child);
+            case "rel":
+              return needsParens(t.term);
+            default:
+              return false;
+          }
+        };
 
-        return l + r;
+        const apps = collectApps(term);
+        const pfunc = pretty(apps[0]);
+        const func = needsParens(apps[0]) ? `(` + pfunc + `)` : pfunc;
+        return func + "(" + apps.slice(1).map(pretty).join(",") + ")";
       }
       case "ref":
       case "id":

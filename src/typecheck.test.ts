@@ -704,7 +704,7 @@ describe("typechecker", () => {
 
     const result = check(defs([bool, tru, fls]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      "(λb b((λP Bool):Bool→★)(false)(true)):Bool→Bool"
+      "(λb b((λP Bool):Bool→★,false,true)):Bool→Bool"
     );
   });
 
@@ -727,7 +727,7 @@ describe("typechecker", () => {
 
     const result = check(defs([nat, zero, succ]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      "(λn n((λP Nat):Nat→★)(zero)((λn.x n.x):Nat→((λP Nat):Nat→★)(succ(n)))):Nat→Nat"
+      "(λn n((λP Nat):Nat→★,zero,(λn.x n.x):Nat→((λP Nat):Nat→★)(succ(n)))):Nat→Nat"
     );
   });
 

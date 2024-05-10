@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import { Var } from "./ast";
-import { prettyC } from "./pretty";
+import { App, Ref, Var } from "./ast";
+import { pretty, prettyC } from "./pretty";
 import * as Erased from "./erased";
 
 describe("pretty", () => {
@@ -80,4 +80,11 @@ describe("pretty", () => {
         true
       )
     ).toBe("λs λz s@1(s@1(z@0))"));
+
+  const fa = App(Ref("f"), Ref("a"));
+  const fab = App(fa, Ref("b"));
+  const fabc = App(fab, Ref("c"));
+  test("f(a)", () => expect(pretty(fa)).toBe("f(a)"));
+  test("f(a)(b)", () => expect(pretty(fab)).toBe("f(a,b)"));
+  test("f(a)(b)(c)", () => expect(pretty(fabc)).toBe("f(a,b,c)"));
 });
