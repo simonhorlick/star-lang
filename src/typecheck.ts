@@ -29,12 +29,7 @@ import {
 } from "./ast";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
-import {
-  Context,
-  addTermToCtx as cons,
-  dbgCheckIndices,
-  lookupType,
-} from "./context";
+import { Context, addTermToCtx as cons, lookupType } from "./context";
 import { shift, substHole, substTop } from "./substitution";
 import { Set } from "immutable";
 import { desugarTerm } from "./adts";
