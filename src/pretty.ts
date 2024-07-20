@@ -47,6 +47,14 @@ const collectApps = (term: App): Term[] => {
     return [term.func, term.arg];
   }
 };
+const collectAppsC = (term: Erased.App): Erased.Term[] => {
+  if (term.left._ == "app") {
+    return collectAppsC(term.left).concat(term.right);
+  } else {
+    // base case: innermost app f(a)
+    return [term.left, term.right];
+  }
+};
 
 // pretty print a term
 export function pretty(
@@ -164,14 +172,29 @@ export function prettyC(term: Erased.Term, indices: boolean = false): string {
       return "λ" + term.name + " " + prettyC(term.body, indices) + "";
     // case "vapp":
     case "app": {
-      let l = prettyC(term.left, indices);
-      let r = "(" + prettyC(term.right, indices) + ")";
+      // Does the left hand side of the app require parenthesis for
+      // disambiguation?
+      const needsParens = (t: Erased.Term): boolean => {
+        switch (t._) {
+          case "lam":
+            return true;
+          default:
+            return false;
+        }
+      };
 
-      if (term.left._ == "lam") {
-        l = "(" + l + ")";
-      }
-
-      return l + r;
+      const apps = collectAppsC(term);
+      const pfunc = prettyC(apps[0]);
+      const func = needsParens(apps[0]) ? `(` + pfunc + `)` : pfunc;
+      return (
+        func +
+        "(" +
+        apps
+          .slice(1)
+          .map((t) => prettyC(t, indices))
+          .join(",") +
+        ")"
+      );
     }
     case "ref":
       return term.name;
