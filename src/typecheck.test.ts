@@ -11,7 +11,6 @@ import {
   Let,
   Origin,
   Par,
-  Self,
   Syntax,
   Term,
   definition,
