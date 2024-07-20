@@ -86,7 +86,7 @@ describe("holes", () => {
     );
     const filled = fill(result);
     expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
-      "cons(Bool)(true)(nil(Bool)):List(Bool)"
+      "cons(Bool,true,nil(Bool)):List(Bool)"
     );
   });
 
@@ -106,7 +106,7 @@ describe("holes", () => {
     );
     const filled = fill(result);
     expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
-      "cons(Bool)(true)(nil(Bool)):List(Bool)"
+      "cons(Bool,true,nil(Bool)):List(Bool)"
     );
   });
 
@@ -135,7 +135,7 @@ describe("holes", () => {
     );
     const filled = fill(result);
     expect(pretty(filled.term) + ":" + pretty(filled.type)).toBe(
-      "cons(Bool)(true)(cons(Bool)(true)(cons(Bool)(true)(nil(Bool)))):List(Bool)"
+      "cons(Bool,true,cons(Bool,true,cons(Bool,true,nil(Bool)))):List(Bool)"
     );
   });
 
