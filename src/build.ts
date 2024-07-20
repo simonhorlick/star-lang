@@ -76,9 +76,14 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       }
       checkedMap.set(def.name, Def(def.name, filled.term));
     } catch (e) {
-      const result = e as TypecheckError;
-      console.error(typecheckErrorDiagnostic(src, result));
-      checkerErrors.push(result);
+      if ((e as any)._ !== undefined) {
+        const result = e as TypecheckError;
+        console.error(typecheckErrorDiagnostic(src, result));
+        checkerErrors.push(result);
+      } else {
+        console.error(e);
+        checkerErrors.push(TypecheckError(e as string, 0, src.length));
+      }
       // add the original term to the map so we can at least get some
       // information when inspecting.
       checkedMap.set(def.name, Def(def.name, def.term));
