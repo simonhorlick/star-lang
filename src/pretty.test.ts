@@ -40,7 +40,7 @@ describe("pretty", () => {
   test("λt λf t", () => expect(prettyC(tru.term)).toBe("λt λf t"));
   test("λt λf f", () => expect(prettyC(fls.term)).toBe("λt λf f"));
   test("λl λm λn l(m)(n)", () =>
-    expect(prettyC(testFn.term)).toBe("λl λm λn l(m)(n)"));
+    expect(prettyC(testFn.term)).toBe("λl λm λn l(m,n)"));
   // test("λn:Nat. λm:Nat. n", () =>
   //   expect(pretty(fst.term)).toBe("λn:Nat. λm:Nat. n"));
   test("(λx x)(y)", () => expect(prettyC(id)).toBe("(λx x)(y)"));
