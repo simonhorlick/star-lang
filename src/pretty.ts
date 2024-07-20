@@ -184,7 +184,7 @@ export function prettyC(term: Erased.Term, indices: boolean = false): string {
       };
 
       const apps = collectAppsC(term);
-      const pfunc = prettyC(apps[0]);
+      const pfunc = prettyC(apps[0], indices);
       const func = needsParens(apps[0]) ? `(` + pfunc + `)` : pfunc;
       return (
         func +
