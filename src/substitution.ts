@@ -117,7 +117,12 @@ export function subst(
     case "syn":
       return Syntax(t.syntax, subst(j, s, c, t.child, name));
     case "case":
-      throw "subst: unexpected case";
+      return Case(
+        t.name,
+        t.branches.map((b) =>
+          Branch(b.constructor, subst(j, s, c, b.term, name))
+        )
+      );
     case "let":
       return Let(
         t.name,
