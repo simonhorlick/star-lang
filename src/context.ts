@@ -104,8 +104,9 @@ export const lookupType = (
   let x = ctx[ctx.length - index - 1];
   // For debugging - this can only happen if the wrong index is used in a
   // hand-crafted expression.
-  if (name) {
-    if (!(x.name == name || x.name.endsWith(name))) {
+  if (name && name != "") {
+    // If the binder doesn't match, throw an error.
+    if (x.name != "" && !(x.name == name || x.name.endsWith(name))) {
       throw `name mismatch: looking up ${name}@${index}; got ${
         x.name
       }@${index}. ctx is ${printCtx(ctx)}`;
