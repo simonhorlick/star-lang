@@ -57,6 +57,7 @@ import {
   vnil,
   ext,
   listADT,
+  boolADT,
 } from "./test_defs";
 import { reduce } from "./equal";
 import { Context } from "./context";
@@ -513,6 +514,75 @@ describe("typechecker", () => {
       nn.term.typ
     ));
 
+  // This is eqivalent to nn, but using a case expression rather than the
+  // desugared version.
+  const nn2 = pdef(
+    `func nn: Πb:Bool equal(Bool,not(not(b)),b) = λb
+  case b of
+  | false -> refl(Bool,false)
+  | true -> refl(Bool,true)`
+  );
+
+  test("double negation proof using case", () => {
+    // Check that not(not(b)) == b on the type level.
+    try {
+      const x = check(
+        defs([bool, tru, fls, not, equal, refl]),
+        adts([boolADT]),
+        [],
+        nn2.term.term,
+        nn2.term.typ
+      );
+      console.log(x);
+    } catch (e) {
+      console.log(e);
+      throw e;
+    }
+  });
+
+  test("should desugar nn case statement", () => {
+    // This test ensures that case statements are desugared to the expected
+    // terms.
+
+    // λb case b of
+    // | false -> refl(Bool,false)
+    // | true -> refl(Bool,true)
+    const term = Abs(
+      "b",
+      Case(Var("b", 0), [
+        Branch(
+          Identifier("false"),
+          App(App(Ref("refl"), Ref("Bool")), Ref("false"))
+        ),
+        Branch(
+          Identifier("true"),
+          App(App(Ref("refl"), Ref("Bool")), Ref("true"))
+        ),
+      ])
+    );
+
+    // equal(Bool,not(not(b)),b)
+    const nnb = App(Ref("not"), App(Ref("not"), Var("b", 0)));
+    const typ = Pi(
+      "b",
+      Ref("Bool"),
+      App(App(App(Ref("equal"), Ref("Bool")), nnb), Var("b", 0))
+    );
+
+    const ctx: Context = [];
+    const result = check(
+      defs([bool, tru, fls, not, equal, refl]),
+      adts([boolADT]),
+      ctx,
+      term,
+      typ
+    );
+
+    expect(pretty(result.term)).toBe(
+      "λb b(λ equal(Bool,not(not(b)),b),refl(Bool,false),refl(Bool,true))"
+    );
+  });
+
   const reflTrue = pdef(`func rt: equal(Bool,true,true) = refl(Bool,true)`);
 
   test("reflexivity of true has type equal(Bool,true,true)", () =>
@@ -707,7 +777,7 @@ describe("typechecker", () => {
 
     const result = check(defs([bool, tru, fls]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      "(λb b((λP Bool):Bool→★,false,true)):Bool→Bool"
+      "(λb b((λ Bool):Bool→★,false,true)):Bool→Bool"
     );
   });
 
@@ -730,7 +800,7 @@ describe("typechecker", () => {
 
     const result = check(defs([nat, zero, succ]), dts, [], stmt, stmttyp);
     expect(pretty(result.term, false, true)).toBe(
-      "(λn n((λP Nat):Nat→★,zero,(λn.x n.x):Nat→((λP Nat):Nat→★)(succ(n)))):Nat→Nat"
+      "(λn n((λ Nat):Nat→★,zero,(λn.x n.x):Nat→((λ Nat):Nat→★)(succ(n)))):Nat→Nat"
     );
   });
 
@@ -770,7 +840,7 @@ describe("typechecker", () => {
     // We expect the case statement to desugar to:
     //   xs(λP Bool,false,λxs.head λxs.tail xs.head)
     const expected = App(
-      App(App(Var("xs", 0), Abs("P", Ref("Bool"))), Ref("false")),
+      App(App(Var("xs", 0), Abs("", Ref("Bool"))), Ref("false")),
       Abs("xs.head", Abs("xs.tail", Var("xs.head", 1)))
     );
 

@@ -94,7 +94,7 @@ describe("inspect", () => {
     `;
     const result = ensureBuild(src);
     expect(pretty(result.defs.get("not")!.term)).toBe(
-      `λb b(λP Bool,true,false)`
+      `λb b(λ Bool,true,false)`
     );
   });
 

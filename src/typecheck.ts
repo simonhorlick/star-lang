@@ -443,13 +443,16 @@ export const desugarCaseStatement = (
       ctx
     );
 
+    // FIXME: This isn't an origin?
     return Syntax(branch.constructor as Origin, branchBodyWithArgsDesugared);
   });
 
   // The case statement desugars to
   //  val(λP tty)(λval.arg1 ... λval.argN branch1)...(λval.arg1 ... λval.argN branchN)
 
-  const P = Abs("P", shift(1, 0, tty)); // P just returns the expected type
+  // Leave this binder empty so that dependently typed expressions don't
+  // throw binder mismatch errors.
+  const P = Abs("", shift(0, 0, tty)); // P just returns the expected type
 
   const desugared = branches.reduce<Term>((acc: Term, branch) => {
     return App(acc, branch);
