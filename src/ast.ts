@@ -37,6 +37,7 @@ import {
   any11,
   lspc,
   any12,
+  any13,
 } from "./parser";
 import { pretty } from "./pretty";
 
@@ -305,14 +306,17 @@ export const Argument = (name: string, type: Type): Argument => ({
 export type Constructor = {
   name: Origin | Identifier;
   args: Argument[];
+  typ: Type | null;
 };
 
 export const Constructor = (
   name: Origin | Identifier,
-  args: Argument[]
+  args: Argument[],
+  typ: Type | null
 ): Constructor => ({
   name: name,
   args: args,
+  typ: typ,
 });
 
 export type ADT = {
@@ -889,8 +893,23 @@ export const stringLiteral: Parser<Term> = bind(str('"'), (_) =>
   )
 );
 
+// abstraction parses a lambda abstraction `λx t`. The binder x is separated
+// from the body by spaces.
+export const self = (term: () => Parser<Term>): Parser<Term> =>
+  bind(char("ι"), (_) =>
+    bind(optional(spaces), (_) =>
+      bind(block(identifier2), (name) =>
+        bind(spaces, (_) =>
+          bind(orFail("expected term", lazy(term)), (body) =>
+            pure(Self(identifier2str(name), body))
+          )
+        )
+      )
+    )
+  );
+
 export const subterm: Parser<Term> = bind(
-  any12(
+  any13(
     // parenthesis `(T)`
     parenthesis(spc(lazy(() => term))),
     // pi `Πx:A t`
@@ -913,6 +932,8 @@ export const subterm: Parser<Term> = bind(
     integerLiteral,
     // a string literal, for example `"abc"`
     stringLiteral,
+    // TODO: remove this, it shouldn't be part of the user-facing syntax.
+    self(() => term),
     // if nothing parses then skip past these characters and present a
     // ParseError AST node.
     resync2("expected term")
@@ -1000,13 +1021,20 @@ export const argumentList: Parser<Argument[]> = bind(
   }
 );
 
-// name(arg1 ArgType1, ..., ArgN ArgTypeN)
+const annotation2: Parser<Type> = bind(optional(spaces), (_) =>
+  bind(str(":"), (_) => type)
+);
+
+// parse an ADT constructor with an optional type annotation, for example
+// `name(arg1 ArgType1, ..., ArgN ArgTypeN):Type`
 export const constructor: Parser<Constructor> = bind(
   block(identifier2),
   (name) =>
     bind(many(whitespace), (_) =>
       bind(optional(argumentList), (args) =>
-        pure(Constructor(name, args || []))
+        bind(optional(annotation2), (typ) =>
+          pure(Constructor(name, args || [], typ))
+        )
       )
     )
 );
@@ -1112,7 +1140,8 @@ export function stripAST(t: ASTNode): ASTNode {
         t.constructors.map((c) =>
           Constructor(
             c.name,
-            c.args.map((p) => Argument(p.name, strip(p.type)))
+            c.args.map((p) => Argument(p.name, strip(p.type))),
+            c.typ ? strip(c.typ) : null
           )
         )
       );

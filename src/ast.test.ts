@@ -59,7 +59,14 @@ export function serialiseAST(n: ASTNode): string {
     case "def":
       return `Def(name=${n.name}, term=${serialise(n.term)})`;
     case "adt":
-      return `ADT(${identifier2str(n.name)})`;
+      return `ADT(${identifier2str(n.name)}, constructors=${n.constructors
+        .map(
+          (c) =>
+            `${identifier2str(c.name)}(${c.args
+              .map((a) => `${a.name}:${serialise(a.type)}`)
+              .join(",")})${c.typ ? `:${serialise(c.typ)}` : ""}`
+        )
+        .join("|")})`;
     case "err":
       return `Err(${n.msg})`;
     case "orig2":
@@ -569,7 +576,7 @@ describe("ast", () => {
     if (ast._ != "adt") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialiseAST(ast)).toBe(`ADT(Bool)`);
+    expect(serialiseAST(ast)).toBe(`ADT(Bool, constructors=true()|false())`);
   });
 
   test("should parse data type with arguments", () => {
@@ -579,7 +586,9 @@ describe("ast", () => {
     if (ast._ != "adt") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialiseAST(ast)).toBe(`ADT(List)`);
+    expect(serialiseAST(ast)).toBe(
+      `ADT(List, constructors=nil()|cons(head:Ref("A"),tail:App(Ref("List"), Ref("A"))))`
+    );
   });
 
   test("should parse data types with annotations", () => {
@@ -587,7 +596,7 @@ describe("ast", () => {
       result(
         adt(
           ts(
-            `type List(A *) = nil : List(A) | cons(head A, tail List(A)) : List(A)`
+            `type List(A *) = nil:List(A) | cons(head A, tail List(A)):List(A)`
           )
         )
       )
@@ -595,13 +604,16 @@ describe("ast", () => {
     if (ast._ != "adt") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialiseAST(ast)).toBe(`ADT(List)`);
+    expect(serialiseAST(ast)).toBe(
+      `ADT(List, constructors=nil():App(Ref("List"), Ref("A"))|cons(head:Ref("A"),tail:App(Ref("List"), Ref("A"))):App(Ref("List"), Ref("A")))`
+    );
   });
 
   // TODO: implement
   //   test("should parse data types with dependent annotations", () => {
   //     // TODO: Figure out syntax.
-  //     // TODO: Need the return type to be arguments to Vector, not some other random type.
+  //     // TODO: Need the return type to be arguments to Vector, not some other
+  //     //  random type, i.e. App(Ref("Vector"), ...)
   //     const ast = stripAST(
   //       result(
   //         adt(

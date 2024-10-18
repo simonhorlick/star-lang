@@ -403,6 +403,49 @@ export function any12<A, B, C, D, E, F, G, H, I, J, K, L>(
     )
   );
 }
+
+export function any13<A, B, C, D, E, F, G, H, I, J, K, L, M>(
+  p1: Parser<A>,
+  p2: Parser<B>,
+  p3: Parser<C>,
+  p4: Parser<D>,
+  p5: Parser<E>,
+  p6: Parser<F>,
+  p7: Parser<G>,
+  p8: Parser<H>,
+  p9: Parser<I>,
+  p10: Parser<J>,
+  p11: Parser<K>,
+  p12: Parser<L>,
+  p13: Parser<L>
+) {
+  return either(
+    p1,
+    either(
+      p2,
+      either(
+        p3,
+        either(
+          p4,
+          either(
+            p5,
+            either(
+              p6,
+              either(
+                p7,
+                either(
+                  p8,
+                  either(p9, either(p10, either(p11, either(p12, p13))))
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
 // optional returns a parser that attempts to use the supplied parser, but
 // if it fails it doesn't return a parse error and instead allows the parsing to
 // continue.

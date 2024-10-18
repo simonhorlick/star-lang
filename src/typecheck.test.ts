@@ -760,8 +760,8 @@ describe("typechecker", () => {
     //   not = λb b(λP Bool,false,true)
 
     const boolConstructors = [
-      { name: Identifier("true"), args: [] },
-      { name: Identifier("false"), args: [] },
+      { name: Identifier("true"), args: [], typ: null },
+      { name: Identifier("false"), args: [], typ: null },
     ];
 
     const dts = adts([ADT(Identifier("Bool"), [], boolConstructors)]);
@@ -783,8 +783,12 @@ describe("typechecker", () => {
 
   test("should annotate lambdas in desugared case branches", () => {
     const natConstructors: Constructor[] = [
-      { name: Identifier("zero"), args: [] },
-      { name: Identifier("succ"), args: [{ name: "x", type: Ref("Nat") }] },
+      { name: Identifier("zero"), args: [], typ: null },
+      {
+        name: Identifier("succ"),
+        args: [{ name: "x", type: Ref("Nat") }],
+        typ: null,
+      },
     ];
 
     const dts = adts([ADT(Identifier("Nat"), [], natConstructors)]);

@@ -3,6 +3,7 @@ import {
   Abs,
   Ann,
   App,
+  Constructor,
   Def,
   Identifier,
   Par,
@@ -18,9 +19,9 @@ import {
   buildType,
 } from "./adts";
 
-const boolConstructors = [
-  { name: Identifier("false"), args: [] },
-  { name: Identifier("true"), args: [] },
+const boolConstructors: Constructor[] = [
+  { name: Identifier("false"), args: [], typ: null },
+  { name: Identifier("true"), args: [], typ: null },
 ];
 
 export const boolADT = ADT(Identifier("Bool"), [], boolConstructors);
@@ -43,7 +44,9 @@ export const tru = Def(
   )
 );
 
-const unitConstructors = [{ name: Identifier("unit"), args: [] }];
+const unitConstructors: Constructor[] = [
+  { name: Identifier("unit"), args: [], typ: null },
+];
 
 export const unitADT = ADT(Identifier("Unit"), [], unitConstructors);
 
@@ -57,9 +60,13 @@ export const unt = Def(
   )
 );
 
-const natConstructors = [
-  { name: Identifier("zero"), args: [] },
-  { name: Identifier("succ"), args: [{ name: "n", type: Ref("Nat") }] },
+const natConstructors: Constructor[] = [
+  { name: Identifier("zero"), args: [], typ: null },
+  {
+    name: Identifier("succ"),
+    args: [{ name: "n", type: Ref("Nat") }],
+    typ: null,
+  },
 ];
 
 export const natADT = ADT(Identifier("Nat"), [], natConstructors);
@@ -84,8 +91,8 @@ export const succ = Def(
 
 const listParams = [{ name: "A", type: Star() }];
 
-const listConstructors = [
-  { name: Identifier("nil"), args: [] },
+const listConstructors: Constructor[] = [
+  { name: Identifier("nil"), args: [], typ: null },
   {
     name: Identifier("cons"),
     args: [
@@ -98,6 +105,7 @@ const listConstructors = [
         type: App(Ref("List"), Par("A")),
       },
     ],
+    typ: null,
   },
 ];
 
@@ -123,8 +131,8 @@ export const cons = Def(
 
 const maybeParams = [{ name: "A", type: Star() }];
 
-const maybeConstructors = [
-  { name: Identifier("null"), args: [] },
+const maybeConstructors: Constructor[] = [
+  { name: Identifier("null"), args: [], typ: null },
   {
     name: Identifier("just"),
     args: [
@@ -133,6 +141,7 @@ const maybeConstructors = [
         type: Par("A"),
       },
     ],
+    typ: null,
   },
 ];
 
@@ -165,7 +174,7 @@ const pairParams = [
   { name: "B", type: Star() },
 ];
 
-const pairConstructors = [
+const pairConstructors: Constructor[] = [
   {
     name: Identifier("pair"),
     args: [
@@ -178,6 +187,7 @@ const pairConstructors = [
         type: Par("B"),
       },
     ],
+    typ: null,
   },
 ];
 

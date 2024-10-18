@@ -376,6 +376,11 @@ const findConstructor = (name: string, adt: ADT, os: number, oe: number) => {
 // then during evaluation x can be either nil or cons, nil evaluating to
 // `nilBranch` and cons evaluating to `λx.head λx.tail consBranch`.
 //
+// Indexed types such as Vectors have optional type annotations on each
+// constructor, for example:
+//
+// type Vector(T *, n Nat) = vnil : Vector(T, 0) | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))
+//
 export const desugarCaseStatement = (
   defs: Map<string, Def>,
   adts: Map<string, ADT>,

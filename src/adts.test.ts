@@ -460,9 +460,10 @@ describe("adts", () => {
   //        Πccons:(Πhead:A Πtail:List(A) P(cons(A)(head)(tail)))
   //        P(t)
   //
-  // type Vector(T ★, n Nat) =
+  // type Vector(T *, n Nat) =
   //   | vnil : Vector(T, 0)
   //   | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))
+  //
   //
   // VectBool : Πsz:Nat ★
   //          = λsz ιt
