@@ -103,18 +103,33 @@ export const IntMul = (lhs: Expression, rhs: Expression): IntMul => ({
   rhs: rhs,
 });
 
-type Expression = IntLit | IntPlus | IntMul | IntNeg;
+// Function composition operator `f . g`.
+export type Comp = {
+  _: "comp";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Comp = (lhs: Expression, rhs: Expression): Comp => ({
+  _: "comp",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+type Expression = IntLit | IntPlus | IntMul | IntNeg | Comp;
 
 // export const reference: Parser<Expression> = map(identifier, (result: string) =>
 //   Ref(result)
 // );
-const opParser = either(char("+"), char("*"));
+const opParser = any3(char("+"), char("*"), char("."));
 
 const getBindingPower = (op: string): [number, number] => {
   if (op == "+") {
-    return [2, 3];
+    return [1, 2];
   } else if (op == "*") {
-    return [4, 5];
+    return [3, 4];
+  } else if (op == ".") {
+    return [6, 5];
   } else {
     throw new Error("unknown operator");
   }
@@ -176,8 +191,8 @@ const expression =
 
       // Consider the following expression `1 + 2 * 3`. The parse tree is built
       // from left-to-right starting with `1`. The next operator is `+` which
-      // has a left binding power of 2 so we continue parsing the `2*3` with a
-      // minimum binding power of 2.
+      // has a left binding power of 1 so we continue parsing the `2*3` with a
+      // minimum binding power of 1.
       //
       //     +
       //    / \
@@ -201,14 +216,14 @@ const expression =
       //    / \
       //   1   2
       //
-      // Because the minimum binding power is 2, when we reach the `*` we know
+      // Because the minimum binding power is 1, when we reach the `*` we know
       // that we can add it at this point in the tree. If the binding power
       // would be less, we would have to add the 2 and recurse back up to add
       // the rest of the expression.
 
-      if (op.value == "+" && min < 2) {
+      if (op.value == "+" && min < leftBindingPower) {
         // Continue parsing, setting the binding power appropriately.
-        const rhs = expression(2)(op.stream);
+        const rhs = expression(rightBindingPower)(op.stream);
         if (rhs._ == "parseerror") {
           return rhs;
         }
@@ -217,14 +232,24 @@ const expression =
           value: IntPlus(acc.value, rhs.value),
           stream: rhs.stream,
         };
-      } else if (op.value == "*" && min < 4) {
-        const rhs = expression(4)(op.stream);
+      } else if (op.value == "*" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
         if (rhs._ == "parseerror") {
           return rhs;
         }
         acc = {
           _: "outputvalue",
           value: IntMul(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == "." && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Comp(acc.value, rhs.value),
           stream: rhs.stream,
         };
       } else {
@@ -252,6 +277,8 @@ export function serialise(t: Expression, d: number = 0): string {
       return `IntPlus(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "imul":
       return `IntMul(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "comp":
+      return `Comp(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
   }
 }
 
@@ -295,4 +322,8 @@ describe("math", () => {
 
   test("should parse unary negation", () =>
     expect(st("-1")).toBe(`IntNeg(IntLit(1))`));
+
+  test("should parse function composition with right associativity", () =>
+    // f . g . h === f . (g . h)
+    expect(st("1.2.3")).toBe(`Comp(IntLit(1), Comp(IntLit(2), IntLit(3)))`));
 });
