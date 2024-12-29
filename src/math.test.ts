@@ -53,6 +53,7 @@ import {
   any4,
   any5,
   any6,
+  any7,
 } from "./parser";
 import { TypecheckError } from "./typecheck";
 import { foldTreeCtx, printDiagnostic } from "./inspect";
@@ -81,6 +82,18 @@ export const IntPlus = (lhs: Expression, rhs: Expression): IntPlus => ({
   _: "iplus",
   lhs: lhs,
   rhs: rhs,
+});
+
+export type Idx = {
+  _: "idx";
+  arr: Expression;
+  idx: Expression;
+};
+
+export const Idx = (arr: Expression, idx: Expression): Idx => ({
+  _: "idx",
+  arr: arr,
+  idx: idx,
 });
 
 export type App = {
@@ -167,14 +180,23 @@ type Expression =
   | App
   | Ref
   | Pi
-  | Ann;
+  | Ann
+  | Idx;
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
 );
 
 const opParser = spc(
-  any6(char("+"), char("*"), char("."), char("("), str("->"), char(":"))
+  any7(
+    char("+"),
+    char("*"),
+    char("."),
+    char("("),
+    str("->"),
+    char(":"),
+    char("[")
+  )
 );
 
 const getBindingPower = (op: string): [number, number] => {
@@ -196,6 +218,8 @@ const getBindingPower = (op: string): [number, number] => {
     return [10, 9];
   } else if (op == ":") {
     return [11, 12];
+  } else if (op == "[") {
+    return [13, 14];
   } else {
     throw new Error("unknown operator");
   }
@@ -334,6 +358,22 @@ const expression =
           value: App(acc.value, rhs.value),
           stream: closeparen.stream,
         };
+      } else if (op.value == "[" && min < leftBindingPower) {
+        // List indexing operator `a[i]` is parsed as an infix `[` followed by
+        // a closing `]`.
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        let closeparen = char("]")(rhs.stream);
+        if (closeparen._ == "parseerror") {
+          return closeparen;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Idx(acc.value, rhs.value),
+          stream: closeparen.stream,
+        };
       } else if (op.value == "->" && min < leftBindingPower) {
         const rhs = expression(rightBindingPower)(op.stream);
         if (rhs._ == "parseerror") {
@@ -387,6 +427,8 @@ export function serialise(t: Expression, d: number = 0): string {
       return `Pi("${t.name}", ${serialise(t.from)}, ${serialise(t.body)})`;
     case "ann":
       return `Ann(${serialise(t.term)}, ${serialise(t.type)})`;
+    case "idx":
+      return `Idx(${serialise(t.arr)}, ${serialise(t.idx)})`;
     default:
       throw new Error(`unhandled node`);
   }
@@ -460,4 +502,10 @@ describe("math", () => {
     expect(st("a:Int+b:Int")).toBe(
       `IntPlus(Ann(Ref("a"), Ref("Int")), Ann(Ref("b"), Ref("Int")))`
     ));
+
+  test("should parse list indexing operator", () =>
+    expect(st("a[i]")).toBe(`Idx(Ref("a"), Ref("i"))`));
+
+  test("should parse list concatenation operator", () =>
+    expect(st("as++bs")).toBe(`Cat(Ref("as"), Ref("bs"))`));
 });
