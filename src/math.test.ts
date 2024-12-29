@@ -86,6 +86,18 @@ export const IntPlus = (lhs: Expression, rhs: Expression): IntPlus => ({
   rhs: rhs,
 });
 
+export type IntSub = {
+  _: "isub";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const IntSub = (lhs: Expression, rhs: Expression): IntSub => ({
+  _: "isub",
+  lhs: lhs,
+  rhs: rhs,
+});
+
 export type Idx = {
   _: "idx";
   arr: Expression;
@@ -189,6 +201,7 @@ export const Ann = (term: Expression, type: Expression): Ann => ({
 type Expression =
   | IntLit
   | IntPlus
+  | IntSub
   | IntMul
   | IntNeg
   | Comp
@@ -206,28 +219,24 @@ export const reference: Parser<Expression> = map(identifier, (result: string) =>
 const opParser = spc(
   any(
     str("++"),
+    str("->"),
     char("+"),
+    char("-"),
     char("*"),
+    char("/"),
     char("."),
     char("("),
-    str("->"),
     char(":"),
     char("[")
   )
 );
 
 const getBindingPower = (op: string): [number, number] => {
-  if (op == "+") {
+  if (op == "+" || op == "-") {
     return [1, 2];
-  } else if (op == "*") {
+  } else if (op == "*" || op == "/") {
     return [3, 4];
   } else if (op == "(") {
-    // function application `f(x)`.
-    //   f(1+2)
-    //   1+f(9)
-    //   2*f(x)
-    //   f.g(y)
-    //   f(x)(z) == (f(x))(z)
     return [5, 6];
   } else if (op == ".") {
     return [8, 7];
@@ -341,6 +350,16 @@ const expression =
           value: IntPlus(acc.value, rhs.value),
           stream: rhs.stream,
         };
+      } else if (op.value == "-" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: IntSub(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
       } else if (op.value == "*" && min < leftBindingPower) {
         const rhs = expression(rightBindingPower)(op.stream);
         if (rhs._ == "parseerror") {
@@ -446,6 +465,8 @@ export function serialise(t: Expression, d: number = 0): string {
       return `IntNeg(${serialise(t.exp)})`;
     case "iplus":
       return `IntPlus(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "isub":
+      return `IntSub(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "imul":
       return `IntMul(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "comp":
@@ -475,6 +496,15 @@ describe("math", () => {
     // 1+2+3 === (1+2)+3
     expect(st("1+2+3")).toBe(
       `IntPlus(IntPlus(IntLit(1), IntLit(2)), IntLit(3))`
+    ));
+
+  test("should parse integer subtraction binary operator", () =>
+    expect(st("1-2")).toBe(`IntSub(IntLit(1), IntLit(2))`));
+
+  test("should parse integer subtraction with left associativity", () =>
+    // 1-2-3 === (1-2)-3
+    expect(st("1-2-3")).toBe(
+      `IntSub(IntSub(IntLit(1), IntLit(2)), IntLit(3))`
     ));
 
   test("should parse integer multiplication binary operator", () =>
