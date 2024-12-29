@@ -98,6 +98,35 @@ export const IntSub = (lhs: Expression, rhs: Expression): IntSub => ({
   rhs: rhs,
 });
 
+export const IntNeg = (exp: Expression): IntNeg => ({
+  _: "ineg",
+  exp: exp,
+});
+
+export type IntMul = {
+  _: "imul";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const IntMul = (lhs: Expression, rhs: Expression): IntMul => ({
+  _: "imul",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+export type IntDiv = {
+  _: "idiv";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const IntDiv = (lhs: Expression, rhs: Expression): IntDiv => ({
+  _: "idiv",
+  lhs: lhs,
+  rhs: rhs,
+});
+
 export type Idx = {
   _: "idx";
   arr: Expression;
@@ -126,23 +155,6 @@ export type IntNeg = {
   _: "ineg";
   exp: Expression;
 };
-
-export const IntNeg = (exp: Expression): IntNeg => ({
-  _: "ineg",
-  exp: exp,
-});
-
-export type IntMul = {
-  _: "imul";
-  lhs: Expression;
-  rhs: Expression;
-};
-
-export const IntMul = (lhs: Expression, rhs: Expression): IntMul => ({
-  _: "imul",
-  lhs: lhs,
-  rhs: rhs,
-});
 
 // List concatenation operator.
 export type Cat = {
@@ -203,6 +215,7 @@ type Expression =
   | IntPlus
   | IntSub
   | IntMul
+  | IntDiv
   | IntNeg
   | Comp
   | App
@@ -370,6 +383,16 @@ const expression =
           value: IntMul(acc.value, rhs.value),
           stream: rhs.stream,
         };
+      } else if (op.value == "/" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: IntDiv(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
       } else if (op.value == "." && min < leftBindingPower) {
         const rhs = expression(rightBindingPower)(op.stream);
         if (rhs._ == "parseerror") {
@@ -469,6 +492,8 @@ export function serialise(t: Expression, d: number = 0): string {
       return `IntSub(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "imul":
       return `IntMul(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "idiv":
+      return `IntDiv(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "comp":
       return `Comp(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "app":
@@ -532,6 +557,9 @@ describe("math", () => {
     expect(st("1*(2+3)")).toBe(
       `IntMul(IntLit(1), IntPlus(IntLit(2), IntLit(3)))`
     ));
+
+  test("should parse integer division binary operator", () =>
+    expect(st("1/2")).toBe(`IntDiv(IntLit(1), IntLit(2))`));
 
   test("should parse multiple parenthesis", () =>
     expect(st("((1))")).toBe(`IntLit(1)`));
