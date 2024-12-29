@@ -129,12 +129,13 @@ export const Comp = (lhs: Expression, rhs: Expression): Comp => ({
   rhs: rhs,
 });
 
-type Expression = IntLit | IntPlus | IntMul | IntNeg | Comp | App;
+type Expression = IntLit | IntPlus | IntMul | IntNeg | Comp | App | Ref;
 
-// export const reference: Parser<Expression> = map(identifier, (result: string) =>
-//   Ref(result)
-// );
-const opParser = any4(char("+"), char("*"), char("."), char("("));
+export const reference: Parser<Expression> = map(identifier, (result: string) =>
+  Ref(result)
+);
+
+const opParser = spc(any4(char("+"), char("*"), char("."), char("(")));
 
 const getBindingPower = (op: string): [number, number] => {
   if (op == "+") {
@@ -196,7 +197,7 @@ const expression =
       };
     }
 
-    let acc: Result<Expression> = integerLiteral(s);
+    let acc: Result<Expression> = either(integerLiteral, reference)(s);
     if (acc._ == "parseerror") {
       return acc;
     }
@@ -302,8 +303,8 @@ const expression =
 // used in tests.
 export function serialise(t: Expression, d: number = 0): string {
   switch (t._) {
-    // case "ref":
-    //   return `Ref("${t.name}")`;
+    case "ref":
+      return `Ref("${t.name}")`;
     case "int":
       return `IntLit(${t.num})`;
     // case "err":
@@ -367,12 +368,12 @@ describe("math", () => {
 
   test("should parse function composition with right associativity", () =>
     // f . g . h === f . (g . h)
-    expect(st("1.2.3")).toBe(`Comp(IntLit(1), Comp(IntLit(2), IntLit(3)))`));
+    expect(st("f . g . h")).toBe(`Comp(Ref("f"), Comp(Ref("g"), Ref("h")))`));
 
   test("should parse function application", () =>
-    expect(st("1(2)")).toBe(`App(IntLit(1), IntLit(2))`));
+    expect(st("f(x)")).toBe(`App(Ref("f"), Ref("x"))`));
 
   test("should parse function application with multiple arguments", () =>
     // f(x)(y) === (f(x))(y)
-    expect(st("1(2)(3)")).toBe(`App(App(IntLit(1), IntLit(2)), IntLit(3))`));
+    expect(st("f(x)(y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
 });
