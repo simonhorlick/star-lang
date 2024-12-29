@@ -100,6 +100,16 @@ type Expression = IntLit | IntPlus | IntMul;
 // );
 const opParser = either(char("+"), char("*"));
 
+const getBindingPower = (op: string): [number, number] => {
+  if (op == "+") {
+    return [2, 3];
+  } else if (op == "*") {
+    return [4, 5];
+  } else {
+    throw new Error("unknown operator");
+  }
+};
+
 const expression =
   (min: number) =>
   (s: Stream): Result<Expression> => {
@@ -132,17 +142,47 @@ const expression =
       return acc;
     }
 
-    // Now parse many `op int op int op int ...`
+    // Now parse many `op a op b op c ...`
     while (true) {
       // Peek the next operator, if there is one.
       const op = opParser(acc.stream);
       if (op._ == "parseerror") {
         break;
       }
-      // Check the binding power of the operator we just peeked. If the binding
-      // power of the current expression (acc) is higher, then we don't parse
-      // the operator and instead we terminate this sub-expression. This allows
-      // the operator to be inserted into the upper level of the tree.
+      const [leftBindingPower, rightBindingPower] = getBindingPower(op.value);
+
+      // Consider the following expression `1 + 2 * 3`. The parse tree is built
+      // from left-to-right starting with `1`. The next operator is `+` which
+      // has a left binding power of 2 so we continue parsing the `2*3` with a
+      // minimum binding power of 2.
+      //
+      //     +
+      //    / \
+      //   1   ?
+      //
+      // There are two possibilities to construct the parse tree. The first is
+      // that the `2*3` is added in the place of the question mark. The second
+      // is that the `2` is added in the place of the question mark and the `*3`
+      // is added at the root of the tree, corresponding to the following
+      // expressions:
+      //
+      //     +
+      //    / \
+      //   1   *                corresponding to 1+(2*3)
+      //      / \
+      //     2   3
+      //
+      //       *
+      //      / \
+      //     +   3              corresponding to (1+2)*3
+      //    / \
+      //   1   2
+      //
+      // Because the minimum binding power is 2, when we reach the `*` we know
+      // that we can add it at this point in the tree. If the binding power
+      // would be less, we would have to add the 2 and recurse back up to add
+      // the rest of the expression.
+
       if (op.value == "+" && min < 2) {
         // Continue parsing, setting the binding power appropriately.
         const rhs = expression(2)(op.stream);
@@ -227,4 +267,7 @@ describe("math", () => {
     expect(st("1*(2+3)")).toBe(
       `IntMul(IntLit(1), IntPlus(IntLit(2), IntLit(3)))`
     ));
+
+  test("should parse unary negation", () =>
+    expect(st("-1")).toBe(`IntNeg(IntLit(1))`));
 });
