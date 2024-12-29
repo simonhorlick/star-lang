@@ -21,7 +21,6 @@ import {
   caseStatement,
   caseBranch,
   IntLit,
-  Ann,
   application,
   ifStatement,
   integerLiteral,
@@ -52,6 +51,8 @@ import {
   map,
   many1,
   any4,
+  any5,
+  any6,
 } from "./parser";
 import { TypecheckError } from "./typecheck";
 import { foldTreeCtx, printDiagnostic } from "./inspect";
@@ -129,13 +130,52 @@ export const Comp = (lhs: Expression, rhs: Expression): Comp => ({
   rhs: rhs,
 });
 
-type Expression = IntLit | IntPlus | IntMul | IntNeg | Comp | App | Ref;
+// Π is the type of functions.
+export type Pi = {
+  _: "pi";
+  from: Expression;
+  body: Expression;
+  name: string; // name of the binder
+};
+
+export const Pi = (name: string, from: Expression, to: Expression): Pi => ({
+  _: "pi",
+  from: from,
+  body: to,
+  name: name,
+});
+
+// Π is the type of functions.
+export type Ann = {
+  _: "ann";
+  term: Expression;
+  type: Expression;
+};
+
+export const Ann = (term: Expression, type: Expression): Ann => ({
+  _: "ann",
+  term: term,
+  type: type,
+});
+
+type Expression =
+  | IntLit
+  | IntPlus
+  | IntMul
+  | IntNeg
+  | Comp
+  | App
+  | Ref
+  | Pi
+  | Ann;
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
 );
 
-const opParser = spc(any4(char("+"), char("*"), char("."), char("(")));
+const opParser = spc(
+  any6(char("+"), char("*"), char("."), char("("), str("->"), char(":"))
+);
 
 const getBindingPower = (op: string): [number, number] => {
   if (op == "+") {
@@ -152,6 +192,10 @@ const getBindingPower = (op: string): [number, number] => {
     return [5, 6];
   } else if (op == ".") {
     return [8, 7];
+  } else if (op == "->") {
+    return [10, 9];
+  } else if (op == ":") {
+    return [11, 12];
   } else {
     throw new Error("unknown operator");
   }
@@ -290,6 +334,26 @@ const expression =
           value: App(acc.value, rhs.value),
           stream: closeparen.stream,
         };
+      } else if (op.value == "->" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Pi("", acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == ":" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Ann(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
       } else {
         break;
       }
@@ -319,6 +383,12 @@ export function serialise(t: Expression, d: number = 0): string {
       return `Comp(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "app":
       return `App(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "pi":
+      return `Pi("${t.name}", ${serialise(t.from)}, ${serialise(t.body)})`;
+    case "ann":
+      return `Ann(${serialise(t.term)}, ${serialise(t.type)})`;
+    default:
+      throw new Error(`unhandled node`);
   }
 }
 
@@ -376,4 +446,18 @@ describe("math", () => {
   test("should parse function application with multiple arguments", () =>
     // f(x)(y) === (f(x))(y)
     expect(st("f(x)(y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
+
+  test("should parse arrow operator with right associativity", () =>
+    // a -> b -> c === a -> (b -> c)
+    expect(st("a->b->c")).toBe(`Pi("", Ref("a"), Pi("", Ref("b"), Ref("c")))`));
+
+  test("should parse type annotation", () =>
+    // a:A:B === (a:A):B
+    expect(st("a:A:B")).toBe(`Ann(Ann(Ref("a"), Ref("A")), Ref("B"))`));
+
+  test("should parse type annotation with high precedence", () =>
+    // a:Int + b:Int === (a:Int) + (b:Int)
+    expect(st("a:Int+b:Int")).toBe(
+      `IntPlus(Ann(Ref("a"), Ref("Int")), Ann(Ref("b"), Ref("Int")))`
+    ));
 });
