@@ -139,6 +139,32 @@ export const Idx = (arr: Expression, idx: Expression): Idx => ({
   idx: idx,
 });
 
+// Boolean and.
+export type And = {
+  _: "and";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const And = (lhs: Expression, rhs: Expression): And => ({
+  _: "and",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+// Boolean or.
+export type Or = {
+  _: "or";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Or = (lhs: Expression, rhs: Expression): Or => ({
+  _: "or",
+  lhs: lhs,
+  rhs: rhs,
+});
+
 export type Eq = {
   _: "eq";
   lhs: Expression;
@@ -301,13 +327,15 @@ type Expression =
   | Gte
   | Lte
   | Eq
-  | Neq;
+  | Neq
+  | And
+  | Or;
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
 );
 
-const opParser = spc(
+const opParser: Parser<string> = spc(
   any(
     str("++"),
     str("->"),
@@ -315,6 +343,8 @@ const opParser = spc(
     str("<="),
     str("=="),
     str("!="),
+    str("&&"),
+    str("||"),
     char(">"),
     char("<"),
     char("+"),
@@ -349,13 +379,17 @@ const getBindingPower = (op: string): [number, number] => {
     return [17, 18];
   } else if (op == "==" || op == "!=") {
     return [19, 20];
+  } else if (op == "||") {
+    return [21, 22];
+  } else if (op == "&&") {
+    return [23, 24];
   } else {
     throw new Error("unknown operator");
   }
 };
 
 const expression =
-  (min: number) =>
+  (min: number): Parser<Expression> =>
   (s: Stream): Result<Expression> => {
     // An expression consists of an integer literal, optionally followed by
     // operators and literals.
@@ -479,6 +513,26 @@ const expression =
         acc = {
           _: "outputvalue",
           value: IntDiv(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == "&&" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: And(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == "||" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Or(acc.value, rhs.value),
           stream: rhs.stream,
         };
       } else if (op.value == "==" && min < leftBindingPower) {
@@ -666,6 +720,10 @@ export function serialise(t: Expression, d: number = 0): string {
       return `Eq(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "neq":
       return `Neq(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "and":
+      return `And(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "or":
+      return `Or(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     default:
       throw new Error(`unhandled node`);
   }
@@ -779,4 +837,13 @@ describe("math", () => {
 
   test("should parse logical not equals binary operator", () =>
     expect(st("a!=b")).toBe(`Neq(Ref("a"), Ref("b"))`));
+
+  test("should parse logical and binary operator", () =>
+    expect(st("a&&b")).toBe(`And(Ref("a"), Ref("b"))`));
+
+  test("should parse logical or binary operator", () =>
+    expect(st("a||b")).toBe(`Or(Ref("a"), Ref("b"))`));
+
+  test("should parse logical and at a higher precedence than logical or", () =>
+    expect(st("a||b&&c")).toBe(`Or(Ref("a"), And(Ref("b"), Ref("c")))`));
 });
