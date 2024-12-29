@@ -51,6 +51,7 @@ import {
   any3,
   map,
   many1,
+  any4,
 } from "./parser";
 import { TypecheckError } from "./typecheck";
 import { foldTreeCtx, printDiagnostic } from "./inspect";
@@ -77,6 +78,18 @@ export type IntPlus = {
 
 export const IntPlus = (lhs: Expression, rhs: Expression): IntPlus => ({
   _: "iplus",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+export type App = {
+  _: "app";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const App = (lhs: Expression, rhs: Expression): App => ({
+  _: "app",
   lhs: lhs,
   rhs: rhs,
 });
@@ -116,20 +129,28 @@ export const Comp = (lhs: Expression, rhs: Expression): Comp => ({
   rhs: rhs,
 });
 
-type Expression = IntLit | IntPlus | IntMul | IntNeg | Comp;
+type Expression = IntLit | IntPlus | IntMul | IntNeg | Comp | App;
 
 // export const reference: Parser<Expression> = map(identifier, (result: string) =>
 //   Ref(result)
 // );
-const opParser = any3(char("+"), char("*"), char("."));
+const opParser = any4(char("+"), char("*"), char("."), char("("));
 
 const getBindingPower = (op: string): [number, number] => {
   if (op == "+") {
     return [1, 2];
   } else if (op == "*") {
     return [3, 4];
+  } else if (op == "(") {
+    // function application `f(x)`.
+    //   f(1+2)
+    //   1+f(9)
+    //   2*f(x)
+    //   f.g(y)
+    //   f(x)(z) == (f(x))(z)
+    return [5, 6];
   } else if (op == ".") {
-    return [6, 5];
+    return [8, 7];
   } else {
     throw new Error("unknown operator");
   }
@@ -252,6 +273,22 @@ const expression =
           value: Comp(acc.value, rhs.value),
           stream: rhs.stream,
         };
+      } else if (op.value == "(" && min < leftBindingPower) {
+        // Function application `f(x)` is parsed as an infix `(` followed by a
+        // closing `)`.
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        let closeparen = char(")")(rhs.stream);
+        if (closeparen._ == "parseerror") {
+          return closeparen;
+        }
+        acc = {
+          _: "outputvalue",
+          value: App(acc.value, rhs.value),
+          stream: closeparen.stream,
+        };
       } else {
         break;
       }
@@ -279,6 +316,8 @@ export function serialise(t: Expression, d: number = 0): string {
       return `IntMul(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "comp":
       return `Comp(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "app":
+      return `App(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
   }
 }
 
@@ -320,10 +359,20 @@ describe("math", () => {
       `IntMul(IntLit(1), IntPlus(IntLit(2), IntLit(3)))`
     ));
 
+  test("should parse multiple parenthesis", () =>
+    expect(st("((1))")).toBe(`IntLit(1)`));
+
   test("should parse unary negation", () =>
     expect(st("-1")).toBe(`IntNeg(IntLit(1))`));
 
   test("should parse function composition with right associativity", () =>
     // f . g . h === f . (g . h)
     expect(st("1.2.3")).toBe(`Comp(IntLit(1), Comp(IntLit(2), IntLit(3)))`));
+
+  test("should parse function application", () =>
+    expect(st("1(2)")).toBe(`App(IntLit(1), IntLit(2))`));
+
+  test("should parse function application with multiple arguments", () =>
+    // f(x)(y) === (f(x))(y)
+    expect(st("1(2)(3)")).toBe(`App(App(IntLit(1), IntLit(2)), IntLit(3))`));
 });
