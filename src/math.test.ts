@@ -139,6 +139,54 @@ export const Idx = (arr: Expression, idx: Expression): Idx => ({
   idx: idx,
 });
 
+export type Gt = {
+  _: "gt";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Gt = (lhs: Expression, rhs: Expression): Gt => ({
+  _: "gt",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+export type Lt = {
+  _: "lt";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Lt = (lhs: Expression, rhs: Expression): Lt => ({
+  _: "lt",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+export type Gte = {
+  _: "gte";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Gte = (lhs: Expression, rhs: Expression): Gte => ({
+  _: "gte",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+export type Lte = {
+  _: "lte";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Lte = (lhs: Expression, rhs: Expression): Lte => ({
+  _: "lte",
+  lhs: lhs,
+  rhs: rhs,
+});
+
 export type App = {
   _: "app";
   lhs: Expression;
@@ -223,7 +271,11 @@ type Expression =
   | Pi
   | Ann
   | Idx
-  | Cat;
+  | Cat
+  | Gt
+  | Lt
+  | Gte
+  | Lte;
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
@@ -233,6 +285,10 @@ const opParser = spc(
   any(
     str("++"),
     str("->"),
+    str(">="),
+    str("<="),
+    char(">"),
+    char("<"),
     char("+"),
     char("-"),
     char("*"),
@@ -261,6 +317,8 @@ const getBindingPower = (op: string): [number, number] => {
     return [13, 14];
   } else if (op == "++") {
     return [15, 16];
+  } else if (op == ">" || op == "<" || op == ">=" || op == "<=") {
+    return [17, 18];
   } else {
     throw new Error("unknown operator");
   }
@@ -393,6 +451,46 @@ const expression =
           value: IntDiv(acc.value, rhs.value),
           stream: rhs.stream,
         };
+      } else if (op.value == ">" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Gt(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == "<" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Lt(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == ">=" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Gte(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == "<=" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Lte(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
       } else if (op.value == "." && min < leftBindingPower) {
         const rhs = expression(rightBindingPower)(op.stream);
         if (rhs._ == "parseerror") {
@@ -506,6 +604,14 @@ export function serialise(t: Expression, d: number = 0): string {
       return `Idx(${serialise(t.arr)}, ${serialise(t.idx)})`;
     case "cat":
       return `Cat(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "gt":
+      return `Gt(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "lt":
+      return `Lt(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "gte":
+      return `Gte(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "lte":
+      return `Lte(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     default:
       throw new Error(`unhandled node`);
   }
@@ -597,4 +703,20 @@ describe("math", () => {
 
   test("should parse list concatenation operator with left associativity", () =>
     expect(st("as++bs++cs")).toBe(`Cat(Cat(Ref("as"), Ref("bs")), Ref("cs"))`));
+
+  test("should parse greater-than binary operator", () =>
+    expect(st("a>b")).toBe(`Gt(Ref("a"), Ref("b"))`));
+
+  test("should parse greater-than-or-equal binary operator", () =>
+    expect(st("a>=b")).toBe(`Gte(Ref("a"), Ref("b"))`));
+
+  test("should parse less-than binary operator", () =>
+    expect(st("a<b")).toBe(`Lt(Ref("a"), Ref("b"))`));
+
+  test("should parse less-than-or-equal binary operator", () =>
+    expect(st("a<=b")).toBe(`Lte(Ref("a"), Ref("b"))`));
+
+  test("should parse less-than and greater-than with the same precedence", () =>
+    // a<b>c === (a<b)>c
+    expect(st("a<b>c")).toBe(`Gt(Lt(Ref("a"), Ref("b")), Ref("c"))`));
 });
