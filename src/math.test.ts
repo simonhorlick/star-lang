@@ -81,6 +81,16 @@ export const IntPlus = (lhs: Expression, rhs: Expression): IntPlus => ({
   rhs: rhs,
 });
 
+export type IntNeg = {
+  _: "ineg";
+  exp: Expression;
+};
+
+export const IntNeg = (exp: Expression): IntNeg => ({
+  _: "ineg",
+  exp: exp,
+});
+
 export type IntMul = {
   _: "imul";
   lhs: Expression;
@@ -93,7 +103,7 @@ export const IntMul = (lhs: Expression, rhs: Expression): IntMul => ({
   rhs: rhs,
 });
 
-type Expression = IntLit | IntPlus | IntMul;
+type Expression = IntLit | IntPlus | IntMul | IntNeg;
 
 // export const reference: Parser<Expression> = map(identifier, (result: string) =>
 //   Ref(result)
@@ -134,6 +144,19 @@ const expression =
         _: "outputvalue",
         value: ex.value,
         stream: closeparen.stream,
+      };
+    }
+
+    let neg = char("-")(s);
+    if (neg._ != "parseerror") {
+      const ex = expression(0)(neg.stream);
+      if (ex._ == "parseerror") {
+        return ex;
+      }
+      return {
+        _: "outputvalue",
+        value: IntNeg(ex.value),
+        stream: ex.stream,
       };
     }
 
@@ -223,6 +246,8 @@ export function serialise(t: Expression, d: number = 0): string {
       return `IntLit(${t.num})`;
     // case "err":
     //   return `ParseError(${t.msg})`;
+    case "ineg":
+      return `IntNeg(${serialise(t.exp)})`;
     case "iplus":
       return `IntPlus(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "imul":
