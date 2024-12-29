@@ -75,54 +75,54 @@ export const result = <T>(x: Result<T>) => {
 };
 
 export type IntPlus = {
-  _: "iplus";
+  _: "add";
   lhs: Expression;
   rhs: Expression;
 };
 
 export const IntPlus = (lhs: Expression, rhs: Expression): IntPlus => ({
-  _: "iplus",
+  _: "add",
   lhs: lhs,
   rhs: rhs,
 });
 
 export type IntSub = {
-  _: "isub";
+  _: "sub";
   lhs: Expression;
   rhs: Expression;
 };
 
 export const IntSub = (lhs: Expression, rhs: Expression): IntSub => ({
-  _: "isub",
+  _: "sub",
   lhs: lhs,
   rhs: rhs,
 });
 
 export const IntNeg = (exp: Expression): IntNeg => ({
-  _: "ineg",
+  _: "neg",
   exp: exp,
 });
 
 export type IntMul = {
-  _: "imul";
+  _: "mul";
   lhs: Expression;
   rhs: Expression;
 };
 
 export const IntMul = (lhs: Expression, rhs: Expression): IntMul => ({
-  _: "imul",
+  _: "mul",
   lhs: lhs,
   rhs: rhs,
 });
 
 export type IntDiv = {
-  _: "idiv";
+  _: "div";
   lhs: Expression;
   rhs: Expression;
 };
 
 export const IntDiv = (lhs: Expression, rhs: Expression): IntDiv => ({
-  _: "idiv",
+  _: "div",
   lhs: lhs,
   rhs: rhs,
 });
@@ -152,7 +152,7 @@ export const App = (lhs: Expression, rhs: Expression): App => ({
 });
 
 export type IntNeg = {
-  _: "ineg";
+  _: "neg";
   exp: Expression;
 };
 
@@ -484,15 +484,15 @@ export function serialise(t: Expression, d: number = 0): string {
       return `IntLit(${t.num})`;
     // case "err":
     //   return `ParseError(${t.msg})`;
-    case "ineg":
+    case "neg":
       return `IntNeg(${serialise(t.exp)})`;
-    case "iplus":
+    case "add":
       return `IntPlus(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
-    case "isub":
+    case "sub":
       return `IntSub(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
-    case "imul":
+    case "mul":
       return `IntMul(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
-    case "idiv":
+    case "div":
       return `IntDiv(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "comp":
       return `Comp(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
