@@ -139,6 +139,30 @@ export const Idx = (arr: Expression, idx: Expression): Idx => ({
   idx: idx,
 });
 
+export type Eq = {
+  _: "eq";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Eq = (lhs: Expression, rhs: Expression): Eq => ({
+  _: "eq",
+  lhs: lhs,
+  rhs: rhs,
+});
+
+export type Neq = {
+  _: "neq";
+  lhs: Expression;
+  rhs: Expression;
+};
+
+export const Neq = (lhs: Expression, rhs: Expression): Neq => ({
+  _: "neq",
+  lhs: lhs,
+  rhs: rhs,
+});
+
 export type Gt = {
   _: "gt";
   lhs: Expression;
@@ -275,7 +299,9 @@ type Expression =
   | Gt
   | Lt
   | Gte
-  | Lte;
+  | Lte
+  | Eq
+  | Neq;
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
@@ -287,6 +313,8 @@ const opParser = spc(
     str("->"),
     str(">="),
     str("<="),
+    str("=="),
+    str("!="),
     char(">"),
     char("<"),
     char("+"),
@@ -319,6 +347,8 @@ const getBindingPower = (op: string): [number, number] => {
     return [15, 16];
   } else if (op == ">" || op == "<" || op == ">=" || op == "<=") {
     return [17, 18];
+  } else if (op == "==" || op == "!=") {
+    return [19, 20];
   } else {
     throw new Error("unknown operator");
   }
@@ -449,6 +479,26 @@ const expression =
         acc = {
           _: "outputvalue",
           value: IntDiv(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == "==" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Eq(acc.value, rhs.value),
+          stream: rhs.stream,
+        };
+      } else if (op.value == "!=" && min < leftBindingPower) {
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
+        acc = {
+          _: "outputvalue",
+          value: Neq(acc.value, rhs.value),
           stream: rhs.stream,
         };
       } else if (op.value == ">" && min < leftBindingPower) {
@@ -612,6 +662,10 @@ export function serialise(t: Expression, d: number = 0): string {
       return `Gte(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "lte":
       return `Lte(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "eq":
+      return `Eq(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "neq":
+      return `Neq(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     default:
       throw new Error(`unhandled node`);
   }
@@ -719,4 +773,10 @@ describe("math", () => {
   test("should parse less-than and greater-than with the same precedence", () =>
     // a<b>c === (a<b)>c
     expect(st("a<b>c")).toBe(`Gt(Lt(Ref("a"), Ref("b")), Ref("c"))`));
+
+  test("should parse logical equals binary operator", () =>
+    expect(st("a==b")).toBe(`Eq(Ref("a"), Ref("b"))`));
+
+  test("should parse logical not equals binary operator", () =>
+    expect(st("a!=b")).toBe(`Neq(Ref("a"), Ref("b"))`));
 });
