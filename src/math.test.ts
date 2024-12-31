@@ -475,132 +475,84 @@ const expression =
       // the rest of the expression.
 
       if (min < leftBindingPower) {
+        // Continue parsing, setting the binding power appropriately.
+        const rhs = expression(rightBindingPower)(op.stream);
+        if (rhs._ == "parseerror") {
+          return rhs;
+        }
         if (op.value == "+") {
-          // Continue parsing, setting the binding power appropriately.
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: IntPlus(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "-") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: IntSub(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "*") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: IntMul(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "/") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: IntDiv(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "&&") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: And(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "||") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Or(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "==") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Eq(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "!=") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Neq(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == ">") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Gt(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "<") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Lt(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == ">=") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Gte(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "<=") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Lte(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == ".") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Comp(acc.value, rhs.value),
@@ -609,10 +561,6 @@ const expression =
         } else if (op.value == "(") {
           // Function application `f(x)` is parsed as an infix `(` followed by a
           // closing `)`.
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           let closeparen = char(")")(rhs.stream);
           if (closeparen._ == "parseerror") {
             return closeparen;
@@ -625,10 +573,6 @@ const expression =
         } else if (op.value == "[") {
           // List indexing operator `a[i]` is parsed as an infix `[` followed by
           // a closing `]`.
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           let closeparen = char("]")(rhs.stream);
           if (closeparen._ == "parseerror") {
             return closeparen;
@@ -639,30 +583,18 @@ const expression =
             stream: closeparen.stream,
           };
         } else if (op.value == "->") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Pi("", acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == "++") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Cat(acc.value, rhs.value),
             stream: rhs.stream,
           };
         } else if (op.value == ":") {
-          const rhs = expression(rightBindingPower)(op.stream);
-          if (rhs._ == "parseerror") {
-            return rhs;
-          }
           acc = {
             _: "outputvalue",
             value: Ann(acc.value, rhs.value),
