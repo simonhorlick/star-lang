@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { identifier, IntLit, integerLiteral, Ref } from "./ast";
+import { identifier, IntLit, integerLiteral, Ref, orFail } from "./ast";
 import {
   char,
   parseErrorDiagnostic,
@@ -11,6 +11,9 @@ import {
   str,
   map,
   any,
+  bind,
+  join,
+  pure,
 } from "./parser";
 
 export const ts = (s: string): Stream => ({
@@ -261,6 +264,28 @@ export const Ann = (term: Expression, type: Expression): Ann => ({
   type: type,
 });
 
+// An element of a cons-list.
+export type Cons = {
+  _: "cons";
+  term: Expression;
+  next: Expression;
+};
+
+export const Cons = (term: Expression, next: Expression): Cons => ({
+  _: "cons",
+  term: term,
+  next: next,
+});
+
+// An empty cons-list.
+export type Nil = {
+  _: "nil";
+};
+
+export const Nil = (): Nil => ({
+  _: "nil",
+});
+
 type Expression =
   | IntLit
   | IntPlus
@@ -282,7 +307,9 @@ type Expression =
   | Eq
   | Neq
   | And
-  | Or;
+  | Or
+  | Cons
+  | Nil;
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
@@ -341,6 +368,28 @@ const getBindingPower = (op: string): [number, number] => {
   }
 };
 
+// listLiteral parses a literal list constructor. Examples include:
+// [] - an empty list
+// [1] - a singleton list
+// [1,2,3] - elements are delimited by commas
+// [[],[],[]] - a list of lists
+export const listLiteral: Parser<Expression> =
+  // opening bracket
+  bind(char("["), (_) =>
+    // elements
+    bind(join(expression(0), spc(char(","))), (elements) =>
+      // closing bracket
+      bind(
+        orFail("expected ]", char("]")),
+        // The parser outputs terms to construct the list, for example,
+        //  [] => nil()
+        //  [1,2] => cons(1, cons(2, nil()))
+        (_) => pure(elements.reduceRight((acc, curr) => Cons(curr, acc), Nil()))
+      )
+    )
+  );
+
+// expression parses terms and operators into an unambiguous tree.
 const expression =
   (min: number): Parser<Expression> =>
   (s: Stream): Result<Expression> => {
@@ -379,6 +428,13 @@ const expression =
         value: IntNeg(ex.value),
         stream: ex.stream,
       };
+    }
+
+    // Peek for an opening square bracket.
+    let lst = char("[")(s);
+    if (lst._ != "parseerror") {
+      // resume parsing from the `[`.
+      return listLiteral(s);
     }
 
     let acc: Result<Expression> = either(integerLiteral, reference)(s);
@@ -611,6 +667,10 @@ export function serialise(t: Expression, d: number = 0): string {
       return `And(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "or":
       return `Or(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+    case "cons":
+      return `Cons(${serialise(t.term)}, ${serialise(t.next)})`;
+    case "nil":
+      return `Nil()`;
     default:
       throw new Error(`unhandled node`);
   }
@@ -682,6 +742,16 @@ describe("math", () => {
   test("should parse function application with multiple arguments", () =>
     // f(x)(y) === (f(x))(y)
     expect(st("f(x)(y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
+
+  test("should parse function application with multiple arguments using commas", () =>
+    // f(x,y) === (f(x))(y)
+    expect(st("f(x,y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
+
+  test("should parse list literal", () =>
+    // [1,2,3]
+    expect(st("[1,2,3]")).toBe(
+      `Cons(IntLit(1), Cons(IntLit(2), Cons(IntLit(3), Nil())))`
+    ));
 
   test("should parse arrow operator with right associativity", () =>
     // a -> b -> c === a -> (b -> c)
