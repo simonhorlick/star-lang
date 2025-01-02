@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { identifier, IntLit, integerLiteral, Ref, orFail } from "./ast";
+import {
+  identifier,
+  IntLit,
+  integerLiteral,
+  Ref,
+  orFail,
+  parenthesis,
+} from "./ast";
 import {
   char,
   parseErrorDiagnostic,
@@ -14,6 +21,7 @@ import {
   bind,
   join,
   pure,
+  error,
 } from "./parser";
 
 export const ts = (s: string): Stream => ({
@@ -286,6 +294,18 @@ export const Nil = (): Nil => ({
   _: "nil",
 });
 
+// ParseError is a syntax node that allows partial parse trees to be
+// constructed.
+export type ParseError = {
+  _: "err";
+  msg: string;
+};
+
+export const ParseError = (msg: string): ParseError => ({
+  _: "err",
+  msg: msg,
+});
+
 type Expression =
   | IntLit
   | IntPlus
@@ -309,7 +329,8 @@ type Expression =
   | And
   | Or
   | Cons
-  | Nil;
+  | Nil
+  | ParseError;
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
@@ -484,6 +505,22 @@ const expression =
       // the rest of the expression.
 
       if (min < leftBindingPower) {
+        // Special case for parsing function application using commas to
+        // separate arguments.
+        if (op.value == "(") {
+          const args = appArgumentList(acc.value)(acc.stream);
+          if (args._ == "parseerror") {
+            return args;
+          }
+          acc = {
+            _: "outputvalue",
+            value: args.value,
+            stream: args.stream,
+          };
+          // Continue parsing further operators at this level.
+          continue;
+        }
+
         // Continue parsing, setting the binding power appropriately.
         const rhs = expression(rightBindingPower)(op.stream);
         if (rhs._ == "parseerror") {
@@ -618,6 +655,24 @@ const expression =
     return acc;
   };
 
+// parses an argument list to an application, for example: `(x,y,z)`.
+// This parses to a tree of App terms.
+const appArgumentList = (lhs: Expression): Parser<Expression> =>
+  parenthesis(
+    spc(
+      map(join(expression(0), spc(char(","))), (args) =>
+        // Application is left-associative, so form the following tree of
+        // applications, i.e. f(x)(y) == (f(x))(y):
+        //      ap
+        //     /  \
+        //    ap   y
+        //   /  \
+        //  f    x
+        args.reduce((acc, curr) => App(acc, curr), lhs)
+      )
+    )
+  );
+
 // serialise outputs the term tree in the same syntax as the typescript
 // implementation. This is useful for quickly generating code for a term to be
 // used in tests.
@@ -627,8 +682,8 @@ export function serialise(t: Expression, d: number = 0): string {
       return `Ref("${t.name}")`;
     case "int":
       return `IntLit(${t.num})`;
-    // case "err":
-    //   return `ParseError(${t.msg})`;
+    case "err":
+      return `ParseError(${t.msg})`;
     case "neg":
       return `IntNeg(${serialise(t.exp)})`;
     case "add":
