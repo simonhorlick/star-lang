@@ -609,69 +609,6 @@ describe("ast", () => {
     );
   });
 
-  // Math operators.
-  test("should parse integer literal", () => expect(st("1")).toBe(`IntLit(1)`));
-
-  test("should parse integer addition binary operator", () =>
-    expect(st("1+2")).toBe(`IntPlus(IntLit(1),IntLit(2))`));
-
-  test("should parse 1+2+3", () =>
-    expect(st("1+2+3")).toBe(
-      `IntPlus(IntPlus(IntLit(1),IntLit(2)),IntLit(3))`
-    ));
-
-  test("should parse integer subtraction binary operator", () =>
-    expect(st("1-2")).toBe(`IntMinus(IntLit(1),IntLit(2)`));
-
-  test("should parse 1-2-3", () =>
-    expect(st("1-2-3")).toBe(
-      `IntMinus(IntMinus(IntLit(1),IntLit(2)),IntLit(3))`
-    ));
-
-  test("should parse integer multiplication binary operator", () =>
-    expect(st("1*2")).toBe(`IntMul(IntLit(1),IntLit(2)`));
-
-  test("should parse integer division binary operator", () =>
-    expect(st("1/2")).toBe(`IntDiv(IntLit(1),IntLit(2)`));
-
-  test("should parse 1+2*3 with correct precendence", () =>
-    expect(st("1+2*3")).toBe(`IntPlus(IntLit(1),IntMul(IntLit(2),IntLit(3)))`));
-
-  test("should parse 1*2+3 with correct precendence", () =>
-    expect(st("1*2+3")).toBe(`IntPlus(IntMul(IntLit(1),IntLit(2)),IntLit(3))`));
-
-  test("should parse 1*(2+3) with correct precendence", () =>
-    expect(st("1*(2+3)")).toBe(
-      `IntMul(IntLit(1),IntPlus(IntLit(2),IntLit(3)))`
-    ));
-
-  test("should parse list indexing operator a[0]", () =>
-    expect(st("a[0]")).toBe(`ListIndex(Var("a"),IntLit(0))`));
-
-  test("should parse pipe binary operator", () =>
-    expect(st("a |> b")).toBe(`Pipe(Var("a"),Var("b"))`));
-
-  test("should parse unary negation operator", () =>
-    expect(st("-1")).toBe(`IntNeg(IntLit(1)`));
-
-  test("should parse unary negation operator applied to a variable", () =>
-    expect(st("-a")).toBe(`IntNeg(Var("a"))`));
-
-  test("should parse float addition binary operator", () =>
-    expect(st("1.+.2.")).toBe(`FloatPlus(FloatLit(1),FloatLit(2))`));
-
-  test("should parse float multiplication binary operator", () =>
-    expect(st("1.*.2.")).toBe(`FloatMul(FloatLit(1),FloatLit(2))`));
-
-  test("should parse float division binary operator", () =>
-    expect(st("1./.2.")).toBe(`FloatDiv(FloatLit(1),FloatLit(2))`));
-
-  test("should parse float subtraction binary operator", () =>
-    expect(st("1.-.2.")).toBe(`FloatMinus(FloatLit(1),FloatLit(2))`));
-
-  test("should parse string concatenation binary operator", () =>
-    expect(st(`"a"++"b"`)).toBe(`StringCat(StringLit("a"),StringLit("b"))`));
-
   // TODO: implement
   //   test("should parse data types with dependent annotations", () => {
   //     // TODO: Figure out syntax.

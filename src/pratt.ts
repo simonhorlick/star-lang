@@ -1,13 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  identifier,
-  IntLit,
-  integerLiteral,
-  Ref,
-  orFail,
-  parenthesis,
-} from "./ast";
-import {
   char,
   parseErrorDiagnostic,
   Stream,
@@ -22,21 +14,43 @@ import {
   join,
   pure,
   error,
+  optional,
+  many,
+  spaces,
+  skip,
+  until,
+  oneOf,
+  whitespace,
+  spc1,
+  newline,
+  many1,
+  lspc,
+  any3,
+  s,
+  alpha,
+  digit,
+  zero,
+  num,
 } from "./parser";
 
-export const ts = (s: string): Stream => ({
-  src: s,
-  idx: 0,
+// Abs is a lambda abstraction.
+export type Abs = {
+  _: "lam";
+  name: Origin | Identifier; // name of the binder
+  body: Expression; // the body of the abstraction
+};
+
+export const Abs = (name: string, body: Expression): Abs => ({
+  _: "lam",
+  name: Identifier(name),
+  body: body,
 });
 
-export const result = <T>(x: Result<T>) => {
-  if (x._ == "parseerror") {
-    const msg = parseErrorDiagnostic(x);
-    throw msg;
-  } else {
-    return x.value;
-  }
-};
+export const AbsI = (name: Origin | Identifier, body: Expression): Abs => ({
+  _: "lam",
+  name: name,
+  body: body,
+});
 
 export type IntPlus = {
   _: "add";
@@ -203,14 +217,14 @@ export const Lte = (lhs: Expression, rhs: Expression): Lte => ({
 
 export type App = {
   _: "app";
-  lhs: Expression;
-  rhs: Expression;
+  func: Expression;
+  arg: Expression;
 };
 
-export const App = (lhs: Expression, rhs: Expression): App => ({
+export const App = (func: Expression, arg: Expression): App => ({
   _: "app",
-  lhs: lhs,
-  rhs: rhs,
+  func: func,
+  arg: arg,
 });
 
 export type IntNeg = {
@@ -259,6 +273,15 @@ export const Pi = (name: string, from: Expression, to: Expression): Pi => ({
   name: name,
 });
 
+// ★ is the type of types.
+export type Star = {
+  _: "star";
+};
+
+export const Star = (): Star => ({
+  _: "star",
+});
+
 // Π is the type of functions.
 export type Ann = {
   _: "ann";
@@ -275,14 +298,14 @@ export const Ann = (term: Expression, type: Expression): Ann => ({
 // An element of a cons-list.
 export type Cons = {
   _: "cons";
-  term: Expression;
-  next: Expression;
+  head: Expression;
+  tail: Expression;
 };
 
 export const Cons = (term: Expression, next: Expression): Cons => ({
   _: "cons",
-  term: term,
-  next: next,
+  head: term,
+  tail: next,
 });
 
 // An empty cons-list.
@@ -292,6 +315,160 @@ export type Nil = {
 
 export const Nil = (): Nil => ({
   _: "nil",
+});
+
+// Identifier is a syntax node so that we can wrap it in origins and map it
+// back to the original source location.
+export type Identifier = {
+  _: "id";
+  name: string;
+};
+
+export const Identifier = (name: string): Identifier => ({
+  _: "id",
+  name: name,
+});
+
+type Branch = {
+  constructor: Identifier | Origin;
+  term: Expression;
+};
+
+export const Branch = (
+  constructor: Identifier | Origin,
+  term: Expression
+): Branch => ({
+  constructor: constructor,
+  term: term,
+});
+
+export type Case = {
+  _: "case";
+  name: Expression; // This should be a Par or a Ref.
+  branches: Branch[];
+};
+
+export const Case = (name: Expression, branches: Branch[]): Case => ({
+  _: "case",
+  name: name,
+  branches: branches,
+});
+
+export type Let = {
+  _: "let";
+  name: Origin | Identifier;
+  expr: Expression;
+  body: Expression;
+};
+
+export const Let = (
+  name: Origin | Identifier,
+  expr: Expression,
+  body: Expression
+): Let => ({
+  _: "let",
+  name: name,
+  expr: expr,
+  body: body,
+});
+
+export type If = {
+  _: "if";
+  condition: Expression;
+  trueBranch: Expression;
+  falseBranch: Expression;
+};
+
+export const If = (
+  condition: Expression,
+  trueBranch: Expression,
+  falseBranch: Expression
+): If => ({
+  _: "if",
+  condition: condition,
+  trueBranch: trueBranch,
+  falseBranch: falseBranch,
+});
+
+// A keyword.
+export type Key = {
+  _: "key";
+  key: string;
+};
+
+export const Key = (key: string): Key => ({
+  _: "key",
+  key: key,
+});
+
+// Mark certain ranges as syntactic, for example the "if" or "case" keywords.
+export type Syntax = {
+  _: "syn";
+  syntax: Origin;
+  child: Expression;
+};
+
+export const Syntax = (syntax: Origin, child: Expression): Syntax => ({
+  _: "syn",
+  syntax: syntax,
+  child: child,
+});
+
+// A bound variable that has not yet been resolved to a debruijin index.
+export type Par = {
+  _: "par";
+
+  // The variable name.
+  name: string;
+};
+
+export const Par = (name: string): Par => ({
+  _: "par",
+  name: name,
+});
+
+// An integer literal
+export type IntLit = { _: "int"; num: number };
+
+// A reference.
+export type Ref = {
+  _: "ref";
+
+  // The name of the definition being referenced.
+  name: string;
+};
+
+export const Ref = (name: string): Ref => ({
+  _: "ref",
+  name: name,
+});
+
+// A Label is a way of annotating terms with a string. This allows us to
+// determine which branch of an if statement a node belongs to, for example.
+export type Label = {
+  _: "label";
+  label: string;
+  child: Expression;
+};
+
+export const Label = (label: string, child: Expression): Label => ({
+  _: "label",
+  label,
+  child,
+});
+
+// Self is a way of abstracting out the value currently being typechecked so
+// that it can be used within the body.
+export type Self = {
+  _: "self";
+  name: string; // name of the binder
+  body: Expression; // the body of the abstraction
+};
+
+export const Self = (name: string, body: Expression): Self => ({
+  _: "self",
+  name: name,
+  body: body,
 });
 
 // ParseError is a syntax node that allows partial parse trees to be
@@ -306,7 +483,7 @@ export const ParseError = (msg: string): ParseError => ({
   msg: msg,
 });
 
-type Expression =
+export type Expression =
   | IntLit
   | IntPlus
   | IntSub
@@ -316,6 +493,7 @@ type Expression =
   | Comp
   | App
   | Ref
+  | Abs
   | Pi
   | Ann
   | Idx
@@ -330,10 +508,107 @@ type Expression =
   | Or
   | Cons
   | Nil
-  | ParseError;
+  | ParseError
+  | Origin
+  | Identifier
+  | Key
+  | Syntax
+  | Case
+  | If
+  | Let
+  | Par
+  | Label
+  | Self
+  | Star;
+
+const reserved = new Set([
+  "func",
+  "import",
+  "let",
+  "case",
+  "of",
+  "if",
+  "then",
+  "else",
+]);
+
+// block is a parser that adds origin information into the parse tree. It can be
+// disabled by setting origins to false in the stream.
+export const block =
+  <T extends Expression>(parser: Parser<T>): Parser<Origin> =>
+  (s: Stream): Result<Origin> => {
+    const start = s.idx;
+    const result = parser(s);
+
+    if (result._ == "parseerror") {
+      return result;
+    }
+
+    return pure(Origin(start, result.stream.idx, result.value))(result.stream);
+  };
+
+// resync is a parser that advances the stream until the
+// next sync character or keyword is observed.
+export const resync = skip(
+  until(
+    any(...Array.from(reserved.values()).map((v) => str(v)), oneOf(`|()" `))
+  ) // until fails iff the nested parser is successful.
+);
+
+// skip forward and return a parse error in this position.
+const resync2 = (msg: string): Parser<ParseError> =>
+  map(resync, (skipped) => ParseError(`${msg}; got ${skipped.join("")}`));
+
+// orFail returns A if the parser succeeds, or ParseError if the parser fails.
+// Either way it returns successfully.
+export const orFail = <A>(msg: string, p: Parser<A>): Parser<A | Expression> =>
+  either(p, block(resync2(msg)));
+
+// identifier parses a letter from the alphabet followed by letters, numbers and
+// other allowed special characters.
+export const identifier: Parser<string> = bind(
+  bind(alpha, (a) =>
+    bind(many(any(alpha, digit, oneOf("_."))), (b) =>
+      pure(a + (b?.join("") ?? ""))
+    )
+  ),
+  (ident: string) => {
+    if (reserved.has(ident)) {
+      return zero("reserved keyword");
+    }
+    return pure(ident);
+  }
+);
+
+// identifier2 parses a letter from the alphabet followed by letters, numbers and
+// other allowed special characters.
+export const identifier2: Parser<Identifier | Expression> = orFail(
+  "expected identifier",
+  bind(identifier, (id) => pure(Identifier(id)))
+);
+
+// parenthesis is a parser that requires an opening and closing parenthesis to
+// surround the given parser.
+export const parenthesis = <T>(between: Parser<T>): Parser<T | ParseError> =>
+  bind(char("("), (_) =>
+    bind(between, (x) =>
+      either(
+        bind(char(")"), (_) => pure(x)),
+        pure(ParseError("missing close parenthesis"))
+      )
+    )
+  );
 
 export const reference: Parser<Expression> = map(identifier, (result: string) =>
   Ref(result)
+);
+
+// type-of-types `*`
+export const star: Parser<Star> = map(char("*"), (_) => Star());
+
+// par parses a "variable" in the programming language.
+export const par: Parser<Expression> = block(
+  map(identifier, (result: string) => Par(result))
 );
 
 const opParser: Parser<string> = spc(
@@ -410,8 +685,197 @@ export const listLiteral: Parser<Expression> =
     )
   );
 
+export type Origin = {
+  _: "orig";
+  start: number;
+  end: number;
+  child: Expression;
+};
+
+export const Origin = (
+  start: number,
+  end: number,
+  child: Expression
+): Origin => ({
+  _: "orig",
+  start: start,
+  end: end,
+  child: child,
+});
+
+// | true -> false
+export const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
+  bind(str("|"), (_) =>
+    bind(optional(spaces), (_) =>
+      bind(block(identifier2), (id) =>
+        bind(many(whitespace), (_) =>
+          bind(either(str("->"), str("=>")), (_) =>
+            bind(expression(0), (t) => pure(Branch(id, t)))
+          )
+        )
+      )
+    )
+  )
+);
+
+export const keyword = (kw: string): Parser<Origin> =>
+  block(map(str(kw), (x) => Key(x)));
+
+// case b of
+// | true -> false
+// | false -> true
+export const caseStatement: Parser<Case | Expression> = bind(
+  keyword("case"),
+  (scase) =>
+    orFail(
+      "case statment not well formed",
+      bind(spc1(par), (id) =>
+        bind(keyword("of"), (sof) =>
+          bind(newline, (_) =>
+            bind(many1(caseBranch), (branches) =>
+              pure(Syntax(scase, Syntax(sof, Case(id, branches))))
+            )
+          )
+        )
+      )
+    )
+);
+
+// let b = f(x) in ...
+export const letStatement: Parser<Let | Expression> = bind(
+  keyword("let"),
+  (slet) =>
+    orFail(
+      "let statment not well formed",
+      bind(spc1(block(identifier2)), (id) =>
+        bind(str("="), (_) =>
+          bind(expression(0), (expr) =>
+            bind(lspc(keyword("in")), (sin) =>
+              bind(expression(0), (body) =>
+                pure(Syntax(slet, Syntax(sin, Let(id, expr, body))))
+              )
+            )
+          )
+        )
+      )
+    )
+);
+
+// Wrap the label with an Origin so we can know what it refers to.
+export const label = (
+  name: string,
+  p: Parser<Expression>
+): Parser<Expression> => block(map(p, (t) => Label(name, t)));
+
+// ifStatement parses an in-then-else statement of the form
+// if <condition> then <true branch> else <false branch>.
+export const ifStatement: Parser<If | Expression> = bind(keyword("if"), (sif) =>
+  orFail(
+    "if statment not well formed",
+    bind(label("if-condition", expression(0)), (condition) =>
+      bind(lspc(keyword("then")), (sthen) =>
+        bind(label("if-true", expression(0)), (trueBranch) =>
+          bind(lspc(keyword("else")), (selse) =>
+            bind(label("if-false", expression(0)), (falseBranch) =>
+              pure(
+                Syntax(
+                  sif,
+                  Syntax(
+                    sthen,
+                    Syntax(
+                      selse,
+                      // Annotate the condition as a Bool. This is necessary
+                      // to ensure any error nodes for condition have the
+                      // right type so that the tooling can suggest useful
+                      // completions.
+                      If(Ann(condition, Ref("Bool")), trueBranch, falseBranch)
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+);
+
+// pi parses a pi type `Πx:T t`.
+export const pi: Parser<Pi | ParseError> = bind(
+  char("Π"),
+  (_) =>
+    // bind(optional(spaces), (_) =>
+    bind(identifier, (name) =>
+      bind(
+        char(":"),
+        (_) =>
+          // bind(optional(spaces), (_) =>
+          bind(orFail("expected type", expression(0)), (from) =>
+            bind(
+              orFail("expected spaces between type and body", spaces),
+              (sp): Parser<Pi | ParseError> => {
+                if (!(sp instanceof Array) && sp._ == "err") {
+                  return pure(Pi(name, from, sp));
+                }
+                return bind(orFail("expected term", expression(0)), (body) =>
+                  pure(Pi(name, from, body))
+                );
+              }
+            )
+          )
+        // )
+      )
+    )
+  // )
+);
+
+// abstraction parses a lambda abstraction `λx t`. The binder x is separated
+// from the body by spaces.
+export const abstraction: Parser<Abs> = bind(char("λ"), (_) =>
+  bind(optional(spaces), (_) =>
+    bind(block(identifier2), (name) =>
+      bind(spaces, (_) =>
+        bind(orFail("expected term", expression(0)), (body) =>
+          pure(AbsI(name, body))
+        )
+      )
+    )
+  )
+);
+
+export const identifier2str = (id: Expression): string => {
+  switch (id._) {
+    case "id":
+      return id.name;
+    case "orig":
+      return identifier2str(id.child);
+    default:
+      throw `expected identifier; got ${id._}`;
+  }
+};
+
+// self parses a self type `ιx t`. The binder x is separated
+// from the body by spaces.
+export const self: Parser<Expression> = bind(char("ι"), (_) =>
+  bind(optional(spaces), (_) =>
+    bind(block(identifier2), (name) =>
+      bind(spaces, (_) =>
+        bind(orFail("expected term", expression(0)), (body) =>
+          pure(Self(identifier2str(name), body))
+        )
+      )
+    )
+  )
+);
+
+export const integerLiteral: Parser<IntLit> = map(num, (x) => ({
+  _: "int",
+  num: x,
+}));
+
 // expression parses terms and operators into an unambiguous tree.
-const expression =
+export const expression =
   (min: number): Parser<Expression> =>
   (s: Stream): Result<Expression> => {
     // An expression consists of an integer literal, optionally followed by
@@ -458,7 +922,46 @@ const expression =
       return listLiteral(s);
     }
 
-    let acc: Result<Expression> = either(integerLiteral, reference)(s);
+    // a case destructuring `case x of ...`
+    let cse = str("case")(s);
+    if (cse._ != "parseerror") {
+      return caseStatement(s);
+    }
+
+    // a let statement `let x = ... in ...`
+    let lt = str("let")(s);
+    if (lt._ != "parseerror") {
+      return letStatement(s);
+    }
+
+    // if-then-else statement `if x then y else z`
+    let cond = str("if")(s);
+    if (cond._ != "parseerror") {
+      return ifStatement(s);
+    }
+
+    // TODO: remove from user-facing syntax
+    // pi `Πx:A t`
+    let p = str("Π")(s);
+    if (p._ != "parseerror") {
+      return pi(s);
+    }
+
+    // TODO: remove from user-facing syntax
+    // abstraction `λx t`
+    let abs = str("λ")(s);
+    if (abs._ != "parseerror") {
+      return abstraction(s);
+    }
+
+    // TODO: remove from user-facing syntax
+    // self-type `ιx t`
+    let slf = str("ι")(s);
+    if (slf._ != "parseerror") {
+      return self(s);
+    }
+
+    let acc: Result<Expression> = any3(star, integerLiteral, reference)(s);
     if (acc._ == "parseerror") {
       return acc;
     }
@@ -673,10 +1176,93 @@ const appArgumentList = (lhs: Expression): Parser<Expression> =>
     )
   );
 
+// strip removes origins and syntax nodes from the term tree.
+export function strip(t: Expression): Expression {
+  switch (t._) {
+    // case "var":
+    //   return t;
+    case "lam":
+      return Abs(identifier2str(t.name), strip(t.body));
+    case "self":
+      return Self(t.name, strip(t.body));
+    case "app":
+      return App(strip(t.func), strip(t.arg));
+    case "ann":
+      return Ann(strip(t.term), strip(t.type));
+    case "pi":
+      return Pi(t.name, strip(t.from), strip(t.body));
+    case "par":
+    case "star":
+    case "ref":
+    case "id":
+    // case "hole":
+    case "int":
+    // case "str":
+    case "key":
+    case "err":
+      return t;
+    case "orig":
+    case "syn":
+    case "label":
+      return strip(t.child);
+    case "case":
+      return Case(
+        strip(t.name),
+        t.branches.map((b) =>
+          Branch(strip(b.constructor) as Identifier, strip(b.term))
+        )
+      );
+    case "let":
+      return Let(strip(t.name) as Identifier, strip(t.expr), strip(t.body));
+    case "if":
+      return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
+    // case "rel":
+    //   throw "strip: unexpected rel";
+    case "neg":
+      return IntNeg(strip(t.exp));
+    case "add":
+      return IntPlus(strip(t.lhs), strip(t.rhs));
+    case "sub":
+      return IntSub(strip(t.lhs), strip(t.rhs));
+    case "mul":
+      return IntMul(strip(t.lhs), strip(t.rhs));
+    case "div":
+      return IntDiv(strip(t.lhs), strip(t.rhs));
+    case "eq":
+      return Eq(strip(t.lhs), strip(t.rhs));
+    case "neq":
+      return Neq(strip(t.lhs), strip(t.rhs));
+    case "gt":
+      return Gt(strip(t.lhs), strip(t.rhs));
+    case "gte":
+      return Gte(strip(t.lhs), strip(t.rhs));
+    case "lt":
+      return Lt(strip(t.lhs), strip(t.rhs));
+    case "lte":
+      return Lte(strip(t.lhs), strip(t.rhs));
+    case "comp":
+      return Comp(strip(t.lhs), strip(t.rhs));
+    case "idx":
+      return Idx(strip(t.arr), strip(t.idx));
+    case "cat":
+      return Cat(strip(t.lhs), strip(t.rhs));
+    case "and":
+      return And(strip(t.lhs), strip(t.rhs));
+    case "or":
+      return Or(strip(t.lhs), strip(t.rhs));
+    case "cons":
+      return Cons(strip(t.head), strip(t.tail));
+    case "nil":
+      return Nil();
+    // default:
+    //   throw `strip: not handled ${t._}`;
+  }
+}
+
 // serialise outputs the term tree in the same syntax as the typescript
 // implementation. This is useful for quickly generating code for a term to be
 // used in tests.
-export function serialise(t: Expression, d: number = 0): string {
+export function serialise(t: Expression): string {
   switch (t._) {
     case "ref":
       return `Ref("${t.name}")`;
@@ -697,7 +1283,7 @@ export function serialise(t: Expression, d: number = 0): string {
     case "comp":
       return `Comp(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "app":
-      return `App(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
+      return `App(${serialise(t.func)}, ${serialise(t.arg)})`;
     case "pi":
       return `Pi("${t.name}", ${serialise(t.from)}, ${serialise(t.body)})`;
     case "ann":
@@ -723,139 +1309,41 @@ export function serialise(t: Expression, d: number = 0): string {
     case "or":
       return `Or(${serialise(t.lhs)}, ${serialise(t.rhs)})`;
     case "cons":
-      return `Cons(${serialise(t.term)}, ${serialise(t.next)})`;
+      return `Cons(${serialise(t.head)}, ${serialise(t.tail)})`;
     case "nil":
       return `Nil()`;
-    default:
-      throw new Error(`unhandled node`);
+    case "lam":
+      return `Abs("${identifier2str(t.name)}", ${serialise(t.body)})`;
+    case "orig":
+      return `Orig(${t.start}, ${t.end}, ${serialise(t.child)})`;
+    case "id":
+      return `Id(${t.name})`;
+    case "key":
+      return `Key(${t.key})`;
+    case "syn":
+      return `Syntax(${serialise(t.syntax)})`;
+    case "case":
+      return `Case(${serialise(t.name)},[${t.branches
+        .map((b) => `Branch(${serialise(b.constructor)}, ${serialise(b.term)})`)
+        .join(",")}])`;
+    case "let":
+      return `Let(${serialise(t.name)}, ${serialise(t.expr)}, ${serialise(
+        t.body
+      )})`;
+
+    case "if":
+      return `If(${serialise(t.condition)}, ${serialise(
+        t.trueBranch
+      )}, ${serialise(t.falseBranch)})`;
+    case "par":
+      return `Par(${t.name})`;
+    case "label":
+      return `Label(${t.label}, ${serialise(t.child)})`;
+    case "self":
+      return `Self(${t.name}, ${serialise(t.body)})`;
+    case "star":
+      return `Star()`;
+    // default:
+    //   throw new Error(`unhandled node: ${t._}`);
   }
 }
-
-const st = (s: string): string => serialise(result(expression(0)(ts(s))));
-
-describe("math", () => {
-  test("should parse integer addition binary operator", () =>
-    expect(st("1+2")).toBe(`IntPlus(IntLit(1), IntLit(2))`));
-
-  test("should parse integer addition with left associativity", () =>
-    // 1+2+3 === (1+2)+3
-    expect(st("1+2+3")).toBe(
-      `IntPlus(IntPlus(IntLit(1), IntLit(2)), IntLit(3))`
-    ));
-
-  test("should parse integer subtraction binary operator", () =>
-    expect(st("1-2")).toBe(`IntSub(IntLit(1), IntLit(2))`));
-
-  test("should parse integer subtraction with left associativity", () =>
-    // 1-2-3 === (1-2)-3
-    expect(st("1-2-3")).toBe(
-      `IntSub(IntSub(IntLit(1), IntLit(2)), IntLit(3))`
-    ));
-
-  test("should parse integer multiplication binary operator", () =>
-    expect(st("1*2")).toBe(`IntMul(IntLit(1), IntLit(2))`));
-
-  test("should parse integer multiplication with left associativity", () =>
-    // 1*2*3 === (1*2)*3
-    expect(st("1*2*3")).toBe(
-      `IntMul(IntMul(IntLit(1), IntLit(2)), IntLit(3))`
-    ));
-
-  test("should parse integer multiplication with higher associativity than addition", () =>
-    // 1+2*3 === 1+(2*3)
-    expect(st("1+2*3")).toBe(
-      `IntPlus(IntLit(1), IntMul(IntLit(2), IntLit(3)))`
-    ));
-
-  test("should parse integer multiplication with higher associativity than addition 2", () =>
-    // 1*2+3 === (1*2)+3
-    expect(st("1*2+3")).toBe(
-      `IntPlus(IntMul(IntLit(1), IntLit(2)), IntLit(3))`
-    ));
-
-  test("should parse parenthesis with the highest precedence", () =>
-    expect(st("1*(2+3)")).toBe(
-      `IntMul(IntLit(1), IntPlus(IntLit(2), IntLit(3)))`
-    ));
-
-  test("should parse integer division binary operator", () =>
-    expect(st("1/2")).toBe(`IntDiv(IntLit(1), IntLit(2))`));
-
-  test("should parse multiple parenthesis", () =>
-    expect(st("((1))")).toBe(`IntLit(1)`));
-
-  test("should parse unary negation", () =>
-    expect(st("-1")).toBe(`IntNeg(IntLit(1))`));
-
-  test("should parse function composition with right associativity", () =>
-    // f . g . h === f . (g . h)
-    expect(st("f . g . h")).toBe(`Comp(Ref("f"), Comp(Ref("g"), Ref("h")))`));
-
-  test("should parse function application", () =>
-    expect(st("f(x)")).toBe(`App(Ref("f"), Ref("x"))`));
-
-  test("should parse function application with multiple arguments", () =>
-    // f(x)(y) === (f(x))(y)
-    expect(st("f(x)(y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
-
-  test("should parse function application with multiple arguments using commas", () =>
-    // f(x,y) === (f(x))(y)
-    expect(st("f(x,y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
-
-  test("should parse list literal", () =>
-    // [1,2,3]
-    expect(st("[1,2,3]")).toBe(
-      `Cons(IntLit(1), Cons(IntLit(2), Cons(IntLit(3), Nil())))`
-    ));
-
-  test("should parse arrow operator with right associativity", () =>
-    // a -> b -> c === a -> (b -> c)
-    expect(st("a->b->c")).toBe(`Pi("", Ref("a"), Pi("", Ref("b"), Ref("c")))`));
-
-  test("should parse type annotation", () =>
-    // a:A:B === (a:A):B
-    expect(st("a:A:B")).toBe(`Ann(Ann(Ref("a"), Ref("A")), Ref("B"))`));
-
-  test("should parse type annotation with high precedence", () =>
-    // a:Int + b:Int === (a:Int) + (b:Int)
-    expect(st("a:Int+b:Int")).toBe(
-      `IntPlus(Ann(Ref("a"), Ref("Int")), Ann(Ref("b"), Ref("Int")))`
-    ));
-
-  test("should parse list indexing operator", () =>
-    expect(st("a[i]")).toBe(`Idx(Ref("a"), Ref("i"))`));
-
-  test("should parse list concatenation operator with left associativity", () =>
-    expect(st("as++bs++cs")).toBe(`Cat(Cat(Ref("as"), Ref("bs")), Ref("cs"))`));
-
-  test("should parse greater-than binary operator", () =>
-    expect(st("a>b")).toBe(`Gt(Ref("a"), Ref("b"))`));
-
-  test("should parse greater-than-or-equal binary operator", () =>
-    expect(st("a>=b")).toBe(`Gte(Ref("a"), Ref("b"))`));
-
-  test("should parse less-than binary operator", () =>
-    expect(st("a<b")).toBe(`Lt(Ref("a"), Ref("b"))`));
-
-  test("should parse less-than-or-equal binary operator", () =>
-    expect(st("a<=b")).toBe(`Lte(Ref("a"), Ref("b"))`));
-
-  test("should parse less-than and greater-than with the same precedence", () =>
-    // a<b>c === (a<b)>c
-    expect(st("a<b>c")).toBe(`Gt(Lt(Ref("a"), Ref("b")), Ref("c"))`));
-
-  test("should parse logical equals binary operator", () =>
-    expect(st("a==b")).toBe(`Eq(Ref("a"), Ref("b"))`));
-
-  test("should parse logical not equals binary operator", () =>
-    expect(st("a!=b")).toBe(`Neq(Ref("a"), Ref("b"))`));
-
-  test("should parse logical and binary operator", () =>
-    expect(st("a&&b")).toBe(`And(Ref("a"), Ref("b"))`));
-
-  test("should parse logical or binary operator", () =>
-    expect(st("a||b")).toBe(`Or(Ref("a"), Ref("b"))`));
-
-  test("should parse logical and at a higher precedence than logical or", () =>
-    expect(st("a||b&&c")).toBe(`Or(Ref("a"), And(Ref("b"), Ref("c")))`));
-});
