@@ -1312,7 +1312,7 @@ export function serialise(t: Expression): string {
     case "orig":
       return `Orig(${t.start}, ${t.end}, ${serialise(t.child)})`;
     case "id":
-      return `Id(${t.name})`;
+      return `Identifier("${t.name}")`;
     case "key":
       return `Key(${t.key})`;
     case "syn":
@@ -1331,7 +1331,7 @@ export function serialise(t: Expression): string {
         t.trueBranch
       )}, ${serialise(t.falseBranch)})`;
     case "par":
-      return `Par(${t.name})`;
+      return `Par("${t.name}")`;
     case "label":
       return `Label(${t.label}, ${serialise(t.child)})`;
     case "self":
