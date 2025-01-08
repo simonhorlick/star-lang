@@ -1,11 +1,19 @@
 import { describe, expect, test } from "vitest";
-import { parseErrorDiagnostic, Stream, Result, char, bind } from "./parser";
+import {
+  parseErrorDiagnostic,
+  Stream,
+  Result,
+  char,
+  bind,
+  lspc,
+} from "./parser";
 import {
   abstraction,
   caseStatement,
   expression,
   identifier,
   identifier2,
+  ifStatement,
   parenthesis,
   pi,
   resync,
@@ -28,7 +36,7 @@ export const result = <T>(x: Result<T>) => {
 };
 
 const st = (s: string): string =>
-  serialise(strip(result(expression(0)(ts(s)))));
+  serialise(strip(result(lspc(expression(0))(ts(s)))));
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
 
@@ -78,7 +86,7 @@ describe("pratt", () => {
 
   test("should include origins in function application", () =>
     expect(serialise(result(expression(0)(ts("f(x)"))))).toBe(
-      `Origin(6, 10, App(Origin(6, 7, Ref("f")), Origin(8, 9, Origin(8, 9, Ref("x")))))`
+      `App(Orig(0, 1, Ref("f")), Orig(2, 3, Ref("x")))`
     ));
 
   test("should parse term", () =>
@@ -87,6 +95,9 @@ describe("pratt", () => {
     ));
 
   test("should parse reference", () => expect(st("ex2")).toBe(`Ref("ex2")`));
+
+  test("should parse reference surrounded by spaces", () =>
+    expect(st(`   r `)).toBe(`Ref("r")`));
 
   test("should parse type reference", () =>
     expect(serialise(strip(result(expression(0)(ts("Bool")))))).toBe(
@@ -230,6 +241,12 @@ describe("pratt", () => {
     expect(st("if x then y else z")).toBe(
       `If(Ann(Ref("x"), Ref("Bool")), Ref("y"), Ref("z"))`
     );
+  });
+
+  test("should parse if statement", () => {
+    expect(
+      serialise(strip(result(ifStatement(ts("if x then y else z")))))
+    ).toBe(`If(Ann(Ref("x"), Ref("Bool")), Ref("y"), Ref("z"))`);
   });
 
   test("should parse multiline if statement", () =>

@@ -599,8 +599,8 @@ export const parenthesis = <T>(between: Parser<T>): Parser<T | ParseError> =>
     )
   );
 
-export const reference: Parser<Expression> = map(identifier, (result: string) =>
-  Ref(result)
+export const reference: Parser<Expression> = block(
+  map(identifier, (result: string) => Ref(result))
 );
 
 // type-of-types `*`
@@ -710,7 +710,7 @@ export const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
       bind(block(identifier2), (id) =>
         bind(many(whitespace), (_) =>
           bind(either(str("->"), str("=>")), (_) =>
-            bind(expression(0), (t) => pure(Branch(id, t)))
+            bind(lspc(expression(0)), (t) => pure(Branch(id, t)))
           )
         )
       )
@@ -751,7 +751,7 @@ export const letStatement: Parser<Let | Expression> = bind(
         bind(str("="), (_) =>
           bind(expression(0), (expr) =>
             bind(lspc(keyword("in")), (sin) =>
-              bind(expression(0), (body) =>
+              bind(lspc(expression(0)), (body) =>
                 pure(Syntax(slet, Syntax(sin, Let(id, expr, body))))
               )
             )
@@ -769,26 +769,29 @@ export const label = (
 
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
-export const ifStatement: Parser<If | Expression> = bind(keyword("if"), (sif) =>
-  orFail(
-    "if statment not well formed",
-    bind(label("if-condition", expression(0)), (condition) =>
-      bind(lspc(keyword("then")), (sthen) =>
-        bind(label("if-true", expression(0)), (trueBranch) =>
-          bind(lspc(keyword("else")), (selse) =>
-            bind(label("if-false", expression(0)), (falseBranch) =>
-              pure(
-                Syntax(
-                  sif,
+export const ifStatement: Parser<If | Expression> = bind(
+  spc(keyword("if")),
+  (sif) =>
+    orFail(
+      "if statment not well formed",
+      bind(label("if-condition", expression(0)), (condition) =>
+        bind(spc(keyword("then")), (sthen) =>
+          bind(label("if-true", expression(0)), (trueBranch) =>
+            bind(spc(keyword("else")), (selse) =>
+              bind(label("if-false", expression(0)), (falseBranch) =>
+                pure(
                   Syntax(
-                    sthen,
+                    sif,
                     Syntax(
-                      selse,
-                      // Annotate the condition as a Bool. This is necessary
-                      // to ensure any error nodes for condition have the
-                      // right type so that the tooling can suggest useful
-                      // completions.
-                      If(Ann(condition, Ref("Bool")), trueBranch, falseBranch)
+                      sthen,
+                      Syntax(
+                        selse,
+                        // Annotate the condition as a Bool. This is necessary
+                        // to ensure any error nodes for condition have the
+                        // right type so that the tooling can suggest useful
+                        // completions.
+                        If(Ann(condition, Ref("Bool")), trueBranch, falseBranch)
+                      )
                     )
                   )
                 )
@@ -798,28 +801,26 @@ export const ifStatement: Parser<If | Expression> = bind(keyword("if"), (sif) =>
         )
       )
     )
-  )
 );
 
 // pi parses a pi type `Πx:T t`.
 export const pi: Parser<Pi | ParseError> = bind(
   char("Π"),
   (_) =>
-    // bind(optional(spaces), (_) =>
     bind(identifier, (name) =>
       bind(
         char(":"),
         (_) =>
-          // bind(optional(spaces), (_) =>
-          bind(orFail("expected type", expression(0)), (from) =>
+          bind(orFail("expected type", lspc(expression(0))), (from) =>
             bind(
               orFail("expected spaces between type and body", spaces),
               (sp): Parser<Pi | ParseError> => {
                 if (!(sp instanceof Array) && sp._ == "err") {
                   return pure(Pi(name, from, sp));
                 }
-                return bind(orFail("expected term", expression(0)), (body) =>
-                  pure(Pi(name, from, body))
+                return bind(
+                  orFail("expected term", lspc(expression(0))),
+                  (body) => pure(Pi(name, from, body))
                 );
               }
             )
@@ -887,7 +888,7 @@ export const expression =
     // Handle parentheses.
     let paren = char("(")(s);
     if (paren._ != "parseerror") {
-      const ex = expression(0)(paren.stream);
+      const ex = lspc(expression(0))(paren.stream);
       if (ex._ == "parseerror") {
         return ex;
       }
@@ -1025,7 +1026,7 @@ export const expression =
         }
 
         // Continue parsing, setting the binding power appropriately.
-        const rhs = expression(rightBindingPower)(op.stream);
+        const rhs = lspc(expression(rightBindingPower))(op.stream);
         if (rhs._ == "parseerror") {
           return rhs;
         }
