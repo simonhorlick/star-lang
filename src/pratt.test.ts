@@ -162,6 +162,12 @@ describe("pratt", () => {
   test("should parse unary negation", () =>
     expect(st("-1")).toBe(`IntNeg(IntLit(1))`));
 
+  test("should parse multiple unary negation", () =>
+    expect(st("--1")).toBe(`IntNeg(IntNeg(IntLit(1)))`));
+
+  test("should parse unary negation with parenthesis", () =>
+    expect(st("-(-1)")).toBe(`IntNeg(IntNeg(IntLit(1)))`));
+
   test("should parse function composition with right associativity", () =>
     // f . g . h === f . (g . h)
     expect(st("f . g . h")).toBe(`Comp(Ref("f"), Comp(Ref("g"), Ref("h")))`));
@@ -314,6 +320,9 @@ describe("pratt", () => {
     expect(st("List(Nat)->Nat")).toBe(
       `Pi("", App(Ref("List"), Ref("Nat")), Ref("Nat"))`
     ));
+
+  test("should parse app with parenthesis on the left", () =>
+    expect(st("(x)((y)(z))")).toBe(`App(Ref("x"), App(Ref("y"), Ref("z")))`));
 
   test("should parse arrow with lots of parenthesis", () =>
     expect(st("(x)((y)(z))->(x)")).toBe(

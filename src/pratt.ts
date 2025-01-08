@@ -31,6 +31,8 @@ import {
   digit,
   zero,
   num,
+  any4,
+  any5,
 } from "./parser";
 
 // Abs is a lambda abstraction.
@@ -885,24 +887,6 @@ export const expression =
     // maintaining correct precedence.
     // It is an implementation of the standard Pratt parsing algorithm.
 
-    // Handle parentheses.
-    let paren = char("(")(s);
-    if (paren._ != "parseerror") {
-      const ex = lspc(expression(0))(paren.stream);
-      if (ex._ == "parseerror") {
-        return ex;
-      }
-      let closeparen = char(")")(ex.stream);
-      if (closeparen._ == "parseerror") {
-        return closeparen;
-      }
-      return {
-        _: "outputvalue",
-        value: ex.value,
-        stream: closeparen.stream,
-      };
-    }
-
     let neg = char("-")(s);
     if (neg._ != "parseerror") {
       const ex = expression(0)(neg.stream);
@@ -962,7 +946,15 @@ export const expression =
       return self(s);
     }
 
-    let acc: Result<Expression> = any3(star, integerLiteral, reference)(s);
+    let acc: Result<Expression> = any5(
+      parenthesis(expression(0)),
+      star,
+      integerLiteral,
+      reference,
+      // if nothing parses then skip past these characters and present a
+      // ParseError AST node.
+      resync2("expected term")
+    )(s);
     if (acc._ == "parseerror") {
       return acc;
     }
