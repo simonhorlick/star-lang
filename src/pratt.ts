@@ -1161,17 +1161,19 @@ export const expression =
 // parses an argument list to an application, for example: `(x,y,z)`.
 // This parses to a tree of App terms.
 const appArgumentList = (lhs: Expression): Parser<Expression> =>
-  parenthesis(
-    spc(
-      map(join(expression(0), spc(char(","))), (args) =>
-        // Application is left-associative, so form the following tree of
-        // applications, i.e. f(x)(y) == (f(x))(y):
-        //      ap
-        //     /  \
-        //    ap   y
-        //   /  \
-        //  f    x
-        args.reduce((acc, curr) => App(acc, curr), lhs)
+  spc(
+    parenthesis(
+      spc(
+        map(join(expression(0), spc(char(","))), (args) =>
+          // Application is left-associative, so form the following tree of
+          // applications, i.e. f(x)(y) == (f(x))(y):
+          //      ap
+          //     /  \
+          //    ap   y
+          //   /  \
+          //  f    x
+          args.reduce((acc, curr) => App(acc, curr), lhs)
+        )
       )
     )
   );
