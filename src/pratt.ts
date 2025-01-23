@@ -34,6 +34,7 @@ import {
   any4,
   any5,
 } from "./parser";
+import { utf8 } from "./ast";
 
 // Abs is a lambda abstraction.
 export type Abs = {
@@ -432,6 +433,9 @@ export const Par = (name: string): Par => ({
 // An integer literal
 export type IntLit = { _: "int"; num: number };
 
+// A string literal
+export type StringLit = { _: "str"; str: string };
+
 // A reference.
 export type Ref = {
   _: "ref";
@@ -492,6 +496,7 @@ export type Expression =
   | IntMul
   | IntDiv
   | IntNeg
+  | StringLit
   | Comp
   | App
   | Ref
@@ -686,6 +691,23 @@ export const listLiteral: Parser<Expression> =
       )
     )
   );
+
+export const stringLiteral: Parser<Expression> = bind(str('"'), (_) =>
+  either(
+    bind(many(utf8), (s) =>
+      bind(str('"'), (_) => pure({ _: "str", str: s.join("") }))
+    ),
+    // if there's a parse error within the string, we need to skip forward to
+    // the next sync character.
+    bind(resync, (_) =>
+      // if the next sync character is an end-of-string character then skip that
+      // too.
+      bind(optional(char(`"`)), (_) =>
+        pure(ParseError("failed to parse string literal"))
+      )
+    )
+  )
+);
 
 export type Origin = {
   _: "orig";
@@ -898,6 +920,12 @@ export const expression =
         value: IntNeg(ex.value),
         stream: ex.stream,
       };
+    }
+
+    let quo = char(`"`)(s);
+    if (quo._ != "parseerror") {
+      // resume parsing from the `"`.
+      return stringLiteral(s);
     }
 
     // Peek for an opening square bracket.
@@ -1192,7 +1220,7 @@ export function strip(t: Expression): Expression {
     case "id":
     // case "hole":
     case "int":
-    // case "str":
+    case "str":
     case "key":
     case "err":
       return t;
@@ -1263,6 +1291,8 @@ export function serialise(t: Expression): string {
       return `Ref("${t.name}")`;
     case "int":
       return `IntLit(${t.num})`;
+    case "str":
+      return `StringLit("${t.str}")`;
     case "err":
       return `ParseError(${t.msg})`;
     case "neg":
