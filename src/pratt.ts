@@ -769,19 +769,24 @@ export const caseStatement: Parser<Case | Expression> = bind(
 export const letStatement: Parser<Let | Expression> = bind(
   keyword("let"),
   (slet) =>
-    orFail(
-      "let statment not well formed",
-      bind(spc1(block(identifier2)), (id) =>
+    bind(
+      orFail("failed to parse let identifier", spc1(block(identifier2))),
+      (id) =>
         bind(str("="), (_) =>
-          bind(expression(0), (expr) =>
-            bind(lspc(keyword("in")), (sin) =>
-              bind(lspc(expression(0)), (body) =>
-                pure(Syntax(slet, Syntax(sin, Let(id, expr, body))))
+          bind(
+            lspc(orFail("expected expression in let binder", expression(0))),
+            (expr) =>
+              bind(lspc(keyword("in")), (sin) =>
+                bind(
+                  lspc(
+                    orFail("expected expression in let body", expression(0))
+                  ),
+                  (body) =>
+                    pure(Syntax(slet, Syntax(sin, Let(id as any, expr, body))))
+                )
               )
-            )
           )
         )
-      )
     )
 );
 
