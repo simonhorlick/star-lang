@@ -1158,11 +1158,25 @@ export const expression =
             stream: closeparen.stream,
           };
         } else if (op.value == "->") {
-          acc = {
-            _: "outputvalue",
-            value: Pi("", acc.value, rhs.value),
-            stream: rhs.stream,
-          };
+          // The left-hand-side should be a value, or an expression like (x:A).
+          // If it's an Ann node, then transform it into a Pi(x,A,...) node.
+          if (acc.value._ == "ann") {
+            acc = {
+              _: "outputvalue",
+              value: Pi(
+                (strip(acc.value.term) as Ref).name,
+                acc.value.type,
+                rhs.value
+              ),
+              stream: rhs.stream,
+            };
+          } else {
+            acc = {
+              _: "outputvalue",
+              value: Pi("", acc.value, rhs.value),
+              stream: rhs.stream,
+            };
+          }
         } else if (op.value == "++") {
           acc = {
             _: "outputvalue",

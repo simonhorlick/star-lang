@@ -196,6 +196,9 @@ describe("pratt", () => {
     // a -> b -> c === a -> (b -> c)
     expect(st("a->b->c")).toBe(`Pi("", Ref("a"), Pi("", Ref("b"), Ref("c")))`));
 
+  test("should parse arrow ending with star", () =>
+    expect(st("A->*")).toBe(`Pi("", Ref("A"), Star())`));
+
   test("should parse type annotation", () =>
     // a:A:B === (a:A):B
     expect(st("a:A:B")).toBe(`Ann(Ann(Ref("a"), Ref("A")), Ref("B"))`));
@@ -457,17 +460,39 @@ describe("pratt", () => {
     expect(r).toBe(`)`);
   });
 
-  test("should parse simple pi type", () => {
-    const src = `
-      Πb:Bool
-       *
-      `;
+  test("should parse star", () => {
+    const src = `*`;
+    const tm = strip(result(expression(0)(ts(src))));
+    expect(serialise(tm)).toBe(`Star()`);
+  });
+
+  test("should allow star as an annotation", () => {
+    const src = `x:*`;
+    const tm = strip(result(expression(0)(ts(src))));
+    expect(serialise(tm)).toBe(`Ann(Ref("x"), Star())`);
+  });
+
+  test("should allow star with arrows", () => {
+    const src = `* -> *`;
+    const tm = strip(result(expression(0)(ts(src))));
+    expect(serialise(tm)).toBe(`Pi("", Star(), Star())`);
+  });
+
+  test("should parse simple pi type with named parameter", () => {
+    const src = `(b:Bool) -> *`;
     const tm = strip(result(expression(0)(ts(src))));
     expect(serialise(tm)).toBe(`Pi("b", Ref("Bool"), Star())`);
   });
 
+  test("should parse simple pi type that's used dependently", () => {
+    const src = `(a:A) -> B(a)`;
+    const tm = strip(result(expression(0)(ts(src))));
+    expect(serialise(tm)).toBe(`Pi("a", Ref("A"), App(Ref("B"), Ref("a")))`);
+  });
+
   test("should parse pi types correctly", () => {
-    const src = `Πb:Bool ΠP:(Πx:Bool *) Πt:P(true) Πf:P(false) P(b)`;
+    // const src = `Πb:Bool -> ΠP:(Πx:Bool *) -> Πt:P(true) -> Πf:P(false) -> P(b)`;
+    const src = `(b:Bool) -> (P:((x:Bool) -> *) -> (t:P(true)) -> (f:P(false)) -> P(b)`;
     const tm = strip(result(expression(0)(ts(src))));
     expect(serialise(tm)).toBe(
       `Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))`
