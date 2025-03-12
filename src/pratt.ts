@@ -727,13 +727,13 @@ export const Origin = (
   child: child,
 });
 
-// | true -> false
+// | true => false
 export const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
   bind(str("|"), (_) =>
     bind(optional(spaces), (_) =>
       bind(block(identifier2), (id) =>
         bind(many(whitespace), (_) =>
-          bind(either(str("->"), str("=>")), (_) =>
+          bind(str("=>"), (_) =>
             bind(lspc(expression(0)), (t) => pure(Branch(id, t)))
           )
         )
@@ -746,8 +746,8 @@ export const keyword = (kw: string): Parser<Origin> =>
   block(map(str(kw), (x) => Key(x)));
 
 // case b of
-// | true -> false
-// | false -> true
+// | true => false
+// | false => true
 export const caseStatement: Parser<Case | Expression> = bind(
   keyword("case"),
   (scase) =>
@@ -980,7 +980,7 @@ export const expression =
     }
 
     let acc: Result<Expression> = any5(
-      parenthesis(expression(0)),
+      parenthesis(spc(expression(0))),
       star,
       integerLiteral,
       reference,

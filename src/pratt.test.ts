@@ -353,8 +353,8 @@ describe("pratt", () => {
 
   test("should parse case", () => {
     const src = `case n of
-          |  zero -> true
-          |  succ -> false`;
+          |  zero => true
+          |  succ => false`;
     const ast = strip(result(expression(0)(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Ref("true")),Branch(Identifier("succ"), Ref("false"))])`
@@ -363,8 +363,8 @@ describe("pratt", () => {
 
   test("should parse case with annotation", () => {
     const src = `(case n of
-          |  zero -> true
-          |  succ -> false
+          |  zero => true
+          |  succ => false
           ):Bool`;
     const ast = strip(result(expression(0)(ts(src))));
     expect(serialise(ast)).toBe(
@@ -374,12 +374,12 @@ describe("pratt", () => {
 
   test("should parse nested case", () => {
     const src = `case n of
-          | zero -> (case m of
-            | zero -> false
-            | succ -> true)
-          | succ -> (case m of
-            | zero -> false
-            | succ -> lt(n.x,m.x))`;
+          | zero => (case m of
+            | zero => false
+            | succ => true)
+          | succ => (case m of
+            | zero => false
+            | succ => lt(n.x,m.x))`;
     const ast = strip(result(expression(0)(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), Ref("true"))])),Branch(Identifier("succ"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), App(App(Ref("lt"), Ref("n.x")), Ref("m.x")))]))])`
@@ -392,15 +392,15 @@ describe("pratt", () => {
     // indicating the next case branch. Make sure the parser doesn't consume
     // the bar and returns an empty error node for this case branch.
     const src = `
-          | succ -> zero`;
+          | succ => zero`;
     const ast = strip(result(expression(0)(ts(src))));
-    expect(serialise(ast)).toBe("ParseError(expected term; got )");
+    expect(serialise(ast)).toBe("ParseError(expected term; got \n)");
   });
 
   test("should parse partial case branch", () => {
     const src = `case b of
-          | zero ->
-          | succ -> zero`;
+          | zero =>
+          | succ => zero`;
     const ast = strip(result(caseStatement(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("b"),[Branch(Identifier("zero"), ParseError(expected term; got )),Branch(Identifier("succ"), Ref("zero"))])`
@@ -409,8 +409,8 @@ describe("pratt", () => {
 
   test("should parse case with empty final branch", () => {
     const src = `case n of
-          | zero -> zero
-          | succ -> `;
+          | zero => zero
+          | succ => `;
     const ast = strip(result(expression(0)(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Ref("zero")),Branch(Identifier("succ"), ParseError(expected term; got ))])`
