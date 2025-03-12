@@ -490,9 +490,22 @@ describe("pratt", () => {
     expect(serialise(tm)).toBe(`Pi("a", Ref("A"), App(Ref("B"), Ref("a")))`);
   });
 
+  test("should parse annotation containing type constructor", () => {
+    const src = `t:P(true)`;
+    const tm = strip(result(expression(0)(ts(src))));
+    expect(serialise(tm)).toBe(`Ann(Ref("t"), App(Ref("P"), Ref("true")))`);
+  });
+
   test("should parse pi types correctly", () => {
-    // const src = `Πb:Bool -> ΠP:(Πx:Bool *) -> Πt:P(true) -> Πf:P(false) -> P(b)`;
-    const src = `(b:Bool) -> (P:((x:Bool) -> *) -> (t:P(true)) -> (f:P(false)) -> P(b)`;
+    const src = `(t:P(true)) -> P(t)`;
+    const tm = strip(result(expression(0)(ts(src))));
+    expect(serialise(tm)).toBe(
+      `Pi("t", App(Ref("P"), Ref("true")), App(Ref("P"), Ref("t")))`
+    );
+  });
+
+  test("should parse more compliated pi types correctly", () => {
+    const src = `(b:Bool) -> (P:((x:Bool) -> *)) -> (t:P(true)) -> (f:P(false)) -> P(b)`;
     const tm = strip(result(expression(0)(ts(src))));
     expect(serialise(tm)).toBe(
       `Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))`

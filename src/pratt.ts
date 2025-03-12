@@ -646,15 +646,15 @@ const getBindingPower = (op: string): [number, number] => {
     return [1, 2];
   } else if (op == "*" || op == "/") {
     return [3, 4];
-  } else if (op == "(") {
-    return [5, 6];
+  } else if (op == "->") {
+    return [6, 5];
   } else if (op == ".") {
     return [8, 7];
-  } else if (op == "->") {
-    return [10, 9];
   } else if (op == ":") {
-    return [11, 12];
+    return [9, 10];
   } else if (op == "[") {
+    return [11, 12];
+  } else if (op == "(") {
     return [13, 14];
   } else if (op == "++") {
     return [15, 16];
