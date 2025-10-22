@@ -260,7 +260,7 @@ describe("ast", () => {
 
   test("should parse list literal with integers", () =>
     expect(st("[1,2,3]")).toBe(
-      `App(App(App(Ref("cons"), Hole()), IntLit(1)), App(App(App(Ref("cons"), Hole()), IntLit(2)), App(App(App(Ref("cons"), Hole()), IntLit(3)), App(Ref("nil"), Hole()))))`
+      `Cons(IntLit(1), Cons(IntLit(2), Cons(IntLit(3), Nil())))`
     ));
 
   test("should parse if statement", () => {

@@ -15,7 +15,6 @@ import {
   identifier2,
   ifStatement,
   parenthesis,
-  pi,
   resync,
   serialise,
   strip,
