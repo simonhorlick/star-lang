@@ -821,7 +821,7 @@ export const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
       bind(block(identifier2), (id) =>
         bind(many(whitespace), (_) =>
           bind(str("=>"), (_) =>
-            bind(lspc(expression(0)), (t) => pure(Branch(id, t)))
+            bind(block(lspc(expression(0))), (t) => pure(Branch(id, t)))
           )
         )
       )
