@@ -357,4 +357,16 @@ func main:Nat = sum(numbers)`;
     const result = build(src, false);
     expect(result.checkerErrors).toEqual([]);
   });
+
+  test("should allow addition in integer literals", () => {
+    const src = `
+    type Nat = zero | succ(x Nat)
+    type List(A *) = nil | cons(head A, tail List(A))
+    func add:Nat->Nat->Nat = λn λm case n of
+    | zero => m
+    | succ => succ(add(n.x,m))
+    func numbers:List(Nat) = [1+1,2,3]`;
+    const result = build(src, false);
+    expect(result.checkerErrors).toEqual([]);
+  });
 });

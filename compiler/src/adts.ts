@@ -22,6 +22,22 @@ import {
   Expression,
   Cons,
   Nil,
+  IntMul,
+  IntPlus,
+  IntSub,
+  Comp,
+  IntNeg,
+  IntDiv,
+  Idx,
+  Cat,
+  Gt,
+  Lt,
+  Gte,
+  Lte,
+  And,
+  Neq,
+  Or,
+  Eq,
 } from "./pratt";
 import { Context, addTermToCtx } from "./context";
 import {
@@ -343,8 +359,85 @@ export const desugarTerm = (
       );
     case "nil":
       return t;
-    default:
-      throw new Error(`desugarTerm: unexpected ${t._}`);
+    case "add":
+      return IntPlus(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "sub":
+      return IntSub(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "mul":
+      return IntMul(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "div":
+      return IntDiv(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "neg":
+      return IntNeg(desugarTerm(t.exp, undefined, ctx));
+    case "comp":
+      return Comp(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "idx":
+      return Idx(
+        desugarTerm(t.arr, undefined, ctx),
+        desugarTerm(t.idx, undefined, ctx)
+      );
+    case "cat":
+      return Cat(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "gt":
+      return Gt(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "lt":
+      return Lt(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "gte":
+      return Gte(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "lte":
+      return Lte(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "eq":
+      return Eq(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "neq":
+      return Neq(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "and":
+      return And(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    case "or":
+      return Or(
+        desugarTerm(t.lhs, undefined, ctx),
+        desugarTerm(t.rhs, undefined, ctx)
+      );
+    // default:
+    //   throw new Error(`desugarTerm: unexpected ${t._}`);
   }
 };
 
