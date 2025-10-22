@@ -210,7 +210,9 @@ describe("typechecker", () => {
 
     test("should check that a lambda has a pi type", () =>
       check(
-        defs([Def("A", Ann(Abs("x", Var("x", 0)), Star()))]),
+        defs([
+          Def("A", Ann(Abs("x", Var("x", 0)), Star()), undefined, undefined),
+        ]),
         adts(),
         [],
         Abs("a", Var("a", 0)),
@@ -230,8 +232,8 @@ describe("typechecker", () => {
     test("should check domain is a type", () => {
       check(
         defs([
-          Def("A", Ann(Abs("x", Var("x", 0)), Star())),
-          Def("B", Ann(Abs("x", Var("x", 0)), Star())),
+          Def("A", Ann(Abs("x", Var("x", 0)), Star()), undefined, undefined),
+          Def("B", Ann(Abs("x", Var("x", 0)), Star()), undefined, undefined),
         ]),
         adts(),
         [],
@@ -264,13 +266,15 @@ describe("typechecker", () => {
       check(
         defs([
           // A:★
-          Def("A", Ann(Abs("x", Var("x", 0)), Star())),
+          Def("A", Ann(Abs("x", Var("x", 0)), Star()), undefined, undefined),
           // B:★
-          Def("B", Ann(Abs("x", Var("x", 0)), Star())),
+          Def("B", Ann(Abs("x", Var("x", 0)), Star()), undefined, undefined),
           // f:A->B
           Def(
             "f",
-            Ann(Abs("a", Abs("x", Var("x", 0))), Pi("", Ref("A"), Ref("B")))
+            Ann(Abs("a", Abs("x", Var("x", 0))), Pi("", Ref("A"), Ref("B"))),
+            undefined,
+            undefined
           ),
         ]),
         adts(),
@@ -311,8 +315,18 @@ describe("typechecker", () => {
       try {
         check(
           defs([
-            Def("A", Ann(Abs("x", Abs("y", Var("y", 0))), Star())),
-            Def("B", Ann(Abs("x", Abs("y", Var("x", 1))), Star())),
+            Def(
+              "A",
+              Ann(Abs("x", Abs("y", Var("y", 0))), Star()),
+              undefined,
+              undefined
+            ),
+            Def(
+              "B",
+              Ann(Abs("x", Abs("y", Var("x", 1))), Star()),
+              undefined,
+              undefined
+            ),
           ]),
           adts(),
           ctx,
@@ -331,8 +345,8 @@ describe("typechecker", () => {
       const ctx: Context = [{ name: "a", typ: Ref("A"), type: "bind" }];
       check(
         defs([
-          Def("A", Ann(Abs("x", Var("x", 0)), Star())),
-          Def("B", Ann(Abs("x", Var("x", 0)), Star())),
+          Def("A", Ann(Abs("x", Var("x", 0)), Star()), undefined, undefined),
+          Def("B", Ann(Abs("x", Var("x", 0)), Star()), undefined, undefined),
         ]),
         adts(),
         ctx,
@@ -366,7 +380,14 @@ describe("typechecker", () => {
       Abs("f", Abs("x", App(Var("f", 1), App(Var("f", 1), Var("x", 0)))))
     );
     check(
-      defs([Def("T", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))))]),
+      defs([
+        Def(
+          "T",
+          Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))),
+          undefined,
+          undefined
+        ),
+      ]),
       adts(),
       [],
       double,
@@ -745,7 +766,9 @@ describe("typechecker", () => {
           )
         )
       )
-    )
+    ),
+    undefined,
+    undefined
   );
 
   test("vhead has the correct type", () => {

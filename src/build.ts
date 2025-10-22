@@ -80,7 +80,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       else return def;
     })
     .map(go)
-    .filter((n) => n !== null);
+    .filter((n): n is Def2 => n !== null);
 
   const nondefs = f.content.filter((c) => c._ != "def") as ASTNode[];
 

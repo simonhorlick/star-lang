@@ -22,7 +22,9 @@ export const and = Def2(
       )
     ),
     Pi("", Star(), Pi("", Star(), Star()))
-  )
+  ),
+  undefined,
+  undefined
 );
 
 // conj : Πp:*. Πq:*. p -> q -> and p q
@@ -56,7 +58,9 @@ export const conj = Def2(
         )
       )
     )
-  )
+  ),
+  undefined,
+  undefined
 );
 
 // proj1 : Πp:*. Πq:*. and p q → p
@@ -83,7 +87,9 @@ export const proj1 = Def2(
         Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("p", 2))
       )
     )
-  )
+  ),
+  undefined,
+  undefined
 );
 
 // proj2 : Πp:*. Πq:*. and p q → q
@@ -110,7 +116,9 @@ export const proj2 = Def2(
         Pi("", App(App(Ref("and"), Var("p", 1)), Var("q", 0)), Var("q", 1))
       )
     )
-  )
+  ),
+  undefined,
+  undefined
 );
 
 // and_commutes : Πp:*. Πq:*. and p q → and q p
@@ -147,7 +155,9 @@ export const andCommutes = Def2(
         )
       )
     )
-  )
+  ),
+  undefined,
+  undefined
 );
 
 // A vector is essentially a List, but with the length encoded as
@@ -211,7 +221,9 @@ export const vect = Def2(
       )
     ),
     Pi("sz", Ref("Nat"), Star())
-  )
+  ),
+  undefined,
+  undefined
 );
 
 //  ext : Πn:Nat Πhead:Bool Πtail:Vect(n) Vect(succ(n))
@@ -256,7 +268,9 @@ export const ext = Def2(
         )
       )
     )
-  )
+  ),
+  undefined,
+  undefined
 );
 
 // vnil : Vect(zero)
@@ -268,5 +282,7 @@ export const vnil = Def2(
     Abs("P", Abs("cnil", Abs("cext", Var("cnil", 1)))),
     // Vect(zero)
     App(Ref("Vect"), Ref("zero"))
-  )
+  ),
+  undefined,
+  undefined
 );

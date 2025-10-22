@@ -27,7 +27,12 @@ describe("term reduction", () => {
   });
 
   // λx. x
-  const id = Def2("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
+  const id = Def2(
+    "id",
+    Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))),
+    undefined,
+    undefined
+  );
 
   // Test that substituting top level functions works properly.
   test("TestSubstituteDef", () => {

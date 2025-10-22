@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { shift, subst } from "./substitution";
-import { Abs, App, Pi, Var } from "./pratt";
+import { Abs, App, Pi, Var } from "./sugar";
 
 describe("shifting", () => {
   test("type shift increments free variables", () => {
