@@ -10,35 +10,13 @@ import {
   adt,
   Origin2,
 } from "./ast";
-import {
-  bind,
-  char,
-  many,
-  parseErrorDiagnostic,
-  Stream,
-  Result,
-  lspc,
-} from "./parser";
-import {
-  abstraction,
-  caseStatement,
-  expression,
-  identifier,
-  identifier2,
-  identifier2str,
-  parenthesis,
-  resync,
-  serialise,
-} from "./pratt";
-import { strip } from "./pratt";
+import { bind, many, parseErrorDiagnostic, Stream, Result } from "./parser";
+import { identifier2str, resync, serialise } from "./pratt";
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,
   idx: 6,
 });
-
-// deserialise term and serialise the result.
-const st = (s: string): string => serialise(strip(result(term(ts(s)))));
 
 export const result = <T>(x: Result<T>) => {
   if (x._ == "parseerror") {
@@ -75,22 +53,6 @@ export function serialiseAST(n: ASTNode): string {
       return "";
   }
 }
-
-const success = <T>(x: Result<T>) => x._ == "outputvalue";
-
-const resultC = <T>(x: Result<T>) => {
-  if (x._ == "parseerror") {
-    throw x.error;
-  } else {
-    if (x.stream.idx != x.stream.src.length) {
-      throw "stream not consumed";
-    }
-    return x.value;
-  }
-};
-
-const term = lspc(expression(0));
-const type = term;
 
 describe("ast", () => {
   test("should parse package", () =>
