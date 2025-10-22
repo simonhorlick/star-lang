@@ -508,11 +508,15 @@ export const desugarCaseStatement = (
       oe
     );
 
-    // Make constructor arguments available on each branch. Any Vars inside the
-    // branch term must be bumped as we add these Abs nodes to the tree.
+    // Make constructor arguments available on each branch. Any free Vars inside
+    // the branch term must be bumped as we add these Abs nodes to the tree.
+    // All variables in the branch term reference the outer context and must be
+    // shifted up by the number of constructor arguments we're adding.
+    const shifted = shift(constructor.args.length, 0, branch.term);
+
     const branchBodyWithArgs = constructor.args.reduceRight(
       (acc: Term, arg: Argument) => Abs(`${caseName}.${arg.name}`, acc),
-      shift(constructor.args.length, 0, branch.term)
+      shifted
     );
 
     // Desugar the branch body - at this point the body still contains Refs that
