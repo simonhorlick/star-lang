@@ -25,9 +25,7 @@ import {
   identifier,
   identifier2,
   identifier2str,
-  listLiteral,
   parenthesis,
-  pi,
   resync,
   serialise,
 } from "./pratt";
@@ -341,21 +339,21 @@ describe("ast", () => {
     ));
 
   test("pi: should parse named pi types", () => {
-    const parser = pi;
-    const res = parser(ts("ΠA:* A"));
+    const parser = term;
+    const res = parser(ts("(A:*) -> A"));
     expect(serialise(strip(result(res)))).toBe(`Pi("A", Star(), Ref("A"))`);
   });
 
   test("pi: should expose ParseError for bad from annotation", () => {
-    const parser = pi;
-    const res = parser(ts("ΠA:(&) A"));
+    const parser = term;
+    const res = parser(ts("(A:(&)) -> A"));
     expect(serialise(strip(result(res)))).toBe(
       `Pi("A", ParseError(expected term; got &), Ref("A"))`
     );
   });
 
   test("pi: should parse multiple named pi types", () =>
-    expect(st("ΠA:* ΠB:* Πa:A Πb:B b")).toBe(
+    expect(st("(A:*) -> (B:*) -> (a:A) -> (b:B) -> b")).toBe(
       `Pi("A", Star(), Pi("B", Star(), Pi("a", Ref("A"), Pi("b", Ref("B"), Ref("b")))))`
     ));
 
@@ -526,17 +524,32 @@ describe("ast", () => {
     );
   });
 
+  test("should parse arrow type Bool -> Bool", () => {
+    const src = `Bool -> Bool`;
+    const tm = strip(result(term(ts(src))));
+    expect(serialise(tm)).toBe(`Pi("", Ref("Bool"), Ref("Bool"))`);
+  });
+
+  test("should parse arrow type * -> *", () => {
+    const src = `* -> *`;
+    const tm = strip(result(term(ts(src))));
+    expect(serialise(tm)).toBe(`Pi("", Star(), Star())`);
+  });
+
+  test("should parse arrow type Bool -> *", () => {
+    const src = `Bool -> *`;
+    const tm = strip(result(term(ts(src))));
+    expect(serialise(tm)).toBe(`Pi("", Ref("Bool"), Star())`);
+  });
+
   test("should parse simple pi type", () => {
-    const src = `
-    Πb:Bool
-     *
-    `;
-    const tm = strip(result(type(ts(src))));
+    const src = `(b:Bool) -> *`;
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(`Pi("b", Ref("Bool"), Star())`);
   });
 
   test("should parse pi types correctly", () => {
-    const src = `Πb:Bool ΠP:(Πx:Bool *) Πt:P(true) Πf:P(false) P(b)`;
+    const src = `(b:Bool) -> (P:((x:Bool) -> *)) -> (t:P(true)) -> (f:P(false)) -> P(b)`;
     const tm = strip(result(type(ts(src))));
     expect(serialise(tm)).toBe(
       `Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))`
@@ -544,27 +557,10 @@ describe("ast", () => {
   });
 
   test("should parse pi types in function type", () => {
-    const src = `func bool_match : Πb:Bool ΠP:(Πx:Bool *) Πt:P(true) Πf:P(false) P(b) =
+    const src = `func bool_match : (b:Bool) -> (P:((x:Bool) -> *)) -> (t:P(true)) -> (f:P(false)) -> P(b) =
     λb λP λt λf b(P,t,f)
 `;
     const ast = stripAST(result(definition(ts(src)))) as Def;
-    // const ast = result(definition(ts(src))) as Def;
-
-    // console.log(`checking for parse errors in tree`);
-    // const errs = foldTreeCtx(
-    //   (acc, curr) => {
-    //     if (curr.term._ !== "err") return acc;
-    //     const err = {
-    //       msg: curr.term.msg,
-    //       start: curr.start ?? 0,
-    //       end: curr.end ?? 0,
-    //     } as TypecheckError;
-    //     console.log(printDiagnostic(src, err));
-    //     return acc.concat(err);
-    //   },
-    //   [] as TypecheckError[],
-    //   ast.term
-    // );
 
     expect(serialiseAST(ast)).toBe(
       `Def(name=bool_match, term=Ann(Abs("b", Abs("P", Abs("t", Abs("f", App(App(App(Ref("b"), Ref("P")), Ref("t")), Ref("f")))))), Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))))`

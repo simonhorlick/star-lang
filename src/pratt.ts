@@ -30,6 +30,8 @@ import {
   sat,
 } from "./parser";
 
+import { withInspect } from "./debug";
+
 // utf8 parses a string literal containing utf8 characters and escape
 // sequences.
 // TODO: Implement escape sequences.
@@ -42,17 +44,19 @@ export type Abs = {
   body: Expression; // the body of the abstraction
 };
 
-export const Abs = (name: string, body: Expression): Abs => ({
-  _: "lam",
-  name: Identifier(name),
-  body: body,
-});
+export const Abs = (name: string, body: Expression): Abs =>
+  withInspect({
+    _: "lam",
+    name: Identifier(name),
+    body: body,
+  });
 
-export const AbsI = (name: Origin | Identifier, body: Expression): Abs => ({
-  _: "lam",
-  name: name,
-  body: body,
-});
+export const AbsI = (name: Origin | Identifier, body: Expression): Abs =>
+  withInspect({
+    _: "lam",
+    name: name,
+    body: body,
+  });
 
 export type IntPlus = {
   _: "add";
@@ -60,11 +64,12 @@ export type IntPlus = {
   rhs: Expression;
 };
 
-export const IntPlus = (lhs: Expression, rhs: Expression): IntPlus => ({
-  _: "add",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const IntPlus = (lhs: Expression, rhs: Expression): IntPlus =>
+  withInspect({
+    _: "add",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type IntSub = {
   _: "sub";
@@ -72,16 +77,18 @@ export type IntSub = {
   rhs: Expression;
 };
 
-export const IntSub = (lhs: Expression, rhs: Expression): IntSub => ({
-  _: "sub",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const IntSub = (lhs: Expression, rhs: Expression): IntSub =>
+  withInspect({
+    _: "sub",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
-export const IntNeg = (exp: Expression): IntNeg => ({
-  _: "neg",
-  exp: exp,
-});
+export const IntNeg = (exp: Expression): IntNeg =>
+  withInspect({
+    _: "neg",
+    exp: exp,
+  });
 
 export type IntMul = {
   _: "mul";
@@ -89,11 +96,12 @@ export type IntMul = {
   rhs: Expression;
 };
 
-export const IntMul = (lhs: Expression, rhs: Expression): IntMul => ({
-  _: "mul",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const IntMul = (lhs: Expression, rhs: Expression): IntMul =>
+  withInspect({
+    _: "mul",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type IntDiv = {
   _: "div";
@@ -101,11 +109,12 @@ export type IntDiv = {
   rhs: Expression;
 };
 
-export const IntDiv = (lhs: Expression, rhs: Expression): IntDiv => ({
-  _: "div",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const IntDiv = (lhs: Expression, rhs: Expression): IntDiv =>
+  withInspect({
+    _: "div",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type Idx = {
   _: "idx";
@@ -113,11 +122,12 @@ export type Idx = {
   idx: Expression;
 };
 
-export const Idx = (arr: Expression, idx: Expression): Idx => ({
-  _: "idx",
-  arr: arr,
-  idx: idx,
-});
+export const Idx = (arr: Expression, idx: Expression): Idx =>
+  withInspect({
+    _: "idx",
+    arr: arr,
+    idx: idx,
+  });
 
 // Boolean and.
 export type And = {
@@ -126,11 +136,12 @@ export type And = {
   rhs: Expression;
 };
 
-export const And = (lhs: Expression, rhs: Expression): And => ({
-  _: "and",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const And = (lhs: Expression, rhs: Expression): And =>
+  withInspect({
+    _: "and",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 // Boolean or.
 export type Or = {
@@ -139,11 +150,12 @@ export type Or = {
   rhs: Expression;
 };
 
-export const Or = (lhs: Expression, rhs: Expression): Or => ({
-  _: "or",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Or = (lhs: Expression, rhs: Expression): Or =>
+  withInspect({
+    _: "or",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type Eq = {
   _: "eq";
@@ -151,11 +163,12 @@ export type Eq = {
   rhs: Expression;
 };
 
-export const Eq = (lhs: Expression, rhs: Expression): Eq => ({
-  _: "eq",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Eq = (lhs: Expression, rhs: Expression): Eq =>
+  withInspect({
+    _: "eq",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type Neq = {
   _: "neq";
@@ -163,11 +176,12 @@ export type Neq = {
   rhs: Expression;
 };
 
-export const Neq = (lhs: Expression, rhs: Expression): Neq => ({
-  _: "neq",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Neq = (lhs: Expression, rhs: Expression): Neq =>
+  withInspect({
+    _: "neq",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type Gt = {
   _: "gt";
@@ -175,11 +189,12 @@ export type Gt = {
   rhs: Expression;
 };
 
-export const Gt = (lhs: Expression, rhs: Expression): Gt => ({
-  _: "gt",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Gt = (lhs: Expression, rhs: Expression): Gt =>
+  withInspect({
+    _: "gt",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type Lt = {
   _: "lt";
@@ -187,11 +202,12 @@ export type Lt = {
   rhs: Expression;
 };
 
-export const Lt = (lhs: Expression, rhs: Expression): Lt => ({
-  _: "lt",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Lt = (lhs: Expression, rhs: Expression): Lt =>
+  withInspect({
+    _: "lt",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type Gte = {
   _: "gte";
@@ -199,11 +215,12 @@ export type Gte = {
   rhs: Expression;
 };
 
-export const Gte = (lhs: Expression, rhs: Expression): Gte => ({
-  _: "gte",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Gte = (lhs: Expression, rhs: Expression): Gte =>
+  withInspect({
+    _: "gte",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type Lte = {
   _: "lte";
@@ -211,11 +228,12 @@ export type Lte = {
   rhs: Expression;
 };
 
-export const Lte = (lhs: Expression, rhs: Expression): Lte => ({
-  _: "lte",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Lte = (lhs: Expression, rhs: Expression): Lte =>
+  withInspect({
+    _: "lte",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 export type App = {
   _: "app";
@@ -223,11 +241,12 @@ export type App = {
   arg: Expression;
 };
 
-export const App = (func: Expression, arg: Expression): App => ({
-  _: "app",
-  func: func,
-  arg: arg,
-});
+export const App = (func: Expression, arg: Expression): App =>
+  withInspect({
+    _: "app",
+    func: func,
+    arg: arg,
+  });
 
 export type IntNeg = {
   _: "neg";
@@ -241,11 +260,12 @@ export type Cat = {
   rhs: Expression;
 };
 
-export const Cat = (lhs: Expression, rhs: Expression): Cat => ({
-  _: "cat",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Cat = (lhs: Expression, rhs: Expression): Cat =>
+  withInspect({
+    _: "cat",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 // Function composition operator `f . g`.
 export type Comp = {
@@ -254,11 +274,12 @@ export type Comp = {
   rhs: Expression;
 };
 
-export const Comp = (lhs: Expression, rhs: Expression): Comp => ({
-  _: "comp",
-  lhs: lhs,
-  rhs: rhs,
-});
+export const Comp = (lhs: Expression, rhs: Expression): Comp =>
+  withInspect({
+    _: "comp",
+    lhs: lhs,
+    rhs: rhs,
+  });
 
 // Π is the type of functions.
 export type Pi = {
@@ -268,12 +289,13 @@ export type Pi = {
   name: string; // name of the binder
 };
 
-export const Pi = (name: string, from: Expression, to: Expression): Pi => ({
-  _: "pi",
-  from: from,
-  body: to,
-  name: name,
-});
+export const Pi = (name: string, from: Expression, to: Expression): Pi =>
+  withInspect({
+    _: "pi",
+    from: from,
+    body: to,
+    name: name,
+  });
 
 // A hole.
 export type Hole = {
@@ -281,32 +303,35 @@ export type Hole = {
   id: number;
 };
 
-export const Hole = (id: number): Hole => ({
-  _: "hole",
-  id: id,
-});
+export const Hole = (id: number): Hole =>
+  withInspect({
+    _: "hole",
+    id: id,
+  });
 
 // ★ is the type of types.
 export type Star = {
   _: "star";
 };
 
-export const Star = (): Star => ({
-  _: "star",
-});
+export const Star = (): Star =>
+  withInspect({
+    _: "star",
+  });
 
-// Π is the type of functions.
+// A type annotation.
 export type Ann = {
   _: "ann";
   term: Expression;
   type: Expression;
 };
 
-export const Ann = (term: Expression, type: Expression): Ann => ({
-  _: "ann",
-  term: term,
-  type: type,
-});
+export const Ann = (term: Expression, type: Expression): Ann =>
+  withInspect({
+    _: "ann",
+    term: term,
+    type: type,
+  });
 
 // An element of a cons-list.
 export type Cons = {
@@ -315,20 +340,22 @@ export type Cons = {
   tail: Expression;
 };
 
-export const Cons = (term: Expression, next: Expression): Cons => ({
-  _: "cons",
-  head: term,
-  tail: next,
-});
+export const Cons = (term: Expression, next: Expression): Cons =>
+  withInspect({
+    _: "cons",
+    head: term,
+    tail: next,
+  });
 
 // An empty cons-list.
 export type Nil = {
   _: "nil";
 };
 
-export const Nil = (): Nil => ({
-  _: "nil",
-});
+export const Nil = (): Nil =>
+  withInspect({
+    _: "nil",
+  });
 
 // Identifier is a syntax node so that we can wrap it in origins and map it
 // back to the original source location.
@@ -337,10 +364,11 @@ export type Identifier = {
   name: string;
 };
 
-export const Identifier = (name: string): Identifier => ({
-  _: "id",
-  name: name,
-});
+export const Identifier = (name: string): Identifier =>
+  withInspect({
+    _: "id",
+    name: name,
+  });
 
 type Branch = {
   constructor: Identifier | Origin;
@@ -361,11 +389,12 @@ export type Case = {
   branches: Branch[];
 };
 
-export const Case = (name: Expression, branches: Branch[]): Case => ({
-  _: "case",
-  name: name,
-  branches: branches,
-});
+export const Case = (name: Expression, branches: Branch[]): Case =>
+  withInspect({
+    _: "case",
+    name: name,
+    branches: branches,
+  });
 
 export type Let = {
   _: "let";
@@ -378,12 +407,13 @@ export const Let = (
   name: Origin | Identifier,
   expr: Expression,
   body: Expression
-): Let => ({
-  _: "let",
-  name: name,
-  expr: expr,
-  body: body,
-});
+): Let =>
+  withInspect({
+    _: "let",
+    name: name,
+    expr: expr,
+    body: body,
+  });
 
 export type If = {
   _: "if";
@@ -396,12 +426,13 @@ export const If = (
   condition: Expression,
   trueBranch: Expression,
   falseBranch: Expression
-): If => ({
-  _: "if",
-  condition: condition,
-  trueBranch: trueBranch,
-  falseBranch: falseBranch,
-});
+): If =>
+  withInspect({
+    _: "if",
+    condition: condition,
+    trueBranch: trueBranch,
+    falseBranch: falseBranch,
+  });
 
 // A keyword.
 export type Key = {
@@ -409,10 +440,11 @@ export type Key = {
   key: string;
 };
 
-export const Key = (key: string): Key => ({
-  _: "key",
-  key: key,
-});
+export const Key = (key: string): Key =>
+  withInspect({
+    _: "key",
+    key: key,
+  });
 
 // Mark certain ranges as syntactic, for example the "if" or "case" keywords.
 export type Syntax = {
@@ -421,11 +453,12 @@ export type Syntax = {
   child: Expression;
 };
 
-export const Syntax = (syntax: Origin, child: Expression): Syntax => ({
-  _: "syn",
-  syntax: syntax,
-  child: child,
-});
+export const Syntax = (syntax: Origin, child: Expression): Syntax =>
+  withInspect({
+    _: "syn",
+    syntax: syntax,
+    child: child,
+  });
 
 // A bound variable that has not yet been resolved to a debruijin index.
 export type Par = {
@@ -435,18 +468,20 @@ export type Par = {
   name: string;
 };
 
-export const Par = (name: string): Par => ({
-  _: "par",
-  name: name,
-});
+export const Par = (name: string): Par =>
+  withInspect({
+    _: "par",
+    name: name,
+  });
 
 // An integer literal
 export type IntLit = { _: "int"; num: number };
 
-export const IntLit = (x: number): IntLit => ({
-  _: "int",
-  num: x,
-});
+export const IntLit = (x: number): IntLit =>
+  withInspect({
+    _: "int",
+    num: x,
+  });
 
 // A string literal
 export type StringLit = { _: "str"; str: string };
@@ -459,10 +494,11 @@ export type Ref = {
   name: string;
 };
 
-export const Ref = (name: string): Ref => ({
-  _: "ref",
-  name: name,
-});
+export const Ref = (name: string): Ref =>
+  withInspect({
+    _: "ref",
+    name: name,
+  });
 
 // A Label is a way of annotating terms with a string. This allows us to
 // determine which branch of an if statement a node belongs to, for example.
@@ -472,11 +508,12 @@ export type Label = {
   child: Expression;
 };
 
-export const Label = (label: string, child: Expression): Label => ({
-  _: "label",
-  label,
-  child,
-});
+export const Label = (label: string, child: Expression): Label =>
+  withInspect({
+    _: "label",
+    label,
+    child,
+  });
 
 // Self is a way of abstracting out the value currently being typechecked so
 // that it can be used within the body.
@@ -486,11 +523,12 @@ export type Self = {
   body: Expression; // the body of the abstraction
 };
 
-export const Self = (name: string, body: Expression): Self => ({
-  _: "self",
-  name: name,
-  body: body,
-});
+export const Self = (name: string, body: Expression): Self =>
+  withInspect({
+    _: "self",
+    name: name,
+    body: body,
+  });
 
 // ParseError is a syntax node that allows partial parse trees to be
 // constructed.
@@ -499,10 +537,11 @@ export type ParseError = {
   msg: string;
 };
 
-export const ParseError = (msg: string): ParseError => ({
-  _: "err",
-  msg: msg,
-});
+export const ParseError = (msg: string): ParseError =>
+  withInspect({
+    _: "err",
+    msg: msg,
+  });
 
 // A bound variable.
 export type Var = {
@@ -516,11 +555,12 @@ export type Var = {
   index: number;
 };
 
-export const Var = (name: string, index: number): Var => ({
-  _: "var",
-  name: name,
-  index: index,
-});
+export const Var = (name: string, index: number): Var =>
+  withInspect({
+    _: "var",
+    name: name,
+    index: index,
+  });
 
 export type Term =
   | Var
@@ -766,16 +806,13 @@ export type Origin = {
   child: Expression;
 };
 
-export const Origin = (
-  start: number,
-  end: number,
-  child: Expression
-): Origin => ({
-  _: "orig",
-  start: start,
-  end: end,
-  child: child,
-});
+export const Origin = (start: number, end: number, child: Expression): Origin =>
+  withInspect({
+    _: "orig",
+    start: start,
+    end: end,
+    child: child,
+  });
 
 // | true => false
 export const caseBranch: Parser<Branch> = bind(optional(spaces), (_) =>
@@ -882,34 +919,6 @@ export const ifStatement: Parser<If | Expression> = bind(
     )
 );
 
-// pi parses a pi type `Πx:T t`.
-export const pi: Parser<Pi | ParseError> = bind(
-  char("Π"),
-  (_) =>
-    bind(identifier, (name) =>
-      bind(
-        char(":"),
-        (_) =>
-          bind(orFail("expected type", lspc(expression(0))), (from) =>
-            bind(
-              orFail("expected spaces between type and body", spaces),
-              (sp): Parser<Pi | ParseError> => {
-                if (!(sp instanceof Array) && sp._ == "err") {
-                  return pure(Pi(name, from, sp));
-                }
-                return bind(
-                  orFail("expected term", lspc(expression(0))),
-                  (body) => pure(Pi(name, from, body))
-                );
-              }
-            )
-          )
-        // )
-      )
-    )
-  // )
-);
-
 // abstraction parses a lambda abstraction `λx t`. The binder x is separated
 // from the body by spaces.
 export const abstraction: Parser<Abs> = bind(char("λ"), (_) =>
@@ -1007,13 +1016,6 @@ export const expression =
     let cond = str("if")(s);
     if (cond._ != "parseerror") {
       return ifStatement(s);
-    }
-
-    // TODO: remove from user-facing syntax
-    // pi `Πx:A t`
-    let p = str("Π")(s);
-    if (p._ != "parseerror") {
-      return pi(s);
     }
 
     // TODO: remove from user-facing syntax

@@ -329,21 +329,21 @@ describe("pratt", () => {
     ));
 
   test("pi: should parse named pi types", () => {
-    const parser = pi;
-    const res = parser(ts("ΠA:* A"));
+    const parser = term;
+    const res = parser(ts("(A:*) -> A"));
     expect(serialise(strip(result(res)))).toBe(`Pi("A", Star(), Ref("A"))`);
   });
 
   test("pi: should expose ParseError for bad from annotation", () => {
-    const parser = pi;
-    const res = parser(ts("ΠA:(&) A"));
+    const parser = term;
+    const res = parser(ts("(A:(&)) -> A"));
     expect(serialise(strip(result(res)))).toBe(
       `Pi("A", ParseError(expected term; got &), Ref("A"))`
     );
   });
 
   test("pi: should parse multiple named pi types", () =>
-    expect(st("ΠA:* ΠB:* Πa:A Πb:B b")).toBe(
+    expect(st("(A:*) -> (B:*) -> (a:A) -> (b:B) -> b")).toBe(
       `Pi("A", Star(), Pi("B", Star(), Pi("a", Ref("A"), Pi("b", Ref("B"), Ref("b")))))`
     ));
 
@@ -390,7 +390,7 @@ describe("pratt", () => {
     const src = `
           | succ => zero`;
     const ast = strip(result(term(ts(src))));
-    expect(serialise(ast)).toBe("ParseError(expected term; got \n)");
+    expect(serialise(ast)).toBe("ParseError(expected term; got )");
   });
 
   test("should parse partial case branch", () => {
