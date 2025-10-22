@@ -212,7 +212,7 @@ describe("ast", () => {
 
   test("should include origins in function application", () =>
     expect(serialise(result(term(ts("f(x)"))))).toBe(
-      `Origin(6, 10, App(Origin(6, 7, Ref("f")), Origin(8, 9, Origin(8, 9, Ref("x")))))`
+      `App(Orig(6, 7, Ref("f")), Orig(8, 9, Ref("x")))`
     ));
 
   test("should parse term", () =>
