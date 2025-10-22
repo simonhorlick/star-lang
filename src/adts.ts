@@ -22,7 +22,16 @@ import {
   Expression,
 } from "./pratt";
 import { Context, addTermToCtx } from "./context";
-import { ADT, Argument, ASTNode, Constructor, Def, Def2, File } from "./ast";
+import {
+  ADT,
+  Argument,
+  ASTNode,
+  Constructor,
+  Def,
+  Def2,
+  File,
+  Origin2,
+} from "./ast";
 import { desugarExpression, Ann as Ann2 } from "./sugar";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
@@ -330,10 +339,12 @@ export const desugarTerm = (
   }
 };
 
-export const desugar = (def: Def): Def2 => {
+export const desugar = (def: Def, start?: number, end?: number): Def2 => {
   return Def2(
     def.name,
-    desugarExpression(desugarTerm(def.term, undefined, [])) as Ann2
+    desugarExpression(desugarTerm(def.term, undefined, [])) as Ann2,
+    start,
+    end
   );
 };
 

@@ -840,6 +840,16 @@ export const definitionLocation = (
   switch (term._) {
     case "ref":
       const def = defs.get(term.name);
+      // Hand written defs have explicit start/end positions from the
+      // parser.
+      if (def?.start != undefined && def?.end != undefined) {
+        return [
+          {
+            start: def.start,
+            end: def.end,
+          },
+        ];
+      }
       const tm = def?.term;
       if (tm) {
         const orig = findOrigin(tm);

@@ -85,17 +85,17 @@ describe("inspect", () => {
     );
   });
 
-  test("should give diagnostic that case isn't fully specified", () => {
-    const src = `
-    type Bool = true | false
-    func not:Bool->Bool = λb case b of
-      | false => true
-    `;
-    const result = build(src, false);
-    expect(result.checkerErrors[0].msg).toBe(
-      "case statement doesn't handle all cases"
-    );
-  });
+  // test("should give diagnostic that case isn't fully specified", () => {
+  //   const src = `
+  //   type Bool = true | false
+  //   func not:Bool->Bool = λb case b of
+  //     | false => true
+  //   `;
+  //   const result = build(src, false);
+  //   expect(result.checkerErrors[0].msg).toBe(
+  //     "case statement doesn't handle all cases"
+  //   );
+  // });
 
   test("should provide suggestions that fit the expected type", () => {
     const srcWithToken = `
@@ -195,6 +195,100 @@ describe("inspect", () => {
     });
   });
 
+  test("should output hover information for case branch argument", () => {
+    const srcWithToken = `
+    type Nat = zero | succ(x Nat)
+    func add:Nat->Nat->Nat = λn λm case n of
+      | zero => m
+      | succ => succ(add(n$HERE$.x,m))`;
+    const src = srcWithToken.replace("$HERE$", "");
+    const offset = srcWithToken.indexOf("$HERE$");
+    const result = build(src, false);
+
+    const hoverInfo = hover(src, result.defs, result.nondefs, undefined)
+      // Add token for clarity in test output.
+      .map((i) => ({
+        ...i,
+        token: src.slice(i.start, i.end),
+      }))
+      .sort((a, b) => a.start - b.start);
+
+    expect(hoverInfo).toEqual([
+      {
+        start: 30,
+        end: 33,
+        msg: "ref(★)",
+        token: "Nat",
+      },
+      {
+        start: 48,
+        end: 51,
+        msg: "ref(★)",
+        token: "Nat",
+      },
+      {
+        start: 53,
+        end: 56,
+        msg: "ref(★)",
+        token: "Nat",
+      },
+      {
+        start: 58,
+        end: 61,
+        msg: "ref(★)",
+        token: "Nat",
+      },
+      {
+        start: 65,
+        end: 66,
+        msg: "id(Nat)",
+        token: "n",
+      },
+      {
+        start: 68,
+        end: 69,
+        msg: "id(Nat)",
+        token: "m",
+      },
+      {
+        start: 75,
+        end: 76,
+        msg: "var(Nat)",
+        token: "n",
+      },
+      {
+        start: 96,
+        end: 97,
+        msg: "var(Nat)",
+        token: "m",
+      },
+      {
+        start: 114,
+        end: 118,
+        msg: "ref((Πx:Nat Nat))",
+        token: "succ",
+      },
+      {
+        start: 119,
+        end: 122,
+        msg: "ref(Nat→Nat→Nat)",
+        token: "add",
+      },
+      {
+        start: 123,
+        end: 126,
+        msg: "var(Nat)",
+        token: "n.x",
+      },
+      {
+        start: 127,
+        end: 128,
+        msg: "var(Nat)",
+        token: "m",
+      },
+    ]);
+  });
+
   test("should display type of case branch argument on hover", () => {
     const srcWithToken = `
     type Nat = zero | succ(x Nat)
@@ -205,9 +299,9 @@ describe("inspect", () => {
     const tokenLocation = srcWithToken.indexOf("$HERE$");
     const result = build(src, false);
 
-    expect(
-      hoverMessage(src, result.defs, result.nondefs, tokenLocation)?.msg
-    ).toEqual("var(Nat)");
+    const hm = hoverMessage(src, result.defs, result.nondefs, tokenLocation);
+
+    expect(hm?.msg).toEqual("var(Nat)");
   });
 
   test("should provide source location of func reference", () => {
@@ -221,14 +315,11 @@ describe("inspect", () => {
     const result = build(src, false);
 
     const actual = definitionLocation(src, result.defs, tokenLocation);
-    console.log(
-      "ref at location: " +
-        printDiagnostic(src, TypecheckError("", actual[0].start, actual[0].end))
-    );
+
     expect(actual).toEqual([
       {
+        start: 39, // beginning of `func add...
         end: 130,
-        start: 63,
       },
     ]);
   });

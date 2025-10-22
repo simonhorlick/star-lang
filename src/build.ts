@@ -1,6 +1,15 @@
 // build is a library for orchestrating builds of source files for this language.
 
-import { parseFile, ADT, Def, File, stripAST, ASTNode, Def2 } from "./ast";
+import {
+  parseFile,
+  ADT,
+  Def,
+  File,
+  stripAST,
+  ASTNode,
+  Def2,
+  Origin2,
+} from "./ast";
 import { TypecheckError, fill, infer } from "./typecheck";
 import { foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
@@ -53,13 +62,26 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
   // generate syntax nodes for ADTs, etc
   const f = processADTs(t.value);
 
-  // desugar definitions
-  const defs = (f.content.filter((c) => c._ == "def") as Def[])
+  // desugar each definition, keeping track of Origin nodes so we can assign
+  // origins to the defs.
+  const go = (node: ASTNode): Def2 | null => {
+    if (node._ == "def") {
+      // This can happen for definitions that are generated.
+      return desugar(node, undefined, undefined);
+    } else if (node._ == "orig2" && node.child._ == "def") {
+      return desugar(node.child, node.start, node.end);
+    } else {
+      return null;
+    }
+  };
+  const defs = f.content
     .map((def) => {
       if (stripDefs) return stripAST(def) as Def;
       else return def;
     })
-    .map((def) => desugar(def));
+    .map(go)
+    .filter((n) => n !== null);
+
   const nondefs = f.content.filter((c) => c._ != "def") as ASTNode[];
 
   let defsMap: Map<string, Def2> = new Map();
@@ -77,7 +99,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       if (filled.term._ != "ann") {
         throw "expected annotated term for definition body";
       }
-      checkedMap.set(def.name, Def2(def.name, filled.term));
+      checkedMap.set(def.name, Def2(def.name, filled.term, def.start, def.end));
     } catch (e) {
       if ((e as any)._ !== undefined) {
         const result = e as TypecheckError;
@@ -89,7 +111,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       }
       // add the original term to the map so we can at least get some
       // information when inspecting.
-      checkedMap.set(def.name, Def2(def.name, def.term));
+      checkedMap.set(def.name, Def2(def.name, def.term, def.start, def.end));
     }
   }
 

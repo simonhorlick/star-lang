@@ -8,6 +8,7 @@ import {
   parseFile,
   Def,
   adt,
+  Origin2,
 } from "./ast";
 import {
   bind,
@@ -476,12 +477,10 @@ describe("ast", () => {
   });
 
   test("should include origins for type annotations of definitions", () => {
-    const ast = result(definition(ts(`func abc:String = ""`)));
-    if (ast._ != "def") {
-      throw `unexpected ${ast._}`;
-    }
+    const ast = result(definition(ts(`func abc:String = ""`))) as Origin2;
+    const term = (ast.child as Def).term;
     // Here there are two origins - one for the term and one for the Ref.
-    expect(serialise(ast.term.type)).toBe(`Orig(15, 21, Ref("String"))`);
+    expect(serialise(term.type)).toBe(`Orig(15, 21, Ref("String"))`);
   });
 
   test("should parse let expression", () => {

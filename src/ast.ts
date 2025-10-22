@@ -414,12 +414,21 @@ export type Def2 = {
   _: "def";
   name: string;
   term: Ann2;
+  start?: number;
+  end?: number;
 };
 
-export const Def2 = (name: string, term: Ann2): Def2 => ({
+export const Def2 = (
+  name: string,
+  term: Ann2,
+  start: number | undefined,
+  end: number | undefined
+): Def2 => ({
   _: "def",
   name: name,
   term: term,
+  start: start,
+  end: end,
 });
 
 // // An integer literal
@@ -599,9 +608,8 @@ const type = term;
 
 // definition parses a top-level function definition, for example
 // `func id: A->A = λx.x`.
-export const definition: Parser<ParseError | Def> = bind(
-  keyword("func"),
-  (sfunc) =>
+export const definition: Parser<ParseError | ASTNode> = block2(
+  bind(keyword("func"), (sfunc) =>
     bind(orFail("expected space after func", many1(whitespace)), (_) =>
       bind(identifier, (name) =>
         bind(many(whitespace), (_) =>
@@ -617,6 +625,7 @@ export const definition: Parser<ParseError | Def> = bind(
         )
       )
     )
+  )
 );
 
 // argument parses a single argument, i.e. `identifier Type`.
@@ -711,7 +720,7 @@ export function stripAST(t: ASTNode): ASTNode {
     case "nl":
       return t;
     case "orig2":
-      return t.child;
+      return stripAST(t.child);
     case "pkg":
       return t;
     case "sp":
