@@ -43,17 +43,16 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     throw "unexpected parse error";
   }
 
-  console.log(JSON.stringify(t.value.content));
+  const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
+  const adts = new Map<string, ADT>();
+  for (const adt of adtList) {
+    adts.set(identifier2str(adt.name), adt);
+  }
 
   // generate syntax nodes for ADTs, etc
   const f = processADTs(t.value);
 
   // desugar definitions
-  const adtList = f.content.filter((c) => c._ == "adt") as ADT[];
-  const adts = new Map<string, ADT>();
-  for (const adt of adtList) {
-    adts.set(identifier2str(adt.name), adt);
-  }
   const defs = (f.content.filter((c) => c._ == "def") as Def[])
     .map((def) => {
       if (stripDefs) return stripAST(def) as Def;

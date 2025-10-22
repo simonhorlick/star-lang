@@ -970,10 +970,6 @@ export const expression =
     // maintaining correct precedence.
     // It is an implementation of the standard Pratt parsing algorithm.
 
-    console.log(
-      `expression(min=${min}) @ ${s.idx} '${s.src.slice(s.idx, s.idx + 10)}...'`
-    );
-
     let neg = char("-")(s);
     if (neg._ != "parseerror") {
       const ex = expression(0)(neg.stream);
