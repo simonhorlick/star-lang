@@ -5,7 +5,7 @@ import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx } from "./context";
 import { substTop } from "./substitution";
 import { BuildResult } from "./build";
-import { ASTNode, Def, Def2, File } from "./ast";
+import { ASTNode, Def2 } from "./ast";
 import {
   AbsI,
   Ann,
@@ -547,92 +547,6 @@ export const inspect = (
         }
         return t;
       }
-      // case "add":
-      //   return IntPlus(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "sub":
-      //   return IntSub(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "mul":
-      //   return IntMul(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "div":
-      //   return IntDiv(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "neg":
-      //   return IntNeg(
-      //     traverse(t.exp, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "comp":
-      //   return Comp(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "idx":
-      //   return Idx(
-      //     traverse(t.arr, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.idx, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "cat":
-      //   return Cat(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "gt":
-      //   return Gt(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "lt":
-      //   return Lt(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "gte":
-      //   return Gte(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "lte":
-      //   return Lte(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "eq":
-      //   return Eq(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "neq":
-      //   return Neq(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "and":
-      //   return And(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "or":
-      //   return Or(
-      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "cons":
-      //   return Cons(
-      //     traverse(t.head, undefined, undefined, undefined, ctx, defs),
-      //     traverse(t.tail, undefined, undefined, undefined, ctx, defs)
-      //   );
-      // case "nil":
-      //   return Nil();
     }
   };
 
