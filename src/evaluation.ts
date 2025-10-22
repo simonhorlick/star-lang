@@ -1,7 +1,8 @@
-import { Term, identifier2str } from "./ast";
 import * as Erased from "./erased";
+import { identifier2str } from "./pratt";
 import { prettyC } from "./pretty";
 import { stringToUtf8ByteArray, utf8ByteArrayToString } from "./strings";
+import { CTerm } from "./sugar";
 
 let fs = require("fs");
 
@@ -11,7 +12,7 @@ function getChar(): string {
   return buffer.toString("utf8");
 }
 
-export function erase(term: Term): Erased.Term {
+export function erase(term: CTerm): Erased.Term {
   // TODO: remove unused arguments
   switch (term._) {
     case "var":
@@ -30,8 +31,6 @@ export function erase(term: Term): Erased.Term {
       throw "erase: unexpected star";
     case "case":
       throw "erase: unexpected case";
-    case "if":
-      throw "erase: unexpected if";
     case "let":
       throw "erase: unexpected let";
     case "self":
@@ -41,10 +40,6 @@ export function erase(term: Term): Erased.Term {
       return erase(term.child);
     case "syn":
       return erase(term.child);
-    case "rel":
-      return erase(term.term);
-    case "par":
-      throw "erase: unexpected par";
     case "id":
       throw "erase: unexpected id";
     case "key":

@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-import { Ref, Var, identifier, utf8 } from "./ast";
 import * as Erased from "./erased";
 import {
   consStringToLiteral,
@@ -30,6 +29,8 @@ import {
   str,
   whitespace,
 } from "./parser";
+import { Var } from "./erased";
+import { identifier, utf8 } from "./pratt";
 
 export const result = <T>(x: Result<T>) => {
   if (x._ == "parseerror") {
@@ -222,7 +223,7 @@ const application = (
 
 // reference parses a "variable" in the programming language.
 const reference: Parser<Erased.Term> = map(identifier, (result: string) =>
-  Ref(result)
+  Erased.Ref(result)
 );
 
 export const stringLiteral: Parser<Erased.Term> = bind(str('"'), (_) =>

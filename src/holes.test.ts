@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { Ann, App, Hole, Ref } from "./ast";
+import { Ann, App, Hole, Ref } from "./sugar";
 import { infer, adts, defs, fill } from "./typecheck";
 import { pretty } from "./pretty";
 import {

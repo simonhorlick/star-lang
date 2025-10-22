@@ -82,7 +82,7 @@ async function run(uri: string, trace: boolean): Promise<void> {
   const checked = [...defs.values()];
 
   const erased = checked.map((def) => {
-    if (def.term.typ._ == "star") {
+    if (def.term.type._ == "star") {
       // replace types with id
       // TODO: Remove from runtime entirely.
       console.log(`erasing ${def.name} ${pretty(def.term)}`);

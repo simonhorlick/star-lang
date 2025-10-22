@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 
-import { App, Ref, Var } from "./ast";
 import { pretty, prettyC } from "./pretty";
 import * as Erased from "./erased";
+import { App, Ref } from "./pratt";
 
 describe("pretty", () => {
   // tru = λt. λf. t
@@ -73,7 +73,7 @@ describe("pretty", () => {
             "z",
             Erased.App(
               Erased.Var("s", 1),
-              Erased.App(Var("s", 1), Erased.Var("z", 0))
+              Erased.App(Erased.Var("s", 1), Erased.Var("z", 0))
             )
           )
         ),

@@ -7,20 +7,22 @@ import {
   App,
   Branch,
   Case,
-  If,
+  Cons,
+  CTerm,
+  Idx,
   Label,
   Let,
+  Nil,
   Origin,
   Pi,
-  Rel,
+  // Rel,
   Self,
   Syntax,
-  Term,
   Var,
-} from "./ast";
+} from "./sugar";
 
 // Shift all Var indices up by d.
-export function shift(d: number, c: number, t: Term): Term {
+export function shift(d: number, c: number, t: CTerm): CTerm {
   switch (t._) {
     case "var":
       return t.index >= c ? Var(t.name, t.index + d) : t;
@@ -31,12 +33,11 @@ export function shift(d: number, c: number, t: Term): Term {
     case "app":
       return App(shift(d, c, t.func), shift(d, c, t.arg));
     case "ann":
-      return Ann(shift(d, c, t.term), t.typ);
+      return Ann(shift(d, c, t.term), t.type);
     case "pi":
       return Pi(t.name, shift(d, c, t.from), shift(d, c + 1, t.body));
     case "star":
     case "ref":
-    case "par":
     case "id":
     case "key":
     case "hole":
@@ -56,14 +57,8 @@ export function shift(d: number, c: number, t: Term): Term {
       );
     case "let":
       return Let(t.name, shift(d, c, t.expr), shift(d, c + 1, t.body));
-    case "if":
-      return If(
-        shift(d, c, t.condition),
-        shift(d, c, t.trueBranch),
-        shift(d, c, t.falseBranch)
-      );
-    case "rel":
-      return Rel(shift(d, c, t.term), t.uses);
+    // case "rel":
+    //   return Rel(shift(d, c, t.term), t.uses);
     case "err":
       return t;
   }
@@ -72,11 +67,11 @@ export function shift(d: number, c: number, t: Term): Term {
 // Given a term t, find all Vars with index j and replace them with the term s.
 export function subst(
   j: number,
-  s: Term,
+  s: CTerm,
   c: number,
-  t: Term,
+  t: CTerm,
   name: string
-): Term {
+): CTerm {
   switch (t._) {
     case "var":
       // Substitute in the term s, renumbering any free variables so the
@@ -95,15 +90,13 @@ export function subst(
     case "app":
       return App(subst(j, s, c, t.func, name), subst(j, s, c, t.arg, name));
     case "ann":
-      return Ann(subst(j, s, c, t.term, name), t.typ);
+      return Ann(subst(j, s, c, t.term, name), t.type);
     case "pi":
       return Pi(
         t.name,
         subst(j, s, c, t.from, name),
         subst(j, s, c + 1, t.body, name)
       );
-    case "par":
-      throw "subst: unexpected par";
     case "star":
     case "ref":
     case "id":
@@ -131,10 +124,8 @@ export function subst(
       );
     case "label":
       return Label(t.label, subst(j, s, c, t.child, name));
-    case "if":
-      throw "subst: unexpected if";
-    case "rel":
-      return Rel(subst(j, s, c, t.term, name), t.uses);
+    // case "rel":
+    //   return Rel(subst(j, s, c, t.term, name), t.uses);
     case "err":
       return t;
   }
@@ -142,7 +133,7 @@ export function subst(
 
 // Replaces all instances of Var(0) with s in the term t. A name can be passed
 // as a sanity check to ensure the substituted variables are the correct ones.
-export function substTop(s: Term, t: Term, name: string): Term {
+export function substTop(s: CTerm, t: CTerm, name: string): CTerm {
   // The term being substituted for the bound variable is first shifted up by one, then the
   // substitution is made, and then the whole result is shifted down by one to account for the
   // fact that the bound variable has been used up.
@@ -150,7 +141,7 @@ export function substTop(s: Term, t: Term, name: string): Term {
 }
 
 // Given a term t, find all Holes with index j and replace them with the term s.
-export function substHole(j: number, s: Term, t: Term): Term {
+export function substHole(j: number, s: CTerm, t: CTerm): CTerm {
   switch (t._) {
     case "var":
       return t;
@@ -161,11 +152,9 @@ export function substHole(j: number, s: Term, t: Term): Term {
     case "app":
       return App(substHole(j, s, t.func), substHole(j, s, t.arg));
     case "ann":
-      return Ann(substHole(j, s, t.term), substHole(j, s, t.typ));
+      return Ann(substHole(j, s, t.term), substHole(j, s, t.type));
     case "pi":
       return Pi(t.name, substHole(j, s, t.from), substHole(j, s, t.body));
-    case "par":
-      throw "substHole: unexpected par";
     case "star":
     case "ref":
     case "id":
@@ -187,11 +176,9 @@ export function substHole(j: number, s: Term, t: Term): Term {
       throw "substHole: unexpected case";
     case "let":
       throw "substHole: unexpected let";
-    case "if":
-      throw "substHole: unexpected if";
     case "label":
       return Label(t.label, substHole(j, s, t.child));
-    case "rel":
-      return Rel(substHole(j, s, t.term), t.uses);
+    // case "rel":
+    //   return Rel(substHole(j, s, t.term), t.uses);
   }
 }

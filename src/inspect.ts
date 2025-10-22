@@ -1,30 +1,3 @@
-import {
-  Ann,
-  Star,
-  Pi,
-  Ref,
-  Self,
-  Type,
-  Term,
-  App,
-  Var,
-  Def,
-  ASTNode,
-  AbsI,
-  Origin,
-  Identifier,
-  Hole,
-  identifier2str,
-  File,
-  Let,
-  Abs,
-  Case,
-  Branch,
-  If,
-  Syntax,
-  Rel,
-  Label,
-} from "./ast";
 import { TypecheckError, equate } from "./typecheck";
 import { reduce } from "./equal";
 import { indexToLineCol, printLine } from "./parser";
@@ -32,6 +5,23 @@ import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx } from "./context";
 import { substTop } from "./substitution";
 import { BuildResult } from "./build";
+import { ASTNode, Def2 } from "./ast";
+import {
+  AbsI,
+  Ann,
+  App,
+  Case,
+  CTerm,
+  Identifier,
+  Let,
+  Origin,
+  Pi,
+  Ref,
+  Self,
+  Star,
+  Var,
+} from "./sugar";
+import { identifier2str } from "./pratt";
 
 export const printMultilineDiagnostic = (
   src: string,
@@ -95,7 +85,7 @@ export const parseErrorDiagnostic = (
 export const inspectASTNodes = (n: ASTNode) => {
   const spans = new Map<
     { start: number; end: number },
-    { term: ASTNode; type: Type | undefined; ctx: Context }
+    { term: ASTNode; type: CTerm | undefined; ctx: Context }
   >();
 
   const f = (n: ASTNode, start: number, end: number): void => {
@@ -127,138 +117,8 @@ export const inspectASTNodes = (n: ASTNode) => {
   return spans;
 };
 
-// map a function over the AST.
-export const map = (
-  f: (curr: Term) => Term, // returns the new accumulator
-  t: Term // the root of the tree
-): Term => {
-  switch (t._) {
-    case "app":
-      return App(f(t.func), f(t.arg));
-    case "lam":
-      return AbsI(t.name, f(t.body));
-    case "ann":
-      return Ann(f(t.term), f(t.typ));
-    case "case":
-      return Case(
-        f(t.name),
-        t.branches.map((b) => Branch(b.constructor, f(b.term)))
-      );
-    case "if":
-      return If(f(t.condition), f(t.trueBranch), f(t.falseBranch));
-    case "let":
-      return Let(t.name, f(t.expr), f(t.body));
-    case "orig":
-      return Origin(t.start, t.end, f(t.child));
-    case "syn":
-      return Syntax(t.syntax, f(t.child));
-    case "pi":
-      return Pi(t.name, f(t.from), f(t.body));
-    case "rel":
-      return Rel(f(t.term), t.uses);
-    case "label":
-      return Label(t.label, f(t.child));
-    case "self":
-      return Self(t.name, f(t.body));
-    case "id":
-    case "key":
-    case "int":
-    case "par":
-    case "hole":
-    case "err":
-    case "star":
-    case "ref":
-    case "str":
-    case "var": {
-      return f(t);
-    }
-  }
-};
-
-// pre-order traversal of the term tree - visit the node itself, followed by
-// any child nodes.
-export const foldTree = <A>(
-  f: (acc: A, curr: Term) => A, // returns the new accumulator
-  init: A, // initial value of the accumulator
-  t: Term // the starting term
-): A => {
-  const x = f(init, t);
-  switch (t._) {
-    case "app": {
-      const left = foldTree(f, x, t.func);
-      const rght = foldTree(f, left, t.arg);
-      return rght;
-    }
-    case "lam": {
-      const curr = foldTree(f, x, t.name);
-      const body = foldTree(f, curr, t.body);
-      return body;
-    }
-    case "ann": {
-      const tm = foldTree(f, x, t.term);
-      const typ = foldTree(f, tm, t.typ);
-      return typ;
-    }
-    case "case": {
-      const name = foldTree(f, x, t.name);
-      let prev = name;
-      for (const b of t.branches) {
-        const ctr = foldTree(f, prev, b.constructor);
-        prev = foldTree(f, ctr, b.term);
-      }
-      return prev;
-    }
-    case "if": {
-      const cond = foldTree(f, x, t.condition);
-      const fls = foldTree(f, cond, t.falseBranch);
-      const tru = foldTree(f, fls, t.trueBranch);
-      return tru;
-    }
-    case "let": {
-      const name = foldTree(f, x, t.name);
-      const expr = foldTree(f, name, t.expr);
-      const body = foldTree(f, expr, t.body);
-      return body;
-    }
-    case "orig": {
-      return foldTree(f, x, t.child);
-    }
-    case "syn": {
-      const syn = foldTree(f, x, t.syntax);
-      const child = foldTree(f, syn, t.child);
-      return child;
-    }
-    case "label": {
-      return foldTree(f, x, t.child);
-    }
-    case "pi": {
-      const frm = foldTree(f, x, t.from);
-      const to = foldTree(f, frm, t.body);
-      return to;
-    }
-    case "rel": {
-      return foldTree(f, x, t.term);
-    }
-    case "self": {
-      return foldTree(f, x, t.body);
-    }
-    case "id":
-    case "key":
-    case "int":
-    case "par":
-    case "hole":
-    case "err":
-    case "star":
-    case "ref":
-    case "str":
-    case "var": {
-      return x;
-    }
-  }
-};
-
 export type TermAndCtx = {
-  term: Term;
+  term: CTerm;
   start?: number;
   end?: number;
 };
@@ -268,7 +128,7 @@ export type TermAndCtx = {
 export const foldTreeCtx = <A>(
   f: (acc: A, curr: TermAndCtx) => A, // returns the new accumulator
   init: A, // initial value of the accumulator
-  initVal: Term // the starting term
+  initVal: CTerm // the starting term
 ): A => {
   const doFold = (
     init: A, // initial value of the accumulator
@@ -310,7 +170,7 @@ export const foldTreeCtx = <A>(
           end: ctx.end,
         });
         const typ = doFold(tm, {
-          term: t.typ,
+          term: t.type,
           start: ctx.start,
           end: ctx.end,
         });
@@ -336,24 +196,6 @@ export const foldTreeCtx = <A>(
           });
         }
         return prev;
-      }
-      case "if": {
-        const cond = doFold(x, {
-          term: t.condition,
-          start: ctx.start,
-          end: ctx.end,
-        });
-        const fls = doFold(cond, {
-          term: t.falseBranch,
-          start: ctx.start,
-          end: ctx.end,
-        });
-        const tru = doFold(fls, {
-          term: t.trueBranch,
-          start: ctx.start,
-          end: ctx.end,
-        });
-        return tru;
       }
       case "let": {
         const name = doFold(x, {
@@ -402,9 +244,6 @@ export const foldTreeCtx = <A>(
         });
         return to;
       }
-      case "rel": {
-        return doFold(x, { term: t.term, start: ctx.start, end: ctx.end });
-      }
       case "label": {
         return doFold(x, { term: t.child, start: ctx.start, end: ctx.end });
       }
@@ -414,15 +253,15 @@ export const foldTreeCtx = <A>(
       case "id":
       case "key":
       case "int":
-      case "par":
       case "hole":
       case "err":
       case "star":
       case "ref":
       case "str":
-      case "var": {
+      case "var":
         return x;
-      }
+
+        throw new Error(`unimplemented`);
     }
   };
   return doFold(init, { term: initVal, start: undefined, end: undefined });
@@ -431,33 +270,33 @@ export const foldTreeCtx = <A>(
 export type Span = {
   start: number;
   end: number;
-  term: Term;
-  type?: Type;
+  term: CTerm;
+  type?: CTerm;
   ctx: Context;
 };
 
 export const inspect = (
-  def: Def,
-  defs: Map<string, Def>,
+  def: Def2,
+  defs: Map<string, Def2>,
   offset: number | undefined = undefined
 ) => {
   const spans: Span[] = [];
 
   const traverse = (
-    t: Term,
-    ty: Type | undefined,
+    t: CTerm,
+    ty: CTerm | undefined,
     start: number | undefined,
     end: number | undefined,
     ctx: Context,
-    defs: Map<string, Def>
-  ): Term => {
+    defs: Map<string, Def2>
+  ): CTerm => {
     switch (t._) {
       case "ann": {
         return Ann(
           // Pass the origins through the annotation. This is useful for
           // annotations generated by the typechecker.
-          traverse(t.term, t.typ, start, end, ctx, defs),
-          traverse(t.typ, undefined, undefined, undefined, ctx, defs)
+          traverse(t.term, t.type, start, end, ctx, defs),
+          traverse(t.type, undefined, undefined, undefined, ctx, defs)
         );
       }
       case "app": {
@@ -502,9 +341,9 @@ export const inspect = (
           )
         );
       }
-      case "par": {
-        throw "inspect: unexpected par";
-      }
+      // case "par": {
+      //   throw "inspect: unexpected par";
+      // }
       case "let": {
         // FIXME: Need to add the type of the expression as an annotation so we can use it here.
         return Let(
@@ -560,9 +399,9 @@ export const inspect = (
           })
         );
       }
-      case "if": {
-        throw "inspect: unexpected if";
-      }
+      // case "if": {
+      //   throw "inspect: unexpected if";
+      // }
       case "ref": {
         // TODO: For defs like true, the type is the expanded version. We
         // usually want a pi type so we can find the types of the arguments,
@@ -577,7 +416,7 @@ export const inspect = (
             start: start,
             end: end,
             term: t,
-            type: ref.term.typ,
+            type: ref.term.type,
             ctx: ctx,
           });
         }
@@ -630,9 +469,9 @@ export const inspect = (
       case "syn": {
         return traverse(t.child, ty, undefined, undefined, ctx, defs);
       }
-      case "rel": {
-        return traverse(t.term, ty, undefined, undefined, ctx, defs);
-      }
+      // case "rel": {
+      //   return traverse(t.term, ty, undefined, undefined, ctx, defs);
+      // }
       case "label": {
         if (start != undefined && end != undefined) {
           spans.push({
@@ -700,49 +539,46 @@ export const printDiagnostic = (src: string, err: TypecheckError) => {
 
 export const hover = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
+  nondefs: ASTNode[],
   offset: number | undefined
 ): Array<Range & HoverInfo> => {
   let hoverInfo = new Array<Range & HoverInfo>();
 
-  for (const node of f.content) {
-    if (node._ == "def") {
-      const def = node;
-      const spans = inspect(def, defs, offset);
-      for (const v of spans) {
-        switch (v.term._) {
-          case "lam":
-            break;
-          default:
-            hoverInfo.push({
-              start: v.start,
-              end: v.end,
-              msg: `${v.term._}(${pretty(v.type)})`,
-            });
-        }
-        const msg = `${v.start}-${v.end} is a ${v.term._} with type ${pretty(
-          v.type
-        )}; ctx at this location is ${printCtx(v.ctx)}`;
-        console.debug(
-          printDiagnostic(src, TypecheckError(msg, v.start, v.end))
-        );
+  // Process definitions
+  for (const [_, def] of defs) {
+    const spans = inspect(def, defs, offset);
+    for (const v of spans) {
+      switch (v.term._) {
+        case "lam":
+          break;
+        default:
+          hoverInfo.push({
+            start: v.start,
+            end: v.end,
+            msg: `${v.term._}(${pretty(v.type)})`,
+          });
       }
-    } else {
-      const spans = inspectASTNodes(node);
-      for (const [k, v] of spans) {
-        const msg = `${k.start}-${k.end} is a ${v.term._}`;
-        console.debug(
-          printDiagnostic(src, TypecheckError(msg, k.start, k.end))
-        );
+      const msg = `${v.start}-${v.end} is a ${v.term._} with type ${pretty(
+        v.type
+      )}; ctx at this location is ${printCtx(v.ctx)}`;
+      console.debug(printDiagnostic(src, TypecheckError(msg, v.start, v.end)));
+    }
+  }
 
-        switch (v.term._) {
-          case "com":
-            hoverInfo.push({ start: k.start, end: k.end, msg: v.term.text });
-            break;
-          default:
-            hoverInfo.push({ start: k.start, end: k.end, msg: msg });
-        }
+  // Process non-definition nodes (comments, etc)
+  for (const node of nondefs) {
+    const spans = inspectASTNodes(node);
+    for (const [k, v] of spans) {
+      const msg = `${k.start}-${k.end} is a ${v.term._}`;
+      console.debug(printDiagnostic(src, TypecheckError(msg, k.start, k.end)));
+
+      switch (v.term._) {
+        case "com":
+          hoverInfo.push({ start: k.start, end: k.end, msg: v.term.text });
+          break;
+        default:
+          hoverInfo.push({ start: k.start, end: k.end, msg: msg });
       }
     }
   }
@@ -763,11 +599,11 @@ export const hover = (
 
 export const hoverMessage = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
+  nondefs: ASTNode[],
   offset: number
 ): { range: { start: number; end: number }; msg: string } | null => {
-  const hoverInfo = hover(src, f, defs, offset);
+  const hoverInfo = hover(src, defs, nondefs, offset);
 
   const overlappingSpans = hoverInfo.filter(
     (hi) => hi.start <= offset && hi.end > offset
@@ -793,47 +629,42 @@ export const hoverMessage = (
 // Finds the type of the hole at this offset in the AST.
 export const inferType = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number
-): Term | undefined => {
-  for (const node of f.content) {
-    if (node._ == "def") {
-      const def = node;
+): CTerm | undefined => {
+  for (const [_, def] of defs) {
+    const spans = inspect(def, defs);
 
-      const spans = inspect(def, defs);
+    const overlapping = spans.filter(
+      (v) => v.start <= offset && v.end > offset
+    );
 
-      const overlapping = spans.filter(
-        (v) => v.start <= offset && v.end > offset
+    const shortest = overlapping.sort((a, b) => {
+      const lena = a.end - a.start;
+      const lenb = b.end - b.start;
+      return lena - lenb;
+    });
+
+    for (const v of shortest) {
+      console.log(
+        printMultilineDiagnostic(
+          src,
+          TypecheckError(
+            `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
+            v.start,
+            v.end
+          )
+        )
       );
 
-      const shortest = overlapping.sort((a, b) => {
-        const lena = a.end - a.start;
-        const lenb = b.end - b.start;
-        return lena - lenb;
-      });
-
-      for (const v of shortest) {
-        console.log(
-          printMultilineDiagnostic(
-            src,
-            TypecheckError(
-              `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
-              v.start,
-              v.end
-            )
-          )
-        );
-
-        return v.type;
-      }
+      return v.type;
     }
   }
 
   return undefined;
 };
 
-export const findOrigin = (term: Term): Origin | null => {
+export const findOrigin = (term: CTerm): Origin | null => {
   if (term._ == "orig") {
     return term;
   } else if (term._ == "ann") {
@@ -846,8 +677,7 @@ export const findOrigin = (term: Term): Origin | null => {
 
 export const definitionLocation = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number
 ): { start: number; end: number }[] => {
   var spans: Span[] = [];
@@ -883,6 +713,16 @@ export const definitionLocation = (
   switch (term._) {
     case "ref":
       const def = defs.get(term.name);
+      // Hand written defs have explicit start/end positions from the
+      // parser.
+      if (def?.start != undefined && def?.end != undefined) {
+        return [
+          {
+            start: def.start,
+            end: def.end,
+          },
+        ];
+      }
       const tm = def?.term;
       if (tm) {
         const orig = findOrigin(tm);
@@ -928,100 +768,93 @@ const CompletionTypeParameter = 25;
 
 export const complete = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number,
-  typ: Term | undefined
+  typ: CTerm | undefined
 ): CompletionInfo[] => {
   let completionList: CompletionInfo[] = [];
 
-  for (const node of f.content) {
-    if (node._ == "def") {
-      const def = node;
+  // Collect variable completions from context at the cursor position
+  for (const [_, def] of defs) {
+    const spans = inspect(def, defs);
 
-      // const spans = inspect(def, defs, offset);
-      const spans = inspect(def, defs);
+    for (const v of spans) {
+      if (!(v.start <= offset && v.end > offset)) {
+        continue;
+      }
 
-      for (const v of spans) {
-        if (!(v.start <= offset && v.end > offset)) {
-          continue;
-        }
-
-        console.log(
-          printMultilineDiagnostic(
-            src,
-            TypecheckError(
-              `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
-              v.start,
-              v.end
-            )
+      console.log(
+        printMultilineDiagnostic(
+          src,
+          TypecheckError(
+            `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
+            v.start,
+            v.end
           )
-        );
+        )
+      );
 
-        for (let i = 0; i < v.ctx.length; i++) {
-          const binding = v.ctx[i];
+      for (let i = 0; i < v.ctx.length; i++) {
+        const binding = v.ctx[i];
 
-          try {
-            // If this binding has the same type as the completion position,
-            // then include the suggestion.
-            if (
-              typ == undefined ||
-              equate(
-                v.ctx,
-                defs,
-                binding.typ,
-                typ,
-                Var(binding.name, v.ctx.length - i - 1)
-              ).eq
-            ) {
-              completionList.push({
-                label: binding.name,
-                kind: CompletionVariable,
-                sortText: "0",
-                detail: `var(${pretty(binding.typ)})`,
-              });
-            }
-          } catch (e) {
-            console.error(e);
+        try {
+          // If this binding has the same type as the completion position,
+          // then include the suggestion.
+          if (
+            typ == undefined ||
+            equate(
+              v.ctx,
+              defs,
+              binding.typ,
+              typ,
+              Var(binding.name, v.ctx.length - i - 1)
+            ).eq
+          ) {
+            completionList.push({
+              label: binding.name,
+              kind: CompletionVariable,
+              sortText: "0",
+              detail: `var(${pretty(binding.typ)})`,
+            });
           }
+        } catch (e) {
+          console.error(e);
         }
       }
     }
   }
 
   // Add all top-level definitions as completions.
-  for (const node of f.content) {
-    if (node._ == "def") {
-      try {
-        if (
-          typ == undefined ||
-          equate(
-            [],
-            defs,
-            node.term.typ,
-            typ,
-            Star() // does it matter that this is star?
-          ).eq
-        ) {
-          if (node.term.typ._ == "star") {
-            completionList.push({
-              label: node.name,
-              kind: CompletionStruct,
-              sortText: "1",
-              detail: `ref(${pretty(node.term.typ)})`,
-            });
-          } else {
-            completionList.push({
-              label: node.name,
-              kind: CompletionFunction,
-              sortText: "1",
-              detail: `ref(${pretty(node.term.typ)})`,
-            });
-          }
+  for (const [_, def] of defs) {
+    try {
+      if (
+        typ == undefined ||
+        equate(
+          [],
+          defs,
+          def.term.type,
+          typ,
+          Star() // does it matter that this is star?
+        ).eq
+      ) {
+        if (def.term.type._ == "star") {
+          completionList.push({
+            label: def.name,
+            kind: CompletionStruct,
+            sortText: "1",
+            detail: `ref(${pretty(def.term.type)})`,
+          });
+        } else {
+          completionList.push({
+            label: def.name,
+            kind: CompletionFunction,
+            sortText: "1",
+            detail: `ref(${pretty(def.term.type)})`,
+          });
         }
-      } catch (e) {
-        console.error(e);
       }
+    } catch (e) {
+      console.error(e);
     }
   }
 
@@ -1033,12 +866,9 @@ export const complete = (
 export const astToHtml = (src: string, built: BuildResult): string => {
   // Loop over every def in the source and compute all of the spans.
   const spans: Span[] = [];
-  for (const node of built.file.content) {
-    if (node._ == "def") {
-      const def = node;
-      const spans1 = inspect(def, built.defs);
-      spans.push(...spans1);
-    }
+  for (const [_, def] of built.defs) {
+    const spans1 = inspect(def, built.defs);
+    spans.push(...spans1);
   }
 
   const lines = src.split("\n");

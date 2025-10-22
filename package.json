@@ -24,7 +24,8 @@
     "./typecheck": "./dist/typecheck.js"
   },
   "scripts": {
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
     "test:ci": "vitest --coverage.enabled true",
     "build": "tsc"
   },

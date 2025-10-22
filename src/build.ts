@@ -1,10 +1,20 @@
 // build is a library for orchestrating builds of source files for this language.
 
-import { identifier2str, parseFile, ADT, Def, File, stripAST } from "./ast";
+import {
+  parseFile,
+  ADT,
+  Def,
+  File,
+  stripAST,
+  ASTNode,
+  Def2,
+  Origin2,
+} from "./ast";
 import { TypecheckError, fill, infer } from "./typecheck";
 import { foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
 import { processADTs, desugar } from "./adts";
+import { identifier2str } from "./pratt";
 
 // What's the MVP for this?
 // - parse all files recursively
@@ -22,7 +32,8 @@ import { processADTs, desugar } from "./adts";
 export type BuildResult = {
   _: "buildresult";
   file: File;
-  defs: Map<string, Def>;
+  defs: Map<string, Def2>;
+  nondefs: ASTNode[];
   adts: Map<string, ADT>;
   checkerErrors: TypecheckError[];
   parseErrors: TypecheckError[];
@@ -42,25 +53,39 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     throw "unexpected parse error";
   }
 
-  // generate syntax nodes for ADTs, etc
-  const f = processADTs(t.value);
-
-  // desugar definitions
   const adtList = t.value.content.filter((c) => c._ == "adt") as ADT[];
   const adts = new Map<string, ADT>();
   for (const adt of adtList) {
     adts.set(identifier2str(adt.name), adt);
   }
-  const defs = (f.content.filter((c) => c._ == "def") as Def[])
+
+  // generate syntax nodes for ADTs, etc
+  const f = processADTs(t.value);
+
+  // desugar each definition, keeping track of Origin nodes so we can assign
+  // origins to the defs.
+  const go = (node: ASTNode): Def2 | null => {
+    if (node._ == "def") {
+      // This can happen for definitions that are generated.
+      return desugar(node, undefined, undefined);
+    } else if (node._ == "orig2" && node.child._ == "def") {
+      return desugar(node.child, node.start, node.end);
+    } else {
+      return null;
+    }
+  };
+  const defs = f.content
     .map((def) => {
       if (stripDefs) return stripAST(def) as Def;
       else return def;
     })
-    .map((def) => desugar(def, adts));
-  const nondefs = f.content.filter((c) => c._ != "def") as Def[];
+    .map(go)
+    .filter((n): n is Def2 => n !== null);
 
-  let defsMap: Map<string, Def> = new Map();
-  let checkedMap: Map<string, Def> = new Map();
+  const nondefs = f.content.filter((c) => c._ != "def") as ASTNode[];
+
+  let defsMap: Map<string, Def2> = new Map();
+  let checkedMap: Map<string, Def2> = new Map();
   for (const def of defs) {
     defsMap.set(def.name, def);
   }
@@ -74,7 +99,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       if (filled.term._ != "ann") {
         throw "expected annotated term for definition body";
       }
-      checkedMap.set(def.name, Def(def.name, filled.term));
+      checkedMap.set(def.name, Def2(def.name, filled.term, def.start, def.end));
     } catch (e) {
       if ((e as any)._ !== undefined) {
         const result = e as TypecheckError;
@@ -86,7 +111,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       }
       // add the original term to the map so we can at least get some
       // information when inspecting.
-      checkedMap.set(def.name, Def(def.name, def.term));
+      checkedMap.set(def.name, Def2(def.name, def.term, def.start, def.end));
     }
   }
 
@@ -111,6 +136,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     _: "buildresult",
     file: { _: "file", content: [...nondefs, ...checkedMap.values()] },
     defs: checkedMap,
+    nondefs: nondefs,
     adts: adts,
     checkerErrors: checkerErrors,
     parseErrors: parseErrors,

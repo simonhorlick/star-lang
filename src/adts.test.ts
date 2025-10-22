@@ -1,34 +1,29 @@
 import { describe, expect, test } from "vitest";
-import { pretty } from "./pretty";
+import { pretty as origPretty } from "./pretty";
 import {
   bool,
+  boolConstructors,
   cons,
   fls,
   just,
   list,
-  listADT,
   maybe,
   mnull,
   nat,
   nil,
   tru,
 } from "./test_defs";
+import { Abs, App, Pi, Ref, Self, Star, Var, CTerm } from "./sugar";
 import {
-  Abs,
-  App,
-  Branch,
-  Case,
-  Hole,
-  Identifier,
-  Pi,
-  Ref,
-  Self,
-  Star,
-  Var,
-} from "./ast";
-import { desugarTerm } from "./adts";
-import { Context } from "./context";
-import { adts, defs } from "./typecheck";
+  desugar,
+  GenerateConstructorTerm,
+  GenerateConstructorType,
+} from "./adts";
+import { Ann, Expression } from "./pratt";
+import { Def } from "./ast";
+
+// Ensure indices are printed so we can differentiate between refs and vars.
+const pretty = (x: Expression) => origPretty(x, true, false);
 
 describe("adts", () => {
   /*
@@ -86,6 +81,21 @@ describe("adts", () => {
     expect(pretty(tru.term)).toBe(
       pretty(Abs("P", Abs("false", Abs("true", Var("true", 0)))))
     ));
+
+  test("false is generated correctly 2", () => {
+    const d = Def(
+      "false",
+      Ann(
+        GenerateConstructorTerm([], boolConstructors, 0),
+        GenerateConstructorType("Bool", [], boolConstructors[0])
+      )
+    );
+
+    const t = desugar(d);
+    expect(pretty(t.term.term)).toBe(
+      pretty(Abs("P", Abs("false", Abs("true", Var("false", 1)))))
+    );
+  });
 
   test("false is generated correctly", () =>
     expect(pretty(fls.term)).toBe(
@@ -246,7 +256,7 @@ describe("adts", () => {
         (A)
         (P) (null) (just) null
     */
-    expect(pretty(mnull.term.typ)).toBe(
+    expect(pretty(mnull.term.type)).toBe(
       pretty(Pi("A", Star(), App(Ref("Maybe"), Var("A", 0))))
     ));
 
@@ -261,7 +271,7 @@ describe("adts", () => {
         (A) (value)
         (P) (null) (just) just(value)
     */
-    expect(pretty(just.term.typ)).toBe(
+    expect(pretty(just.term.type)).toBe(
       pretty(
         Pi(
           "A",
@@ -362,7 +372,7 @@ describe("adts", () => {
                     Var("A", 3),
                     Pi(
                       "tail",
-                      App(Ref("List"), Var("A", 3)),
+                      App(Ref("List"), Var("A", 4)),
                       App(
                         Var("P", 3),
                         App(
@@ -387,7 +397,7 @@ describe("adts", () => {
       <P> (nil) (cons) nil
     */
   test("type of nil is generated correctly", () =>
-    expect(pretty(nil.term.typ)).toBe(
+    expect(pretty(nil.term.type)).toBe(
       pretty(Pi("A", Star(), App(Ref("List"), Var("A", 0))))
     ));
 
@@ -427,7 +437,7 @@ describe("adts", () => {
     ));
 
   test("type of cons is generated correctly", () =>
-    expect(pretty(cons.term.typ)).toBe(
+    expect(pretty(cons.term.type)).toBe(
       pretty(
         Pi(
           "A",
