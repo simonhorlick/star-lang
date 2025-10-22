@@ -8,6 +8,9 @@
 //
 // We must then type-check the AST to ensure consistency.
 
+import { Inspectable } from "./debug";
+import util from "node:util";
+
 // head gives the first element of a list.
 export const head = <T>(l: T[]) => l[0];
 
@@ -21,7 +24,7 @@ export const last = <T>(l: T[]) => l[l.length - 1];
 export const front = <T>(l: T[]) => l.slice(0, -1);
 
 // Stream tracks where a parser is currently reading.
-export type Stream = {
+export type Stream = Partial<Inspectable> & {
   src: string;
 
   // The index of the reader within the src string.
@@ -29,7 +32,15 @@ export type Stream = {
 };
 
 // s constructs a new stream from a string.
-export const s = (s: string): Stream => ({ src: s, idx: 0 });
+export const s = (s: string): Stream => ({
+  src: s,
+  idx: 0,
+
+  // For debugging.
+  [util.inspect.custom]: function (this: Stream) {
+    return this.src.slice(this.idx);
+  },
+});
 
 // A successful parse result.
 export interface OutputValue<T> {
@@ -118,12 +129,14 @@ export function error<T>(expected: string): Parser<T> {
 export const advance = (n: number, s: Stream): Stream => ({
   src: s.src,
   idx: s.idx + n,
+  [util.inspect.custom]: s[util.inspect.custom],
 });
 
 // pos returns the stream s with the position reset to character n.
 export const pos = (n: number, s: Stream): Stream => ({
   src: s.src,
   idx: n,
+  [util.inspect.custom]: s[util.inspect.custom],
 });
 
 // item reads a single character from the stream and advances the stream by one
