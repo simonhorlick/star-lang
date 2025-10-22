@@ -707,6 +707,9 @@ const opParser: Parser<string> = spc(
     str("!="),
     str("&&"),
     str("||"),
+    // this is not really an operator, we just want to make sure we don't
+    // accidentally parse it as a division
+    str("//"),
     char(">"),
     char("<"),
     char("+"),
@@ -1046,6 +1049,10 @@ export const expression =
       // Peek the next operator, if there is one.
       const op = opParser(acc.stream);
       if (op._ == "parseerror") {
+        break;
+      }
+      if (op.value == "//") {
+        // comment, so don't parse this as an operator.
         break;
       }
       const [leftBindingPower, rightBindingPower] = getBindingPower(op.value);

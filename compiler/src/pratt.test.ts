@@ -161,6 +161,9 @@ describe("pratt", () => {
   test("should parse integer division binary operator", () =>
     expect(st("1/2")).toBe(`IntDiv(IntLit(1), IntLit(2))`));
 
+  test("should not parse comments as division operators", () =>
+    expect(st("1//2")).toBe(`IntLit(1)`));
+
   test("should parse multiple parenthesis", () =>
     expect(st("((1))")).toBe(`IntLit(1)`));
 
