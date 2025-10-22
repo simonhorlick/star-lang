@@ -886,15 +886,15 @@ export const label = (
 // ifStatement parses an in-then-else statement of the form
 // if <condition> then <true branch> else <false branch>.
 export const ifStatement: Parser<If | Expression> = bind(
-  spc(keyword("if")),
+  lspc(keyword("if")),
   (sif) =>
     orFail(
       "if statment not well formed",
-      bind(label("if-condition", expression(0)), (condition) =>
-        bind(spc(keyword("then")), (sthen) =>
-          bind(label("if-true", expression(0)), (trueBranch) =>
-            bind(spc(keyword("else")), (selse) =>
-              bind(label("if-false", expression(0)), (falseBranch) =>
+      bind(label("if-condition", spc(expression(0))), (condition) =>
+        bind(keyword("then"), (sthen) =>
+          bind(label("if-true", spc(expression(0))), (trueBranch) =>
+            bind(keyword("else"), (selse) =>
+              bind(label("if-false", spc(expression(0))), (falseBranch) =>
                 pure(
                   Syntax(
                     sif,
