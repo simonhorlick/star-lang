@@ -542,8 +542,8 @@ describe("typechecker", () => {
     expect(pretty(actual.type)).toBe("Bool→Bool");
   });
 
-  test("correct self-type is inferred for Bool(Πx:Bool ★)", () => {
-    // b:Bool, P:(Πx:Bool. ★), t:P(true), f:P(false)];
+  test("correct self-type is inferred for Bool((x:Bool) -> ★)", () => {
+    // b:Bool, P:((x:Bool) -> ★), t:P(true), f:P(false)];
     const ctx: Context = [
       { type: "bind", name: "b", typ: Ref("Bool") },
       { type: "bind", name: "P", typ: Pi("x", Ref("Bool"), Star()) },
@@ -559,11 +559,13 @@ describe("typechecker", () => {
 
   // A value of type equal(A)(a)(b) can only be constructed if a == b.
   const equal = pdef(
-    `func equal: ΠA:* Πa:A Πb:A * = λA λa λb ΠP:(A->*) Πp:P(a) P(b)`
+    `func equal: (A:*) -> (a:A) -> (b:A) -> * = λA λa λb (P:(A->*)) -> (p:P(a)) -> P(b)`
   );
-  const refl = pdef(`func refl: ΠA:* Πx:A equal(A,x,x) = λA λx λP λp p`);
+  const refl = pdef(
+    `func refl: (A:*) -> (x:A) -> equal(A,x,x) = λA λx λP λp p`
+  );
   const nn = pdef(
-    `func nn: Πb:Bool equal(Bool,not(not(b)),b) = λb b(λx equal(Bool,not(not(x)),x),refl(Bool,false),refl(Bool,true))`
+    `func nn: (b:Bool) -> equal(Bool,not(not(b)),b) = λb b(λx equal(Bool,not(not(x)),x),refl(Bool,false),refl(Bool,true))`
   );
 
   test("double negation proof", () =>
@@ -579,10 +581,10 @@ describe("typechecker", () => {
   // This is eqivalent to nn, but using a case expression rather than the
   // desugared version.
   const nn2 = pdef(
-    `func nn: Πb:Bool equal(Bool,not(not(b)),b) = λb
+    `func nn: (b:Bool) -> equal(Bool,not(not(b)),b) = λb
   case b of
-  | false -> refl(Bool,false)
-  | true -> refl(Bool,true)`
+  | false => refl(Bool,false)
+  | true => refl(Bool,true)`
   );
 
   test("double negation proof using case", () => {
@@ -665,7 +667,7 @@ describe("typechecker", () => {
       vnil.term.type
     ));
 
-  test("ext has type Πn:Nat Πhead:Bool Πtail:Vect(n) Vect(succ(n))", () =>
+  test("ext has type (n:Nat) -> (head:Bool) -> (tail:Vect(n)) -> Vect(succ(n))", () =>
     check(
       defs([nat, zero, succ, vect, vnil, ext, bool, tru, fls]),
       adts(),
@@ -729,7 +731,7 @@ describe("typechecker", () => {
           )
         )
       ),
-      // Πn:Nat xs:Vect(n) n(λP *,Unit,λv Bool)
+      // (n:Nat) -> (xs:Vect(n)) -> n(λP *,Unit,λv Bool)
       Pi(
         "n",
         Ref("Nat"),
