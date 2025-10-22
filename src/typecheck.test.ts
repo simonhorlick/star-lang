@@ -861,7 +861,7 @@ describe("typechecker", () => {
       "n",
       Case(Var("n", 0), [
         Branch(Identifier("zero"), Ref("zero")),
-        Branch(Identifier("succ"), Var("n.x", 0)),
+        Branch(Identifier("succ"), Ref("n.x")),
       ])
     );
     const stmttyp = Pi("", Ref("Nat"), Ref("Nat"));
