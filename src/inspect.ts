@@ -197,24 +197,6 @@ export const foldTreeCtx = <A>(
         }
         return prev;
       }
-      // case "if": {
-      //   const cond = doFold(x, {
-      //     term: t.condition,
-      //     start: ctx.start,
-      //     end: ctx.end,
-      //   });
-      //   const fls = doFold(cond, {
-      //     term: t.falseBranch,
-      //     start: ctx.start,
-      //     end: ctx.end,
-      //   });
-      //   const tru = doFold(fls, {
-      //     term: t.trueBranch,
-      //     start: ctx.start,
-      //     end: ctx.end,
-      //   });
-      //   return tru;
-      // }
       case "let": {
         const name = doFold(x, {
           term: t.name,
@@ -262,9 +244,6 @@ export const foldTreeCtx = <A>(
         });
         return to;
       }
-      // case "rel": {
-      //   return doFold(x, { term: t.term, start: ctx.start, end: ctx.end });
-      // }
       case "label": {
         return doFold(x, { term: t.child, start: ctx.start, end: ctx.end });
       }
@@ -274,34 +253,14 @@ export const foldTreeCtx = <A>(
       case "id":
       case "key":
       case "int":
-      // case "par":
       case "hole":
       case "err":
       case "star":
       case "ref":
       case "str":
       case "var":
-        {
-          return x;
-        }
-        // case "add":
-        // case "sub":
-        // case "mul":
-        // case "div":
-        // case "neg":
-        // case "comp":
-        // case "idx":
-        // case "cat":
-        // case "gt":
-        // case "lt":
-        // case "gte":
-        // case "lte":
-        // case "eq":
-        // case "neq":
-        // case "and":
-        // case "or":
-        // case "cons":
-        // case "nil":
+        return x;
+
         throw new Error(`unimplemented`);
     }
   };
