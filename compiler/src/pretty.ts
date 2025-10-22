@@ -136,7 +136,7 @@ export function pretty(
         return "★";
       case "case":
         return `case ${pretty(term.name)} of${term.branches
-          .map((b) => `\n|  ${pretty(b.constructor)} -> ${pretty(b.term)}`)
+          .map((b) => `\n|  ${pretty(b.constructor)} => ${pretty(b.term)}`)
           .join("")}`;
       case "let":
         return `let ${pretty(term.name)} = ${pretty(term.expr)} in ${pretty(
