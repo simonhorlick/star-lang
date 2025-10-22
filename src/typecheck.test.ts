@@ -1,18 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
-  ADT,
   Branch,
   Case,
-  Constructor,
-  Def,
   Hole,
   Identifier,
   Let,
   Origin,
-  Par,
-  Term,
-  definition,
-  stripAST,
   Abs,
   Ann,
   App,
@@ -20,7 +13,9 @@ import {
   Ref,
   Star,
   Var,
-} from "./ast";
+  CTerm,
+} from "./sugar";
+import { ADT, Constructor, Def2 as Def, definition, stripAST } from "./ast";
 import {
   check,
   equate,
@@ -46,19 +41,21 @@ import {
   zero,
   pair,
   ppair,
+  unit,
+  unt,
+  listADT,
+  boolADT,
+} from "./test_defs";
+import {
   and,
   conj,
   proj1,
   proj2,
   andCommutes,
-  unit,
-  unt,
   vect,
   vnil,
   ext,
-  listADT,
-  boolADT,
-} from "./test_defs";
+} from "./test_defs2";
 import { reduce } from "./equal";
 import { Context } from "./context";
 import { desugar } from "./adts";
@@ -78,8 +75,73 @@ export const result = <T>(x: ParserResult<T>) => {
   }
 };
 
+const ensureSuccess = (d: Def) => {
+  const ct = (t: CTerm): void => {
+    switch (t._) {
+      case "app":
+        ct(t.func);
+        ct(t.arg);
+        break;
+      case "lam":
+        ct(t.name);
+        ct(t.body);
+        break;
+      case "ann":
+        ct(t.term);
+        ct(t.type);
+        break;
+      case "case":
+        ct(t.name);
+        t.branches.forEach((b) => {
+          ct(b.constructor);
+          ct(b.term);
+        });
+        break;
+      case "let":
+        ct(t.name);
+        ct(t.expr);
+        ct(t.body);
+        break;
+      case "orig":
+        ct(t.child);
+        break;
+      case "syn":
+        ct(t.child);
+        break;
+      case "pi":
+        ct(t.from);
+        ct(t.body);
+        break;
+      case "label":
+        ct(t.child);
+        break;
+      case "self":
+        ct(t.body);
+        break;
+
+      // Leaf terms
+      case "id":
+      case "key":
+      case "int":
+      case "hole":
+      case "star":
+      case "str":
+      case "var":
+      case "ref":
+        break;
+      case "err":
+        throw new Error("unexpected error node in checkTree: " + t.msg);
+
+      default:
+        throw new Error(`unexpected term in checkTree`);
+    }
+  };
+  ct(d.term);
+  return d;
+};
+
 const pdef = (s: string): Def =>
-  desugar(stripAST(result(definition(ts(s)))) as Def, adts());
+  ensureSuccess(desugar(stripAST(result(definition(ts(s)))) as Def));
 
 describe("typechecker", () => {
   // Typing Rules
@@ -321,16 +383,16 @@ describe("typechecker", () => {
   });
 
   test("should check type-level and function", () =>
-    check(defs(), adts(), [], and.term.term, and.term.typ));
+    check(defs(), adts(), [], and.term.term, and.term.type));
 
   test("should check type-level conjunction function", () =>
-    check(defs([and]), adts(), [], conj.term.term, conj.term.typ));
+    check(defs([and]), adts(), [], conj.term.term, conj.term.type));
 
   test("proj1 checks", () =>
-    check(defs([and]), adts(), [], proj1.term.term, proj1.term.typ));
+    check(defs([and]), adts(), [], proj1.term.term, proj1.term.type));
 
   test("proj2 checks", () => {
-    check(defs([and]), adts(), [], proj2.term.term, proj2.term.typ);
+    check(defs([and]), adts(), [], proj2.term.term, proj2.term.type);
   });
 
   test("type-level and commutes", () =>
@@ -342,7 +404,7 @@ describe("typechecker", () => {
       adts(),
       [],
       andCommutes.term.term,
-      andCommutes.term.typ
+      andCommutes.term.type
     ));
 
   test("true is a bool", () =>
@@ -418,7 +480,7 @@ describe("typechecker", () => {
       defs([bool, tru, fls, maybe, mnull, just]),
       caseExp
     );
-    expect(reduced).toStrictEqual(tru.term.term);
+    expect(pretty(reduced)).toBe(pretty(tru.term.term));
   });
 
   test("null checks", () =>
@@ -427,7 +489,7 @@ describe("typechecker", () => {
       adts(),
       [],
       mnull.term.term,
-      mnull.term.typ
+      mnull.term.type
     ));
 
   test("just checks", () =>
@@ -436,11 +498,11 @@ describe("typechecker", () => {
       adts(),
       [],
       just.term.term,
-      just.term.typ
+      just.term.type
     ));
 
   test("nil checks", () =>
-    check(defs([list, nil, cons]), adts([]), [], nil.term.term, nil.term.typ));
+    check(defs([list, nil, cons]), adts([]), [], nil.term.term, nil.term.type));
 
   test("cons checks", () =>
     check(
@@ -448,12 +510,12 @@ describe("typechecker", () => {
       adts([]),
       [],
       cons.term.term,
-      cons.term.typ
+      cons.term.type
     ));
 
   test("pair checks", () =>
     // ppair is the constructor for the type pair
-    check(defs([pair, ppair]), adts([]), [], ppair.term.term, ppair.term.typ));
+    check(defs([pair, ppair]), adts([]), [], ppair.term.term, ppair.term.type));
 
   test("pair(Bool)(Bool)(true)(true):Pair(Bool)(Bool)", () =>
     check(
@@ -511,7 +573,7 @@ describe("typechecker", () => {
       adts(),
       [],
       nn.term.term,
-      nn.term.typ
+      nn.term.type
     ));
 
   // This is eqivalent to nn, but using a case expression rather than the
@@ -531,7 +593,7 @@ describe("typechecker", () => {
         adts([boolADT]),
         [],
         nn2.term.term,
-        nn2.term.typ
+        nn2.term.type
       );
       console.log(x);
     } catch (e) {
@@ -591,7 +653,7 @@ describe("typechecker", () => {
       adts(),
       [],
       reflTrue.term.term,
-      reflTrue.term.typ
+      reflTrue.term.type
     ));
 
   test("vnil has type Vect(zero)", () =>
@@ -600,7 +662,7 @@ describe("typechecker", () => {
       adts(),
       [],
       vnil.term.term,
-      vnil.term.typ
+      vnil.term.type
     ));
 
   test("ext has type Πn:Nat Πhead:Bool Πtail:Vect(n) Vect(succ(n))", () =>
@@ -609,7 +671,7 @@ describe("typechecker", () => {
       adts(),
       [],
       ext.term.term,
-      ext.term.typ
+      ext.term.type
     ));
 
   test("the type of ext(0,true,vnil) is Vect(1)", () => {
@@ -690,7 +752,7 @@ describe("typechecker", () => {
       adts(),
       [],
       vhead.term.term,
-      vhead.term.typ,
+      vhead.term.type,
       0
     );
   });
@@ -797,7 +859,7 @@ describe("typechecker", () => {
       "n",
       Case(Var("n", 0), [
         Branch(Identifier("zero"), Ref("zero")),
-        Branch(Identifier("succ"), Par("n.x")),
+        Branch(Identifier("succ"), Var("n.x", 0)),
       ])
     );
     const stmttyp = Pi("", Ref("Nat"), Ref("Nat"));
@@ -853,19 +915,19 @@ describe("typechecker", () => {
 });
 
 describe("type equality", () => {
-  const Nat: Term = nat.term;
-  const Bool: Term = bool.term;
+  const Nat: CTerm = nat.term;
+  const Bool: CTerm = bool.term;
 
   // The identity type operator λX.X: when applied to any type it gives back
   // the argument.
-  const Id: Term = Abs("A", Var("A", 0));
+  const Id: CTerm = Abs("A", Var("A", 0));
 
   const ds = defs([nat, bool, unit]);
 
   // The type Nat→Bool.
-  const NatToBool: Term = Pi("", Nat, Bool);
+  const NatToBool: CTerm = Pi("", Nat, Bool);
 
-  const eq = (a: Term, b: Term) => equate([], ds, a, b, Ref("unused"));
+  const eq = (a: CTerm, b: CTerm) => equate([], ds, a, b, Ref("unused"));
 
   test("Bool→Bool != Bool", () =>
     expect(eq(Pi("", Bool, Bool), Bool).eq).toBe(false));

@@ -35,8 +35,9 @@ export const result = <T>(x: Result<T>) => {
   }
 };
 
-const st = (s: string): string =>
-  serialise(strip(result(lspc(expression(0))(ts(s)))));
+const term = lspc(expression(0));
+
+const st = (s: string): string => serialise(strip(result(term(ts(s)))));
 
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
 
@@ -85,7 +86,7 @@ describe("pratt", () => {
     expect(st("x (y (z))")).toBe(`App(Ref("x"), App(Ref("y"), Ref("z")))`));
 
   test("should include origins in function application", () =>
-    expect(serialise(result(expression(0)(ts("f(x)"))))).toBe(
+    expect(serialise(result(term(ts("f(x)"))))).toBe(
       `App(Orig(0, 1, Ref("f")), Orig(2, 3, Ref("x")))`
     ));
 
@@ -100,14 +101,10 @@ describe("pratt", () => {
     expect(st(`   r `)).toBe(`Ref("r")`));
 
   test("should parse type reference", () =>
-    expect(serialise(strip(result(expression(0)(ts("Bool")))))).toBe(
-      `Ref("Bool")`
-    ));
+    expect(serialise(strip(result(term(ts("Bool")))))).toBe(`Ref("Bool")`));
 
   test("should parse reference in parenthesis", () =>
-    expect(serialise(strip(result(expression(0)(ts("(Bool)")))))).toBe(
-      `Ref("Bool")`
-    ));
+    expect(serialise(strip(result(term(ts("(Bool)")))))).toBe(`Ref("Bool")`));
 
   test("should parse integer addition binary operator", () =>
     expect(st("1+2")).toBe(`IntPlus(IntLit(1), IntLit(2))`));
@@ -263,7 +260,7 @@ describe("pratt", () => {
       serialise(
         strip(
           result(
-            expression(0)(
+            term(
               ts(`if x then
       y
     else
@@ -315,7 +312,7 @@ describe("pratt", () => {
     ));
 
   test("should parse type constructor", () =>
-    expect(serialise(strip(result(expression(0)(ts("List(Nat)")))))).toBe(
+    expect(serialise(strip(result(term(ts("List(Nat)")))))).toBe(
       `App(Ref("List"), Ref("Nat"))`
     ));
 
@@ -355,7 +352,7 @@ describe("pratt", () => {
     const src = `case n of
           |  zero => true
           |  succ => false`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Ref("true")),Branch(Identifier("succ"), Ref("false"))])`
     );
@@ -366,7 +363,7 @@ describe("pratt", () => {
           |  zero => true
           |  succ => false
           ):Bool`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Ann(Case(Par("n"),[Branch(Identifier("zero"), Ref("true")),Branch(Identifier("succ"), Ref("false"))]), Ref("Bool"))`
     );
@@ -380,7 +377,7 @@ describe("pratt", () => {
           | succ => (case m of
             | zero => false
             | succ => lt(n.x,m.x))`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), Ref("true"))])),Branch(Identifier("succ"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), App(App(Ref("lt"), Ref("n.x")), Ref("m.x")))]))])`
     );
@@ -393,7 +390,7 @@ describe("pratt", () => {
     // the bar and returns an empty error node for this case branch.
     const src = `
           | succ => zero`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe("ParseError(expected term; got \n)");
   });
 
@@ -411,7 +408,7 @@ describe("pratt", () => {
     const src = `case n of
           | zero => zero
           | succ => `;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Ref("zero")),Branch(Identifier("succ"), ParseError(expected term; got ))])`
     );
@@ -419,18 +416,18 @@ describe("pratt", () => {
 
   test("should parse empty string literal", () => {
     const src = `""`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(`StringLit("")`);
   });
 
   test("should parse string literal", () => {
     const src = `"hello"`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(`StringLit("hello")`);
   });
 
   test("should parse let expression", () => {
-    const ast = strip(result(expression(0)(ts("let g = f(x) in h(g,g)"))));
+    const ast = strip(result(term(ts("let g = f(x) in h(g,g)"))));
     expect(serialise(ast)).toBe(
       `Let(Identifier("g"), App(Ref("f"), Ref("x")), App(App(Ref("h"), Ref("g")), Ref("g")))`
     );
@@ -438,7 +435,7 @@ describe("pratt", () => {
 
   test("should allow ParseError on the rhs of App", () => {
     const src = `f("hello )`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `App(Ref("f"), ParseError(failed to parse string literal))`
     );
@@ -446,7 +443,7 @@ describe("pratt", () => {
 
   test("should parse app with string literal", () => {
     const src = `elimIO(println("hello))`;
-    const ast = strip(result(expression(0)(ts(src))));
+    const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `App(Ref("elimIO"), App(Ref("println"), ParseError(failed to parse string literal)))`
     );
@@ -462,43 +459,43 @@ describe("pratt", () => {
 
   test("should parse star", () => {
     const src = `*`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(`Star()`);
   });
 
   test("should allow star as an annotation", () => {
     const src = `x:*`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(`Ann(Ref("x"), Star())`);
   });
 
   test("should allow star with arrows", () => {
     const src = `* -> *`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(`Pi("", Star(), Star())`);
   });
 
   test("should parse simple pi type with named parameter", () => {
     const src = `(b:Bool) -> *`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(`Pi("b", Ref("Bool"), Star())`);
   });
 
   test("should parse simple pi type that's used dependently", () => {
     const src = `(a:A) -> B(a)`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(`Pi("a", Ref("A"), App(Ref("B"), Ref("a")))`);
   });
 
   test("should parse annotation containing type constructor", () => {
     const src = `t:P(true)`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(`Ann(Ref("t"), App(Ref("P"), Ref("true")))`);
   });
 
   test("should parse pi types correctly", () => {
     const src = `(t:P(true)) -> P(t)`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(
       `Pi("t", App(Ref("P"), Ref("true")), App(Ref("P"), Ref("t")))`
     );
@@ -506,7 +503,7 @@ describe("pratt", () => {
 
   test("should parse more compliated pi types correctly", () => {
     const src = `(b:Bool) -> (P:((x:Bool) -> *)) -> (t:P(true)) -> (f:P(false)) -> P(b)`;
-    const tm = strip(result(expression(0)(ts(src))));
+    const tm = strip(result(term(ts(src))));
     expect(serialise(tm)).toBe(
       `Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))`
     );

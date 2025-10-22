@@ -1,7 +1,6 @@
-import { App, Term, identifier2str } from "./ast";
 import { Context } from "./context";
 import * as Erased from "./erased";
-import { foldTree } from "./inspect";
+import { App, Expression, Term } from "./pratt";
 
 export function printCtxMultiline(
   ctx: Context,
@@ -39,7 +38,7 @@ export function printCtx(ctx: Context, indices: boolean = false): string {
 //
 // App(App(f,a),b) => [f,a,b]
 //
-const collectApps = (term: App): Term[] => {
+const collectApps = (term: App): Expression[] => {
   if (term.func._ == "app") {
     return collectApps(term.func).concat(term.arg);
   } else {
@@ -58,11 +57,11 @@ const collectAppsC = (term: Erased.App): Erased.Term[] => {
 
 // pretty print a term
 export function pretty(
-  term?: Term,
+  term?: Expression,
   indices: boolean = false,
   annotate: boolean = false
 ): string {
-  const pretty = (term?: Term): string => {
+  const pretty = (term?: Expression): string => {
     if (term == undefined) {
       return "#undefined#";
     }
@@ -77,7 +76,7 @@ export function pretty(
 
         // Does the left hand side of the app require parenthesis for
         // disambiguation?
-        const needsParens = (t: Term): boolean => {
+        const needsParens = (t: Expression): boolean => {
           switch (t._) {
             case "lam":
             case "self":
@@ -87,8 +86,8 @@ export function pretty(
             case "orig":
             case "syn":
               return needsParens(t.child);
-            case "rel":
-              return needsParens(t.term);
+            // case "rel":
+            //   return needsParens(t.term);
             default:
               return false;
           }
@@ -124,7 +123,11 @@ export function pretty(
           const begin = consoleColours ? "\x1b[34m" : "";
           const end = consoleColours ? "\x1b[0m" : "";
           return (
-            `(` + pretty(term.term) + `):${begin}` + pretty(term.typ) + `${end}`
+            `(` +
+            pretty(term.term) +
+            `):${begin}` +
+            pretty(term.type) +
+            `${end}`
           );
         } else {
           return pretty(term.term);
@@ -143,8 +146,6 @@ export function pretty(
         return pretty(term.child);
       case "syn":
         return pretty(term.child);
-      case "rel":
-        return pretty(term.term);
       case "if":
         return `if ${pretty(term.condition)} then ${pretty(
           term.trueBranch
@@ -159,6 +160,42 @@ export function pretty(
         return `@${term.label} ${pretty(term.child)}`;
       case "err":
         return `##${term.msg}##`;
+      case "add":
+        return `(${pretty(term.lhs)} + ${pretty(term.rhs)})`;
+      case "sub":
+        return `(${pretty(term.lhs)} - ${pretty(term.rhs)})`;
+      case "mul":
+        return `(${pretty(term.lhs)} * ${pretty(term.rhs)})`;
+      case "div":
+        return `(${pretty(term.lhs)} / ${pretty(term.rhs)})`;
+      case "comp":
+        return `(${pretty(term.lhs)} . ${pretty(term.rhs)})`;
+      case "idx":
+        return `${pretty(term.arr)}[${pretty(term.idx)}]`;
+      case "cat":
+        return `(${pretty(term.lhs)} ++ ${pretty(term.rhs)})`;
+      case "gt":
+        return `(${pretty(term.lhs)} > ${pretty(term.rhs)})`;
+      case "lt":
+        return `(${pretty(term.lhs)} < ${pretty(term.rhs)})`;
+      case "gte":
+        return `(${pretty(term.lhs)} >= ${pretty(term.rhs)})`;
+      case "lte":
+        return `(${pretty(term.lhs)} <= ${pretty(term.rhs)})`;
+      case "eq":
+        return `(${pretty(term.lhs)} == ${pretty(term.rhs)})`;
+      case "neq":
+        return `(${pretty(term.lhs)} != ${pretty(term.rhs)})`;
+      case "and":
+        return `(${pretty(term.lhs)} && ${pretty(term.rhs)})`;
+      case "or":
+        return `(${pretty(term.lhs)} || ${pretty(term.rhs)})`;
+      case "cons":
+        return `(${pretty(term.head)} :: ${pretty(term.tail)})`;
+      case "nil":
+        return `[]`;
+      case "neg":
+        return `(-${pretty(term.exp)})`;
     }
   };
   return pretty(term);
@@ -231,100 +268,100 @@ export const printNodeAsDotGraph = (term: Term): string => {
   output += `  edge [fontname="Helvetica,Arial,sans-serif"]`;
   output += `  node [style=filled];`;
 
-  output += foldTree(
-    (acc, curr) => {
-      // add this AST node to the graph
-      let node = "";
-      // add any edges to the child AST nodes
-      let edges = "";
-      switch (curr._) {
-        case "ann":
-          node = `  "${uid(curr)}" [label="ann"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.term)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.typ)}";\n`;
-          break;
-        case "app":
-          node = `  "${uid(curr)}" [label="@"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.func)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.arg)}";\n`;
-          break;
-        case "case":
-          node = `  "${uid(curr)}" [label="case ${curr.name}"];\n`;
-          for (const branch of curr.branches) {
-            edges += `  "${uid(curr)}" -> "${uid(branch.term)}";\n`;
-          }
-          break;
-        case "err":
-          node = `  "${uid(curr)}" [label="err ${curr.msg}"];\n`;
-          break;
-        case "hole":
-          node = `  "${uid(curr)}" [label="hole ${curr.id}"];\n`;
-          break;
-        case "id":
-          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
-          break;
-        case "int":
-          node = `  "${uid(curr)}" [label="${curr.num}"];\n`;
-          break;
-        case "str":
-          node = `  "${uid(curr)}" [label="${curr.str}"];\n`;
-          break;
-        case "var":
-          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
-          break;
-        case "star":
-          node = `  "${uid(curr)}" [label="★"];\n`;
-          break;
-        case "par":
-          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
-          break;
-        case "ref":
-          node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
-          break;
-        case "if":
-          node = `  "${uid(curr)}" [label="if"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.condition)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.falseBranch)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.trueBranch)}";\n`;
-          break;
-        case "lam":
-          node = `  "${uid(curr)}" [label="λ${identifier2str(curr.name)}"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
-          break;
-        case "let":
-          node = `  "${uid(curr)}" [label="let ${identifier2str(
-            curr.name
-          )}"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.expr)}";\n`;
-          break;
-        case "orig":
-          node = `  "${uid(curr)}" [label="orig ${curr.start}-${curr.end}"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.child)}";\n`;
-          break;
-        case "label":
-          node = `  "${uid(curr)}" [label="${curr.label}"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.child)}";\n`;
-          break;
-        case "pi":
-          node = `  "${uid(curr)}" [label="Π${curr.name}"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.from)}";\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
-          break;
-        case "rel":
-          node = `  "${uid(curr)}" [label="rel ${curr.uses}"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.term)}";\n`;
-          break;
-        case "self":
-          node = `  "${uid(curr)}" [label="ι${curr.name}"];\n`;
-          edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
-          break;
-      }
-      return acc + node + edges;
-    },
-    "",
-    term
-  );
+  // output += foldTree(
+  //   (acc, curr) => {
+  //     // add this AST node to the graph
+  //     let node = "";
+  //     // add any edges to the child AST nodes
+  //     let edges = "";
+  //     switch (curr._) {
+  //       case "ann":
+  //         node = `  "${uid(curr)}" [label="ann"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.term)}";\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.typ)}";\n`;
+  //         break;
+  //       case "app":
+  //         node = `  "${uid(curr)}" [label="@"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.func)}";\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.arg)}";\n`;
+  //         break;
+  //       case "case":
+  //         node = `  "${uid(curr)}" [label="case ${curr.name}"];\n`;
+  //         for (const branch of curr.branches) {
+  //           edges += `  "${uid(curr)}" -> "${uid(branch.term)}";\n`;
+  //         }
+  //         break;
+  //       case "err":
+  //         node = `  "${uid(curr)}" [label="err ${curr.msg}"];\n`;
+  //         break;
+  //       case "hole":
+  //         node = `  "${uid(curr)}" [label="hole ${curr.id}"];\n`;
+  //         break;
+  //       case "id":
+  //         node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+  //         break;
+  //       case "int":
+  //         node = `  "${uid(curr)}" [label="${curr.num}"];\n`;
+  //         break;
+  //       case "str":
+  //         node = `  "${uid(curr)}" [label="${curr.str}"];\n`;
+  //         break;
+  //       case "var":
+  //         node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+  //         break;
+  //       case "star":
+  //         node = `  "${uid(curr)}" [label="★"];\n`;
+  //         break;
+  //       case "par":
+  //         node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+  //         break;
+  //       case "ref":
+  //         node = `  "${uid(curr)}" [label="${curr.name}"];\n`;
+  //         break;
+  //       case "if":
+  //         node = `  "${uid(curr)}" [label="if"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.condition)}";\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.falseBranch)}";\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.trueBranch)}";\n`;
+  //         break;
+  //       case "lam":
+  //         node = `  "${uid(curr)}" [label="λ${identifier2str(curr.name)}"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
+  //         break;
+  //       case "let":
+  //         node = `  "${uid(curr)}" [label="let ${identifier2str(
+  //           curr.name
+  //         )}"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.expr)}";\n`;
+  //         break;
+  //       case "orig":
+  //         node = `  "${uid(curr)}" [label="orig ${curr.start}-${curr.end}"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.child)}";\n`;
+  //         break;
+  //       case "label":
+  //         node = `  "${uid(curr)}" [label="${curr.label}"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.child)}";\n`;
+  //         break;
+  //       case "pi":
+  //         node = `  "${uid(curr)}" [label="Π${curr.name}"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.from)}";\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
+  //         break;
+  //       case "rel":
+  //         node = `  "${uid(curr)}" [label="rel ${curr.uses}"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.term)}";\n`;
+  //         break;
+  //       case "self":
+  //         node = `  "${uid(curr)}" [label="ι${curr.name}"];\n`;
+  //         edges += `  "${uid(curr)}" -> "${uid(curr.body)}";\n`;
+  //         break;
+  //     }
+  //     return acc + node + edges;
+  //   },
+  //   "",
+  //   term
+  // );
 
   output += `}`;
 

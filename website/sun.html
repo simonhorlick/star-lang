@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Star</title>
+</head>
+
+<body>
+  <h1>A Tour of Star</h1>
+  <h2>A function</h2>
+  <pre>
+fun fib(n Int) Int =
+if n < 2 then
+  n
+else
+  fib(n-1) + fib(n-2)    
+    </pre>
+  <h2>Sum Types</h2>
+  <pre>
+type Suit = clubs | diamonds | hearts | spades
+
+fun toString(suit Suit) String =
+  case suit of
+    clubs    => "♣️"
+    diamonds => "♦️"
+    hearts   => "♥️"
+    spades   => "♠️"
+    </pre>
+  <h2>Summing a list</h2>
+  <pre>
+fun sum(list List<Int>) Int = fold(add, 0, list)
+    </pre>
+  <h2>A binary tree</h2>
+  <pre>
+type Tree {
+  left  Tree
+  right Tree
+}
+    </pre>
+</body>
+
+</html>

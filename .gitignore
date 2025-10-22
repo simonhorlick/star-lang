@@ -2,3 +2,7 @@ node_modules
 coverage
 dist
 *.js
+papers
+integration
+examples
+TODO.md

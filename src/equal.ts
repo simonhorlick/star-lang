@@ -1,16 +1,18 @@
-import { Def, Self, Term, identifier2str as id } from "./ast";
+import { Def2 } from "./ast";
 import { TypecheckError } from "./typecheck";
 import { Context } from "./context";
 import { substTop } from "./substitution";
 import { printCtx } from "./pretty";
+import { CTerm } from "./sugar";
+import { identifier2str } from "./pratt";
 
 // Reduce this term to weak head normal form.
 export const reduce = (
   unfold: boolean,
   ctx: Context,
-  defs: Map<string, Def>,
-  t: Term
-): Term => {
+  defs: Map<string, Def2>,
+  t: CTerm
+): CTerm => {
   switch (t._) {
     case "ref": {
       if (!unfold) {
@@ -33,7 +35,7 @@ export const reduce = (
           unfold,
           ctx,
           defs,
-          substTop(t.arg, func.body, id(func.name))
+          substTop(t.arg, func.body, identifier2str(func.name))
         );
       }
       return t;

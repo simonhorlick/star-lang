@@ -1,7 +1,5 @@
-import { describe, expect, test } from "vitest";
 import {
   char,
-  parseErrorDiagnostic,
   Stream,
   Result,
   Parser,
@@ -13,7 +11,6 @@ import {
   bind,
   join,
   pure,
-  error,
   optional,
   many,
   spaces,
@@ -25,16 +22,18 @@ import {
   newline,
   many1,
   lspc,
-  any3,
-  s,
   alpha,
   digit,
   zero,
   num,
-  any4,
   any5,
+  sat,
 } from "./parser";
-import { utf8 } from "./ast";
+
+// utf8 parses a string literal containing utf8 characters and escape
+// sequences.
+// TODO: Implement escape sequences.
+export const utf8 = sat((c) => c != '"');
 
 // Abs is a lambda abstraction.
 export type Abs = {
@@ -276,6 +275,17 @@ export const Pi = (name: string, from: Expression, to: Expression): Pi => ({
   name: name,
 });
 
+// A hole.
+export type Hole = {
+  _: "hole";
+  id: number;
+};
+
+export const Hole = (id: number): Hole => ({
+  _: "hole",
+  id: id,
+});
+
 // ★ is the type of types.
 export type Star = {
   _: "star";
@@ -433,6 +443,11 @@ export const Par = (name: string): Par => ({
 // An integer literal
 export type IntLit = { _: "int"; num: number };
 
+export const IntLit = (x: number): IntLit => ({
+  _: "int",
+  num: x,
+});
+
 // A string literal
 export type StringLit = { _: "str"; str: string };
 
@@ -489,32 +504,33 @@ export const ParseError = (msg: string): ParseError => ({
   msg: msg,
 });
 
-export type Expression =
+// A bound variable.
+export type Var = {
+  _: "var";
+
+  // The variable name for pretty printing.
+  name: string;
+
+  // The de Bruijn index of this node. The number index stands for “the variable
+  // bound by the index’th enclosing λ.”
+  index: number;
+};
+
+export const Var = (name: string, index: number): Var => ({
+  _: "var",
+  name: name,
+  index: index,
+});
+
+export type Term =
+  | Var
   | IntLit
-  | IntPlus
-  | IntSub
-  | IntMul
-  | IntDiv
-  | IntNeg
   | StringLit
-  | Comp
   | App
   | Ref
   | Abs
   | Pi
   | Ann
-  | Idx
-  | Cat
-  | Gt
-  | Lt
-  | Gte
-  | Lte
-  | Eq
-  | Neq
-  | And
-  | Or
-  | Cons
-  | Nil
   | ParseError
   | Origin
   | Identifier
@@ -526,7 +542,30 @@ export type Expression =
   | Par
   | Label
   | Self
-  | Star;
+  | Star
+  | Hole;
+
+// Reducible terms plus syntactic sugar.
+export type Expression =
+  | Term
+  | IntPlus
+  | IntSub
+  | IntMul
+  | IntDiv
+  | IntNeg
+  | Comp
+  | Idx
+  | Cat
+  | Gt
+  | Lt
+  | Gte
+  | Lte
+  | Eq
+  | Neq
+  | And
+  | Or
+  | Cons
+  | Nil;
 
 const reserved = new Set([
   "func",
@@ -679,15 +718,26 @@ const getBindingPower = (op: string): [number, number] => {
 export const listLiteral: Parser<Expression> =
   // opening bracket
   bind(char("["), (_) =>
-    // elements
-    bind(join(expression(0), spc(char(","))), (elements) =>
-      // closing bracket
-      bind(
-        orFail("expected ]", char("]")),
-        // The parser outputs terms to construct the list, for example,
-        //  [] => nil()
-        //  [1,2] => cons(1, cons(2, nil()))
-        (_) => pure(elements.reduceRight((acc, curr) => Cons(curr, acc), Nil()))
+    either(
+      // Try to parse closing bracket immediately (empty list case)
+      bind(spc(char("]")), (_) => pure(Nil())),
+
+      // Otherwise parse elements and closing bracket
+      bind(join(expression(0), spc(char(","))), (elements) =>
+        // closing bracket
+        bind(
+          orFail("expected ]", char("]")),
+          // The parser outputs terms to construct the list, for example,
+          //  [] => nil()
+          //  [1,2] => cons(1, cons(2, nil()))
+          (_) =>
+            pure(
+              (elements ?? []).reduceRight(
+                (acc, curr) => Cons(curr, acc),
+                Nil()
+              )
+            )
+        )
       )
     )
   );
@@ -899,10 +949,7 @@ export const self: Parser<Expression> = bind(char("ι"), (_) =>
   )
 );
 
-export const integerLiteral: Parser<IntLit> = map(num, (x) => ({
-  _: "int",
-  num: x,
-}));
+export const integerLiteral: Parser<IntLit> = map(num, (x) => IntLit(x));
 
 // expression parses terms and operators into an unambiguous tree.
 export const expression =
@@ -913,6 +960,10 @@ export const expression =
     // The job of this function is to parse the expression tree while
     // maintaining correct precedence.
     // It is an implementation of the standard Pratt parsing algorithm.
+
+    console.log(
+      `expression(min=${min}) @ ${s.idx} '${s.src.slice(s.idx, s.idx + 10)}...'`
+    );
 
     let neg = char("-")(s);
     if (neg._ != "parseerror") {
@@ -1221,8 +1272,6 @@ const appArgumentList = (lhs: Expression): Parser<Expression> =>
 // strip removes origins and syntax nodes from the term tree.
 export function strip(t: Expression): Expression {
   switch (t._) {
-    // case "var":
-    //   return t;
     case "lam":
       return Abs(identifier2str(t.name), strip(t.body));
     case "self":
@@ -1237,11 +1286,12 @@ export function strip(t: Expression): Expression {
     case "star":
     case "ref":
     case "id":
-    // case "hole":
     case "int":
     case "str":
     case "key":
     case "err":
+    case "var":
+    case "hole":
       return t;
     case "orig":
     case "syn":
@@ -1258,8 +1308,6 @@ export function strip(t: Expression): Expression {
       return Let(strip(t.name) as Identifier, strip(t.expr), strip(t.body));
     case "if":
       return If(strip(t.condition), strip(t.trueBranch), strip(t.falseBranch));
-    // case "rel":
-    //   throw "strip: unexpected rel";
     case "neg":
       return IntNeg(strip(t.exp));
     case "add":
@@ -1296,8 +1344,6 @@ export function strip(t: Expression): Expression {
       return Cons(strip(t.head), strip(t.tail));
     case "nil":
       return Nil();
-    // default:
-    //   throw `strip: not handled ${t._}`;
   }
 }
 
@@ -1306,6 +1352,8 @@ export function strip(t: Expression): Expression {
 // used in tests.
 export function serialise(t: Expression): string {
   switch (t._) {
+    case "var":
+      return `Var("${t.name}", ${t.index})`;
     case "ref":
       return `Ref("${t.name}")`;
     case "int":
@@ -1356,6 +1404,8 @@ export function serialise(t: Expression): string {
       return `Cons(${serialise(t.head)}, ${serialise(t.tail)})`;
     case "nil":
       return `Nil()`;
+    case "hole":
+      return `Hole(${t.id})`;
     case "lam":
       return `Abs("${identifier2str(t.name)}", ${serialise(t.body)})`;
     case "orig":
@@ -1391,3 +1441,5 @@ export function serialise(t: Expression): string {
     //   throw new Error(`unhandled node: ${t._}`);
   }
 }
+
+export type Type = Term;

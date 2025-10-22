@@ -2,25 +2,12 @@ import { describe, expect, test } from "vitest";
 import {
   ASTNode,
   parsePackage,
-  term,
   stripAST,
-  identifier2str,
-  serialise,
-  strip,
-  identifier2,
   parseLineComment,
-  identifier,
-  parenthesis,
-  abstraction,
-  type,
   definition,
   parseFile,
-  resync,
-  pi,
   Def,
   adt,
-  caseStatement,
-  caseBranch,
 } from "./ast";
 import {
   bind,
@@ -29,9 +16,22 @@ import {
   parseErrorDiagnostic,
   Stream,
   Result,
+  lspc,
 } from "./parser";
-import { TypecheckError } from "./typecheck";
-import { foldTreeCtx, printDiagnostic } from "./inspect";
+import {
+  abstraction,
+  caseStatement,
+  expression,
+  identifier,
+  identifier2,
+  identifier2str,
+  listLiteral,
+  parenthesis,
+  pi,
+  resync,
+  serialise,
+} from "./pratt";
+import { strip } from "./pratt";
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,
@@ -89,6 +89,9 @@ const resultC = <T>(x: Result<T>) => {
     return x.value;
   }
 };
+
+const term = lspc(expression(0));
+const type = term;
 
 describe("ast", () => {
   test("should parse lambda body greedily", () => {
@@ -158,7 +161,7 @@ describe("ast", () => {
     expect(success(parenthesis(char("a"))(ts("(a)")))).toStrictEqual(true));
 
   test("should parse lambda abstraction", () =>
-    expect(serialise(strip(result(abstraction(() => term)(ts("λx t")))))).toBe(
+    expect(serialise(strip(result(abstraction(ts("λx t")))))).toBe(
       `Abs("x", Ref("t"))`
     ));
 
@@ -253,8 +256,7 @@ describe("ast", () => {
       `Pi("", Pi("", Ref("A"), Ref("B")), Pi("", Ref("C"), Ref("D")))`
     ));
 
-  test("should parse empty list", () =>
-    expect(st("[]")).toBe(`App(Ref("nil"), Hole())`));
+  test("should parse empty list", () => expect(st("[]")).toBe(`Nil()`));
 
   test("should parse list literal with integers", () =>
     expect(st("[1,2,3]")).toBe(
@@ -339,13 +341,13 @@ describe("ast", () => {
     ));
 
   test("pi: should parse named pi types", () => {
-    const parser = pi(() => term);
+    const parser = pi;
     const res = parser(ts("ΠA:* A"));
     expect(serialise(strip(result(res)))).toBe(`Pi("A", Star(), Ref("A"))`);
   });
 
   test("pi: should expose ParseError for bad from annotation", () => {
-    const parser = pi(() => term);
+    const parser = pi;
     const res = parser(ts("ΠA:(&) A"));
     expect(serialise(strip(result(res)))).toBe(
       `Pi("A", ParseError(expected term; got &), Ref("A"))`
@@ -364,14 +366,14 @@ describe("ast", () => {
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.term.typ)).toBe(`App(Ref("List"), Ref("Nat"))`);
+    expect(serialise(ast.term.type)).toBe(`App(Ref("List"), Ref("Nat"))`);
     expect(serialise(ast.term.term)).toBe(`Ref("zero")`);
   });
 
   test("should parse case", () => {
     const src = `case n of
-      |  zero -> true
-      |  succ -> false`;
+      |  zero => true
+      |  succ => false`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Ref("true")),Branch(Identifier("succ"), Ref("false"))])`
@@ -380,8 +382,8 @@ describe("ast", () => {
 
   test("should parse case with annotation", () => {
     const src = `(case n of
-      |  zero -> true
-      |  succ -> false
+      |  zero => true
+      |  succ => false
       ):Bool`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
@@ -391,12 +393,12 @@ describe("ast", () => {
 
   test("should parse nested case", () => {
     const src = `case n of
-      | zero -> (case m of
-        | zero -> false
-        | succ -> true)
-      | succ -> (case m of
-        | zero -> false
-        | succ -> lt(n.x,m.x))`;
+      | zero => (case m of
+        | zero => false
+        | succ => true)
+      | succ => (case m of
+        | zero => false
+        | succ => lt(n.x,m.x))`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), Ref("true"))])),Branch(Identifier("succ"), Case(Par("m"),[Branch(Identifier("zero"), Ref("false")),Branch(Identifier("succ"), App(App(Ref("lt"), Ref("n.x")), Ref("m.x")))]))])`
@@ -409,15 +411,15 @@ describe("ast", () => {
     // indicating the next case branch. Make sure the parser doesn't consume
     // the bar and returns an empty error node for this case branch.
     const src = `
-      | succ -> zero`;
+      | succ => zero`;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe("ParseError(expected term; got )");
   });
 
   test("should parse partial case branch", () => {
     const src = `case b of
-      | zero ->
-      | succ -> zero`;
+      | zero =>
+      | succ => zero`;
     const ast = strip(result(caseStatement(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("b"),[Branch(Identifier("zero"), ParseError(expected term; got )),Branch(Identifier("succ"), Ref("zero"))])`
@@ -426,8 +428,8 @@ describe("ast", () => {
 
   test("should parse case with empty final branch", () => {
     const src = `case n of
-      | zero -> zero
-      | succ -> `;
+      | zero => zero
+      | succ => `;
     const ast = strip(result(term(ts(src))));
     expect(serialise(ast)).toBe(
       `Case(Par("n"),[Branch(Identifier("zero"), Ref("zero")),Branch(Identifier("succ"), ParseError(expected term; got ))])`
@@ -437,8 +439,8 @@ describe("ast", () => {
   test("should parse definition containing partial case", () => {
     const ast = parseFile(
       ts(`func abc:Bool->Bool = λn case n of
-      | zero -> zero
-      | succ ->
+      | zero => zero
+      | succ =>
       func def:Nat = zero
       `)
     );
@@ -471,7 +473,7 @@ describe("ast", () => {
     if (ast._ != "def") {
       throw `unexpected ${ast._}`;
     }
-    expect(serialise(ast.term.typ)).toBe(`Ref("String")`);
+    expect(serialise(ast.term.type)).toBe(`Ref("String")`);
     expect(serialise(ast.term.term)).toBe(`StringLit("")`);
   });
 
@@ -481,7 +483,7 @@ describe("ast", () => {
       throw `unexpected ${ast._}`;
     }
     // Here there are two origins - one for the term and one for the Ref.
-    expect(serialise(ast.term.typ)).toBe(
+    expect(serialise(ast.term.type)).toBe(
       `Origin(15, 21, Origin(15, 21, Ref("String")))`
     );
   });
@@ -550,21 +552,21 @@ describe("ast", () => {
     const ast = stripAST(result(definition(ts(src)))) as Def;
     // const ast = result(definition(ts(src))) as Def;
 
-    console.log(`checking for parse errors in tree`);
-    const errs = foldTreeCtx(
-      (acc, curr) => {
-        if (curr.term._ !== "err") return acc;
-        const err = {
-          msg: curr.term.msg,
-          start: curr.start ?? 0,
-          end: curr.end ?? 0,
-        } as TypecheckError;
-        console.log(printDiagnostic(src, err));
-        return acc.concat(err);
-      },
-      [] as TypecheckError[],
-      ast.term
-    );
+    // console.log(`checking for parse errors in tree`);
+    // const errs = foldTreeCtx(
+    //   (acc, curr) => {
+    //     if (curr.term._ !== "err") return acc;
+    //     const err = {
+    //       msg: curr.term.msg,
+    //       start: curr.start ?? 0,
+    //       end: curr.end ?? 0,
+    //     } as TypecheckError;
+    //     console.log(printDiagnostic(src, err));
+    //     return acc.concat(err);
+    //   },
+    //   [] as TypecheckError[],
+    //   ast.term
+    // );
 
     expect(serialiseAST(ast)).toBe(
       `Def(name=bool_match, term=Ann(Abs("b", Abs("P", Abs("t", Abs("f", App(App(App(Ref("b"), Ref("P")), Ref("t")), Ref("f")))))), Pi("b", Ref("Bool"), Pi("P", Pi("x", Ref("Bool"), Star()), Pi("t", App(Ref("P"), Ref("true")), Pi("f", App(Ref("P"), Ref("false")), App(Ref("P"), Ref("b"))))))))`

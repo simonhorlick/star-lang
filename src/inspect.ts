@@ -1,30 +1,3 @@
-import {
-  Ann,
-  Star,
-  Pi,
-  Ref,
-  Self,
-  Type,
-  Term,
-  App,
-  Var,
-  Def,
-  ASTNode,
-  AbsI,
-  Origin,
-  Identifier,
-  Hole,
-  identifier2str,
-  File,
-  Let,
-  Abs,
-  Case,
-  Branch,
-  If,
-  Syntax,
-  Rel,
-  Label,
-} from "./ast";
 import { TypecheckError, equate } from "./typecheck";
 import { reduce } from "./equal";
 import { indexToLineCol, printLine } from "./parser";
@@ -32,6 +5,23 @@ import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx } from "./context";
 import { substTop } from "./substitution";
 import { BuildResult } from "./build";
+import { ASTNode, Def, Def2, File } from "./ast";
+import {
+  AbsI,
+  Ann,
+  App,
+  Case,
+  CTerm,
+  Identifier,
+  Let,
+  Origin,
+  Pi,
+  Ref,
+  Self,
+  Star,
+  Var,
+} from "./sugar";
+import { identifier2str } from "./pratt";
 
 export const printMultilineDiagnostic = (
   src: string,
@@ -95,7 +85,7 @@ export const parseErrorDiagnostic = (
 export const inspectASTNodes = (n: ASTNode) => {
   const spans = new Map<
     { start: number; end: number },
-    { term: ASTNode; type: Type | undefined; ctx: Context }
+    { term: ASTNode; type: CTerm | undefined; ctx: Context }
   >();
 
   const f = (n: ASTNode, start: number, end: number): void => {
@@ -127,138 +117,8 @@ export const inspectASTNodes = (n: ASTNode) => {
   return spans;
 };
 
-// map a function over the AST.
-export const map = (
-  f: (curr: Term) => Term, // returns the new accumulator
-  t: Term // the root of the tree
-): Term => {
-  switch (t._) {
-    case "app":
-      return App(f(t.func), f(t.arg));
-    case "lam":
-      return AbsI(t.name, f(t.body));
-    case "ann":
-      return Ann(f(t.term), f(t.typ));
-    case "case":
-      return Case(
-        f(t.name),
-        t.branches.map((b) => Branch(b.constructor, f(b.term)))
-      );
-    case "if":
-      return If(f(t.condition), f(t.trueBranch), f(t.falseBranch));
-    case "let":
-      return Let(t.name, f(t.expr), f(t.body));
-    case "orig":
-      return Origin(t.start, t.end, f(t.child));
-    case "syn":
-      return Syntax(t.syntax, f(t.child));
-    case "pi":
-      return Pi(t.name, f(t.from), f(t.body));
-    case "rel":
-      return Rel(f(t.term), t.uses);
-    case "label":
-      return Label(t.label, f(t.child));
-    case "self":
-      return Self(t.name, f(t.body));
-    case "id":
-    case "key":
-    case "int":
-    case "par":
-    case "hole":
-    case "err":
-    case "star":
-    case "ref":
-    case "str":
-    case "var": {
-      return f(t);
-    }
-  }
-};
-
-// pre-order traversal of the term tree - visit the node itself, followed by
-// any child nodes.
-export const foldTree = <A>(
-  f: (acc: A, curr: Term) => A, // returns the new accumulator
-  init: A, // initial value of the accumulator
-  t: Term // the starting term
-): A => {
-  const x = f(init, t);
-  switch (t._) {
-    case "app": {
-      const left = foldTree(f, x, t.func);
-      const rght = foldTree(f, left, t.arg);
-      return rght;
-    }
-    case "lam": {
-      const curr = foldTree(f, x, t.name);
-      const body = foldTree(f, curr, t.body);
-      return body;
-    }
-    case "ann": {
-      const tm = foldTree(f, x, t.term);
-      const typ = foldTree(f, tm, t.typ);
-      return typ;
-    }
-    case "case": {
-      const name = foldTree(f, x, t.name);
-      let prev = name;
-      for (const b of t.branches) {
-        const ctr = foldTree(f, prev, b.constructor);
-        prev = foldTree(f, ctr, b.term);
-      }
-      return prev;
-    }
-    case "if": {
-      const cond = foldTree(f, x, t.condition);
-      const fls = foldTree(f, cond, t.falseBranch);
-      const tru = foldTree(f, fls, t.trueBranch);
-      return tru;
-    }
-    case "let": {
-      const name = foldTree(f, x, t.name);
-      const expr = foldTree(f, name, t.expr);
-      const body = foldTree(f, expr, t.body);
-      return body;
-    }
-    case "orig": {
-      return foldTree(f, x, t.child);
-    }
-    case "syn": {
-      const syn = foldTree(f, x, t.syntax);
-      const child = foldTree(f, syn, t.child);
-      return child;
-    }
-    case "label": {
-      return foldTree(f, x, t.child);
-    }
-    case "pi": {
-      const frm = foldTree(f, x, t.from);
-      const to = foldTree(f, frm, t.body);
-      return to;
-    }
-    case "rel": {
-      return foldTree(f, x, t.term);
-    }
-    case "self": {
-      return foldTree(f, x, t.body);
-    }
-    case "id":
-    case "key":
-    case "int":
-    case "par":
-    case "hole":
-    case "err":
-    case "star":
-    case "ref":
-    case "str":
-    case "var": {
-      return x;
-    }
-  }
-};
-
 export type TermAndCtx = {
-  term: Term;
+  term: CTerm;
   start?: number;
   end?: number;
 };
@@ -268,7 +128,7 @@ export type TermAndCtx = {
 export const foldTreeCtx = <A>(
   f: (acc: A, curr: TermAndCtx) => A, // returns the new accumulator
   init: A, // initial value of the accumulator
-  initVal: Term // the starting term
+  initVal: CTerm // the starting term
 ): A => {
   const doFold = (
     init: A, // initial value of the accumulator
@@ -310,7 +170,7 @@ export const foldTreeCtx = <A>(
           end: ctx.end,
         });
         const typ = doFold(tm, {
-          term: t.typ,
+          term: t.type,
           start: ctx.start,
           end: ctx.end,
         });
@@ -337,24 +197,24 @@ export const foldTreeCtx = <A>(
         }
         return prev;
       }
-      case "if": {
-        const cond = doFold(x, {
-          term: t.condition,
-          start: ctx.start,
-          end: ctx.end,
-        });
-        const fls = doFold(cond, {
-          term: t.falseBranch,
-          start: ctx.start,
-          end: ctx.end,
-        });
-        const tru = doFold(fls, {
-          term: t.trueBranch,
-          start: ctx.start,
-          end: ctx.end,
-        });
-        return tru;
-      }
+      // case "if": {
+      //   const cond = doFold(x, {
+      //     term: t.condition,
+      //     start: ctx.start,
+      //     end: ctx.end,
+      //   });
+      //   const fls = doFold(cond, {
+      //     term: t.falseBranch,
+      //     start: ctx.start,
+      //     end: ctx.end,
+      //   });
+      //   const tru = doFold(fls, {
+      //     term: t.trueBranch,
+      //     start: ctx.start,
+      //     end: ctx.end,
+      //   });
+      //   return tru;
+      // }
       case "let": {
         const name = doFold(x, {
           term: t.name,
@@ -402,9 +262,9 @@ export const foldTreeCtx = <A>(
         });
         return to;
       }
-      case "rel": {
-        return doFold(x, { term: t.term, start: ctx.start, end: ctx.end });
-      }
+      // case "rel": {
+      //   return doFold(x, { term: t.term, start: ctx.start, end: ctx.end });
+      // }
       case "label": {
         return doFold(x, { term: t.child, start: ctx.start, end: ctx.end });
       }
@@ -414,15 +274,35 @@ export const foldTreeCtx = <A>(
       case "id":
       case "key":
       case "int":
-      case "par":
+      // case "par":
       case "hole":
       case "err":
       case "star":
       case "ref":
       case "str":
-      case "var": {
-        return x;
-      }
+      case "var":
+        {
+          return x;
+        }
+        // case "add":
+        // case "sub":
+        // case "mul":
+        // case "div":
+        // case "neg":
+        // case "comp":
+        // case "idx":
+        // case "cat":
+        // case "gt":
+        // case "lt":
+        // case "gte":
+        // case "lte":
+        // case "eq":
+        // case "neq":
+        // case "and":
+        // case "or":
+        // case "cons":
+        // case "nil":
+        throw new Error(`unimplemented`);
     }
   };
   return doFold(init, { term: initVal, start: undefined, end: undefined });
@@ -431,33 +311,33 @@ export const foldTreeCtx = <A>(
 export type Span = {
   start: number;
   end: number;
-  term: Term;
-  type?: Type;
+  term: CTerm;
+  type?: CTerm;
   ctx: Context;
 };
 
 export const inspect = (
-  def: Def,
-  defs: Map<string, Def>,
+  def: Def2,
+  defs: Map<string, Def2>,
   offset: number | undefined = undefined
 ) => {
   const spans: Span[] = [];
 
   const traverse = (
-    t: Term,
-    ty: Type | undefined,
+    t: CTerm,
+    ty: CTerm | undefined,
     start: number | undefined,
     end: number | undefined,
     ctx: Context,
-    defs: Map<string, Def>
-  ): Term => {
+    defs: Map<string, Def2>
+  ): CTerm => {
     switch (t._) {
       case "ann": {
         return Ann(
           // Pass the origins through the annotation. This is useful for
           // annotations generated by the typechecker.
-          traverse(t.term, t.typ, start, end, ctx, defs),
-          traverse(t.typ, undefined, undefined, undefined, ctx, defs)
+          traverse(t.term, t.type, start, end, ctx, defs),
+          traverse(t.type, undefined, undefined, undefined, ctx, defs)
         );
       }
       case "app": {
@@ -502,9 +382,9 @@ export const inspect = (
           )
         );
       }
-      case "par": {
-        throw "inspect: unexpected par";
-      }
+      // case "par": {
+      //   throw "inspect: unexpected par";
+      // }
       case "let": {
         // FIXME: Need to add the type of the expression as an annotation so we can use it here.
         return Let(
@@ -560,9 +440,9 @@ export const inspect = (
           })
         );
       }
-      case "if": {
-        throw "inspect: unexpected if";
-      }
+      // case "if": {
+      //   throw "inspect: unexpected if";
+      // }
       case "ref": {
         // TODO: For defs like true, the type is the expanded version. We
         // usually want a pi type so we can find the types of the arguments,
@@ -577,7 +457,7 @@ export const inspect = (
             start: start,
             end: end,
             term: t,
-            type: ref.term.typ,
+            type: ref.term.type,
             ctx: ctx,
           });
         }
@@ -630,9 +510,9 @@ export const inspect = (
       case "syn": {
         return traverse(t.child, ty, undefined, undefined, ctx, defs);
       }
-      case "rel": {
-        return traverse(t.term, ty, undefined, undefined, ctx, defs);
-      }
+      // case "rel": {
+      //   return traverse(t.term, ty, undefined, undefined, ctx, defs);
+      // }
       case "label": {
         if (start != undefined && end != undefined) {
           spans.push({
@@ -667,6 +547,92 @@ export const inspect = (
         }
         return t;
       }
+      // case "add":
+      //   return IntPlus(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "sub":
+      //   return IntSub(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "mul":
+      //   return IntMul(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "div":
+      //   return IntDiv(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "neg":
+      //   return IntNeg(
+      //     traverse(t.exp, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "comp":
+      //   return Comp(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "idx":
+      //   return Idx(
+      //     traverse(t.arr, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.idx, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "cat":
+      //   return Cat(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "gt":
+      //   return Gt(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "lt":
+      //   return Lt(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "gte":
+      //   return Gte(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "lte":
+      //   return Lte(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "eq":
+      //   return Eq(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "neq":
+      //   return Neq(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "and":
+      //   return And(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "or":
+      //   return Or(
+      //     traverse(t.lhs, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.rhs, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "cons":
+      //   return Cons(
+      //     traverse(t.head, undefined, undefined, undefined, ctx, defs),
+      //     traverse(t.tail, undefined, undefined, undefined, ctx, defs)
+      //   );
+      // case "nil":
+      //   return Nil();
     }
   };
 
@@ -701,7 +667,7 @@ export const printDiagnostic = (src: string, err: TypecheckError) => {
 export const hover = (
   src: string,
   f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number | undefined
 ): Array<Range & HoverInfo> => {
   let hoverInfo = new Array<Range & HoverInfo>();
@@ -764,7 +730,7 @@ export const hover = (
 export const hoverMessage = (
   src: string,
   f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number
 ): { range: { start: number; end: number }; msg: string } | null => {
   const hoverInfo = hover(src, f, defs, offset);
@@ -796,7 +762,7 @@ export const inferType = (
   f: File,
   defs: Map<string, Def>,
   offset: number
-): Term | undefined => {
+): CTerm | undefined => {
   for (const node of f.content) {
     if (node._ == "def") {
       const def = node;
@@ -833,7 +799,7 @@ export const inferType = (
   return undefined;
 };
 
-export const findOrigin = (term: Term): Origin | null => {
+export const findOrigin = (term: Expression): Origin | null => {
   if (term._ == "orig") {
     return term;
   } else if (term._ == "ann") {
@@ -931,7 +897,7 @@ export const complete = (
   f: File,
   defs: Map<string, Def>,
   offset: number,
-  typ: Term | undefined
+  typ: CTerm | undefined
 ): CompletionInfo[] => {
   let completionList: CompletionInfo[] = [];
 
@@ -998,24 +964,24 @@ export const complete = (
           equate(
             [],
             defs,
-            node.term.typ,
+            node.term.type,
             typ,
             Star() // does it matter that this is star?
           ).eq
         ) {
-          if (node.term.typ._ == "star") {
+          if (node.term.type._ == "star") {
             completionList.push({
               label: node.name,
               kind: CompletionStruct,
               sortText: "1",
-              detail: `ref(${pretty(node.term.typ)})`,
+              detail: `ref(${pretty(node.term.type)})`,
             });
           } else {
             completionList.push({
               label: node.name,
               kind: CompletionFunction,
               sortText: "1",
-              detail: `ref(${pretty(node.term.typ)})`,
+              detail: `ref(${pretty(node.term.type)})`,
             });
           }
         }

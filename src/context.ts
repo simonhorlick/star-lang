@@ -1,6 +1,9 @@
-import { Star, Term, Type, identifier2str } from "./ast";
+import { identifier2str } from "./pratt";
 import { printCtx } from "./pretty";
 import { shift } from "./substitution";
+import { CTerm, Star } from "./sugar";
+
+type Type = CTerm;
 
 export type VariableBinding = { type: "bind"; name: string; typ: Type };
 
@@ -27,7 +30,11 @@ export const addTermToCtx = (
   return [...ctx, { type: "bind", name: name, typ: type }];
 };
 
-export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
+export const dbgCheckIndices = (
+  ctx: Context,
+  depth: number,
+  t: CTerm
+): CTerm => {
   // check the names of Var terms match what's in the context.
   switch (t._) {
     case "var":
@@ -59,7 +66,7 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       return t;
     case "ann":
       dbgCheckIndices(ctx, depth, t.term);
-      dbgCheckIndices(ctx, depth, t.typ);
+      dbgCheckIndices(ctx, depth, t.type);
       return t;
     case "pi":
       dbgCheckIndices(ctx, depth, t.from);
@@ -69,7 +76,6 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
     case "ref":
     case "id":
     case "key":
-    case "par":
     case "hole":
     case "int":
     case "int":
@@ -82,10 +88,6 @@ export const dbgCheckIndices = (ctx: Context, depth: number, t: Term): Term => {
       throw "dbgCheckIndices: unexpected case";
     case "let":
       throw "dbgCheckIndices: unexpected let";
-    case "rel":
-      throw "dbgCheckIndices: unexpected rel";
-    case "if":
-      throw "dbgCheckIndices: unexpected if";
     case "orig":
     case "syn":
       dbgCheckIndices(ctx, depth, t.child);

@@ -1,25 +1,25 @@
 import { describe, expect, test } from "vitest";
 import { reduce } from "./equal";
 import {
-  Def,
   Key,
   Origin,
   Syntax,
-  Term,
   Abs,
   Ann,
   App,
   Pi,
   Ref,
   Var,
-} from "./ast";
+  CTerm,
+} from "./sugar";
 import { defs } from "./typecheck";
+import { Def2 } from "./ast";
 
 describe("term reduction", () => {
   // (λx. x)(λz. z) -> (λz. z)
   test("TestReduceIdentity", () => {
     const identity = App(Abs("x", Var("x", 0)), Abs("z", Var("z", 0)));
-    const expected: Term = Abs("z", Var("z", 0));
+    const expected: CTerm = Abs("z", Var("z", 0));
 
     const actual = reduce(true, [], defs(), identity);
 
@@ -27,7 +27,7 @@ describe("term reduction", () => {
   });
 
   // λx. x
-  const id = Def("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
+  const id = Def2("id", Ann(Abs("x", Var("x", 0)), Pi("", Ref("X"), Ref("X"))));
 
   // Test that substituting top level functions works properly.
   test("TestSubstituteDef", () => {

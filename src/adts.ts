@@ -4,20 +4,12 @@ import {
   Pi,
   Self,
   Par,
-  Term,
   App,
   Abs,
-  Var,
   Ref,
-  File,
-  Def,
-  ADT,
-  Argument,
-  Constructor,
   Case,
   Branch,
   Origin,
-  ASTNode,
   AbsI,
   Identifier,
   If,
@@ -25,12 +17,20 @@ import {
   identifier2str,
   Syntax,
   Label,
-} from "./ast";
+  Term,
+  Var,
+  Expression,
+} from "./pratt";
 import { Context, addTermToCtx } from "./context";
+import { ADT, Argument, ASTNode, Constructor, Def, Def2, File } from "./ast";
+import { desugarExpression, Ann as Ann2 } from "./sugar";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
 
-const wrapOrigin = (term: Term, from: Origin | Identifier): Term => {
+const wrapOrigin = (
+  term: Expression,
+  from: Origin | Identifier
+): Expression => {
   if (from._ == "orig") {
     return Origin(from.start, from.end, term);
   } else {
@@ -204,19 +204,18 @@ export const processADTs = (f: File): File => {
 // TODO: Re-think this. There's a lot of places where we're doing thing kind of
 // thing.
 export const desugarTerm = (
-  t: Term,
-  ann: Term | undefined,
-  adts: Map<string, ADT>,
+  t: Expression,
+  ann: Expression | undefined,
   ctx: Context
-): Term => {
+): Expression => {
   switch (t._) {
     case "ann":
-      const desugaredType = desugarTerm(t.typ, undefined, adts, ctx);
-      return Ann(desugarTerm(t.term, desugaredType, adts, ctx), desugaredType);
+      const desugaredType = desugarTerm(t.type, undefined, ctx);
+      return Ann(desugarTerm(t.term, desugaredType, ctx), desugaredType);
     case "app":
       return App(
-        desugarTerm(t.func, undefined, adts, ctx),
-        desugarTerm(t.arg, undefined, adts, ctx)
+        desugarTerm(t.func, undefined, ctx),
+        desugarTerm(t.arg, undefined, ctx)
       );
     case "lam":
       // The type in this context is not important so just set it as *.
@@ -225,7 +224,6 @@ export const desugarTerm = (
         desugarTerm(
           t.body,
           undefined,
-          adts,
           addTermToCtx(ctx, identifier2str(t.name), Star())
         )
       );
@@ -240,22 +238,22 @@ export const desugarTerm = (
     case "pi":
       return Pi(
         t.name,
-        desugarTerm(t.from, undefined, adts, ctx),
-        desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.from, undefined, ctx),
+        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star()))
       );
     case "self":
       return Self(
         t.name,
-        desugarTerm(t.body, undefined, adts, addTermToCtx(ctx, t.name, Star()))
+        desugarTerm(t.body, undefined, addTermToCtx(ctx, t.name, Star()))
       );
     case "case":
       // We can't desugar case expressions at this point because we need to
       // infer the type of the term we're destructuring. This can only happen
       // while we're typechecking.
       return Case(
-        desugarTerm(t.name, undefined, adts, ctx),
+        desugarTerm(t.name, undefined, ctx),
         t.branches.map((b) =>
-          Branch(b.constructor, desugarTerm(b.term, undefined, adts, ctx))
+          Branch(b.constructor, desugarTerm(b.term, undefined, ctx))
         )
       );
     case "let":
@@ -264,11 +262,10 @@ export const desugarTerm = (
       // typechecking stage.
       return Let(
         t.name,
-        desugarTerm(t.expr, undefined, adts, ctx),
+        desugarTerm(t.expr, undefined, ctx),
         desugarTerm(
           t.body,
           undefined,
-          adts,
           addTermToCtx(ctx, identifier2str(t.name), Star())
         )
       );
@@ -283,15 +280,9 @@ export const desugarTerm = (
       // FIXME: let b = t.condition; case b ...
       // FIXME: This is going to give horrible error messages in the situation
       //  that b is not a Bool.
-      return Case(desugarTerm(t.condition, undefined, adts, ctx), [
-        Branch(
-          Identifier("false"),
-          desugarTerm(t.falseBranch, undefined, adts, ctx)
-        ),
-        Branch(
-          Identifier("true"),
-          desugarTerm(t.trueBranch, undefined, adts, ctx)
-        ),
+      return Case(desugarTerm(t.condition, undefined, ctx), [
+        Branch(Identifier("false"), desugarTerm(t.falseBranch, undefined, ctx)),
+        Branch(Identifier("true"), desugarTerm(t.trueBranch, undefined, ctx)),
       ]);
     case "ref":
       // At this point we're still unsure whether this node is a Var or a Ref.
@@ -325,27 +316,32 @@ export const desugarTerm = (
       // return stringLiteralToTerm(t.str);
     }
     case "orig":
-      return Origin(t.start, t.end, desugarTerm(t.child, ann, adts, ctx));
+      return Origin(t.start, t.end, desugarTerm(t.child, ann, ctx));
     case "syn":
-      return Syntax(t.syntax, desugarTerm(t.child, ann, adts, ctx));
+      return Syntax(t.syntax, desugarTerm(t.child, ann, ctx));
     case "label":
-      return Label(t.label, desugarTerm(t.child, ann, adts, ctx));
+      return Label(t.label, desugarTerm(t.child, ann, ctx));
     case "err":
       return t;
-    case "rel":
-      throw "desugarTerm: unexpected Rel";
+    // case "rel":
+    //   throw "desugarTerm: unexpected Rel";
+    default:
+      throw new Error(`desugarTerm: unexpected ${t._}`);
   }
 };
 
-export const desugar = (def: Def, adts: Map<string, ADT>): Def => {
-  return Def(def.name, desugarTerm(def.term, undefined, adts, []) as Ann);
+export const desugar = (def: Def): Def2 => {
+  return Def2(
+    def.name,
+    desugarExpression(desugarTerm(def.term, undefined, [])) as Ann2
+  );
 };
 
 // processPars removes all Par nodes from the tree t.
-export const processPars = (t: Term, ctx: Context): Term => {
+export const processPars = (t: Expression, ctx: Context): Expression => {
   switch (t._) {
     case "ann":
-      return Ann(processPars(t.term, ctx), processPars(t.typ, ctx));
+      return Ann(processPars(t.term, ctx), processPars(t.type, ctx));
     case "app":
       return App(processPars(t.func, ctx), processPars(t.arg, ctx));
     case "lam":
@@ -409,8 +405,10 @@ export const processPars = (t: Term, ctx: Context): Term => {
     case "str":
     case "err":
       return t;
-    case "rel":
-      throw "processPars: unexpected Rel";
+    // case "rel":
+    //   throw "processPars: unexpected Rel";
+    default:
+      throw new Error(`processPars: unexpected ${t._}`);
   }
 };
 
@@ -449,7 +447,7 @@ export const GenerateConstructorTerm = (
   params: Argument[],
   constructors: Constructor[],
   i: number
-) => {
+): Expression => {
   /*
     cons = <A> (head) (tail) <P> (nil) (cons) cons(head)(tail)
     nil = <A> <P> (nil) (cons) nil

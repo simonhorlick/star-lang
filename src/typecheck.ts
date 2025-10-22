@@ -5,34 +5,35 @@
 // applications can be inferred by looking up their definition.
 //
 import {
-  Term,
-  Type,
-  Def,
   Star,
-  ADT,
   Ref,
-  identifier2str as id,
   App,
   Ann,
   AbsI,
   Pi,
   Abs,
-  strip,
-  Constructor,
-  identifier2str,
   Origin,
   Syntax,
   Hole,
   Case,
-  Argument,
   Label,
-} from "./ast";
+  CTerm,
+  strip,
+  fixupRefs,
+  Branch,
+  Self,
+  Let,
+} from "./sugar";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
 import { shift, substHole, substTop } from "./substitution";
 import { Set } from "immutable";
-import { desugarTerm } from "./adts";
+import { ADT, Argument, Constructor, Def, Def2 } from "./ast";
+import { identifier2str } from "./pratt";
+
+type Term = CTerm;
+type Type = CTerm;
 
 const verbose = true;
 
@@ -74,7 +75,7 @@ export const Result = (
 
 // infer the type of a term
 export const infer = (
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   adts: Map<string, ADT>,
   ctx: Context,
   term: Term,
@@ -150,9 +151,9 @@ export const infer = (
     }
     case "ann": {
       // Check the annotation is actually a type.
-      const typ = check(defs, adts, ctx, term.typ, Star(), os, oe);
+      const typ = check(defs, adts, ctx, term.type, Star(), os, oe);
       // Check the annotated type matches the computed type.
-      const c = check(defs, adts, ctx, term.term, term.typ, os, oe);
+      const c = check(defs, adts, ctx, term.term, term.type, os, oe);
       // Return the desugared term.
       return Result(Ann(c.term, c.type), c.type, typ.holes.concat(c.holes));
     }
@@ -166,7 +167,7 @@ export const infer = (
         );
       }
       // Do we need to return the looked up ref? Or can this be done in reduce?
-      return Result(term, match.term.typ, []);
+      return Result(term, match.term.type, []);
     }
     case "self": {
       // Add the value being typed to the context (i.e. self-typing) and check the body has the correct type.
@@ -218,9 +219,76 @@ export const infer = (
   }
 };
 
+const checkTree = (init: Term, defs: Map<string, Def2>): void => {
+  const ct = (t: CTerm): void => {
+    switch (t._) {
+      case "app":
+        ct(t.func);
+        ct(t.arg);
+        break;
+      case "lam":
+        ct(t.name);
+        ct(t.body);
+        break;
+      case "ann":
+        ct(t.term);
+        ct(t.type);
+        break;
+      case "case":
+        ct(t.name);
+        t.branches.forEach((b) => {
+          ct(b.constructor);
+          ct(b.term);
+        });
+        break;
+      case "let":
+        ct(t.name);
+        ct(t.expr);
+        ct(t.body);
+        break;
+      case "orig":
+        ct(t.child);
+        break;
+      case "syn":
+        ct(t.child);
+        break;
+      case "pi":
+        ct(t.from);
+        ct(t.body);
+        break;
+      case "label":
+        ct(t.child);
+        break;
+      case "self":
+        ct(t.body);
+        break;
+
+      // Leaf terms
+      case "id":
+      case "key":
+      case "int":
+      case "hole":
+      case "err":
+      case "star":
+      case "str":
+      case "var":
+        break;
+
+      case "ref":
+        if (!defs.has(t.name)) {
+          throw new Error(`undefined reference: ${t.name}`);
+        }
+        break;
+      default:
+        throw new Error(`unexpected term in checkTree`);
+    }
+  };
+  ct(init);
+};
+
 // check the term val has the type typ.
 export const check = (
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   adts: Map<string, ADT>,
   ctx: Context,
   val: Term,
@@ -238,6 +306,14 @@ export const check = (
   } else if (val._ == "label") {
     const x = check(defs, adts, ctx, val.child, tty, os, oe);
     return Result(Label(val.label, x.term), x.type, x.holes);
+  }
+
+  // debug check
+  try {
+    checkTree(tty, defs);
+  } catch (e) {
+    console.error(`debug check failed: ${e}`);
+    console.error(`tty: ${pretty(tty)}`);
   }
 
   const pval = pretty(val);
@@ -295,7 +371,7 @@ export const check = (
     let c = check(
       defs,
       adts,
-      cons(ctx, id(val.name), typ.from),
+      cons(ctx, identifier2str(val.name), typ.from),
       val.body,
       typ.body,
       os,
@@ -382,7 +458,7 @@ const findConstructor = (name: string, adt: ADT, os: number, oe: number) => {
 // type Vector(T *, n Nat) = vnil : Vector(T, 0) | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))
 //
 export const desugarCaseStatement = (
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   adts: Map<string, ADT>,
   ctx: Context,
   caseStmt: Case,
@@ -441,7 +517,7 @@ export const desugarCaseStatement = (
 
     // Desugar the branch body - at this point the body still contains Refs that
     // reference the constructor arguments. Turn these into Vars.
-    const branchBodyWithArgsDesugared = desugarTerm(
+    const branchBodyWithArgsDesugared = fixupRefs(
       branchBodyWithArgs,
       undefined,
       adts,
@@ -539,11 +615,9 @@ const aeq = (t1: Term, t2: Term): boolean => {
     case "app":
       return t2._ == "app" && aeq(t1.func, t2.func) && aeq(t1.arg, t2.arg);
     case "ann":
-      return t2._ == "ann" && aeq(t1.term, t2.term) && aeq(t1.typ, t2.typ);
+      return t2._ == "ann" && aeq(t1.term, t2.term) && aeq(t1.type, t2.type);
     case "pi":
       return t2._ == "pi" && aeq(t1.from, t2.from) && aeq(t1.body, t2.body);
-    case "par":
-      throw "aeq: unexpected par";
     case "star":
       return t2._ == "star";
     case "ref":
@@ -568,8 +642,6 @@ const aeq = (t1: Term, t2: Term): boolean => {
       );
     case "let":
       return t2._ == "let" && aeq(t1.expr, t2.expr) && aeq(t1.body, t2.body);
-    case "if":
-      throw "aeq: unexpected if";
     case "int":
       return t2._ == "int" && t2.num == t1.num;
     case "str":
@@ -577,8 +649,6 @@ const aeq = (t1: Term, t2: Term): boolean => {
     case "err":
       // throw "aeq: unexpected parse error";
       return true;
-    case "rel":
-      throw "aeq: unexpected rel";
     case "key":
       throw "aeq: unexpected keyword";
   }
@@ -592,7 +662,7 @@ const aeq = (t1: Term, t2: Term): boolean => {
 //   f(Nat,Bool) == f(Nat,▨0) imples that ▨0 is Bool.
 export const equate = (
   ctx: Context,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   ty1: Term,
   ty2: Term,
   val: Term,
@@ -689,8 +759,8 @@ export const equate = (
   return { eq: false, holes: [] };
 };
 
-export const defs = (defs: Def[] = []): Map<string, Def> => {
-  const m = new Map<string, Def>();
+export const defs = (defs: Def2[] = []): Map<string, Def2> => {
+  const m = new Map<string, Def2>();
   for (const d of defs) {
     m.set(d.name, d);
   }
@@ -700,7 +770,7 @@ export const defs = (defs: Def[] = []): Map<string, Def> => {
 export const adts = (adts: ADT[] = []): Map<string, ADT> => {
   const m = new Map<string, ADT>();
   for (const adt of adts) {
-    m.set(id(adt.name), adt);
+    m.set(identifier2str(adt.name), adt);
   }
   return m;
 };

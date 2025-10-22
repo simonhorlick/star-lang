@@ -52,8 +52,8 @@ a compile error.
 ```
 func prev:Nat->Nat = λn
   case n of
-  | zero -> zero
-  | succ -> n.x
+  | zero => zero
+  | succ => n.x
 ```
 
 ### Literals

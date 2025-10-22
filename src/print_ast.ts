@@ -13,8 +13,8 @@ const src = `
 type Bool = false | true
 func not:Bool->Bool = λb
   case b of
-  | false -> true
-  | true -> false
+  | false => true
+  | true => false
 `;
 const result = ensureBuild(src);
 const def = result.defs.get("not")!;
