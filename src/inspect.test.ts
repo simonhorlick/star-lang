@@ -35,7 +35,7 @@ describe("inspect", () => {
   test("should not display anything when hovering comments", () => {
     const result = ensureBuild(`// comment`);
     const expected = [{ start: 0, end: 10, msg: " comment" }];
-    expect(hover("", result.file, result.defs, 5)).toEqual(expected);
+    expect(hover("", result.defs, result.nondefs, 5)).toEqual(expected);
   });
 
   test("should display the type when hovering a function definition", () => {
@@ -66,7 +66,7 @@ describe("inspect", () => {
       // the other Bool in the type signature
       { start: 43, end: 47, msg: "ref(★)" },
     ];
-    const actual = hover(src, result.file, result.defs, undefined);
+    const actual = hover(src, result.defs, result.nondefs, undefined);
     console.log(JSON.stringify(actual, null, 2));
     expect(actual).toEqual(expected);
   });
@@ -109,7 +109,8 @@ describe("inspect", () => {
     const result = build(src, false);
 
     // The space under the cursor should have type == Bool.
-    const typ = inferType(src, result.file, result.defs, tokenLocation);
+    const typ = inferType(src, result.defs, tokenLocation);
+    expect(typ).toBeDefined();
     const equ = equate([], result.defs, typ!, Ref("Bool"), Ref("unused"));
     expect(equ.eq).toBeTruthy();
   });
@@ -125,7 +126,7 @@ describe("inspect", () => {
     const result = build(src, false);
 
     // The space under the cursor should have type == Bool.
-    const typ = inferType(src, result.file, result.defs, tokenLocation);
+    const typ = inferType(src, result.defs, tokenLocation);
     expect(pretty(typ)).toBe("Bool");
   });
 
@@ -141,7 +142,7 @@ describe("inspect", () => {
 
   //   debugPrintTokens(src, result);
   //   // the type of f
-  //   expect(hoverMessage(src, result.file, result.defs, tokenLocation)).toEqual({
+  //   expect(hoverMessage(src, result.defs, result.nondefs, tokenLocation)).toEqual({
   //     range: { start: 70, end: 71 },
   //     msg: "Nat",
   //   });
@@ -172,14 +173,8 @@ describe("inspect", () => {
     );
 
     // in the succ branch of the case
-    const typ = inferType(src, result.file, result.defs, tokenLocation);
-    const completion = complete(
-      src,
-      result.file,
-      result.defs,
-      tokenLocation,
-      typ
-    );
+    const typ = inferType(src, result.defs, tokenLocation);
+    const completion = complete(src, result.defs, tokenLocation, typ);
     const completionLabels = completion.map((c) => c.label);
     expect(completionLabels).toContain("n");
     expect(completionLabels).toContain("n.x");
@@ -192,7 +187,9 @@ describe("inspect", () => {
     const src = srcWithToken.replace("$HERE$", "");
     const tokenLocation = srcWithToken.indexOf("$HERE$");
     const result = build(src, false);
-    expect(hoverMessage(src, result.file, result.defs, tokenLocation)).toEqual({
+    expect(
+      hoverMessage(src, result.defs, result.nondefs, tokenLocation)
+    ).toEqual({
       range: { start: 52, end: 56 },
       msg: "ref((Πx:Nat Nat))",
     });
@@ -209,7 +206,7 @@ describe("inspect", () => {
     const result = build(src, false);
 
     expect(
-      hoverMessage(src, result.file, result.defs, tokenLocation)?.msg
+      hoverMessage(src, result.defs, result.nondefs, tokenLocation)?.msg
     ).toEqual("var(Nat)");
   });
 
@@ -223,12 +220,7 @@ describe("inspect", () => {
     const tokenLocation = srcWithToken.indexOf("$1$");
     const result = build(src, false);
 
-    const actual = definitionLocation(
-      src,
-      result.file,
-      result.defs,
-      tokenLocation
-    );
+    const actual = definitionLocation(src, result.defs, tokenLocation);
     console.log(
       "ref at location: " +
         printDiagnostic(src, TypecheckError("", actual[0].start, actual[0].end))

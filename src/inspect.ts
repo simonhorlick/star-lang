@@ -666,49 +666,46 @@ export const printDiagnostic = (src: string, err: TypecheckError) => {
 
 export const hover = (
   src: string,
-  f: File,
   defs: Map<string, Def2>,
+  nondefs: ASTNode[],
   offset: number | undefined
 ): Array<Range & HoverInfo> => {
   let hoverInfo = new Array<Range & HoverInfo>();
 
-  for (const node of f.content) {
-    if (node._ == "def") {
-      const def = node;
-      const spans = inspect(def, defs, offset);
-      for (const v of spans) {
-        switch (v.term._) {
-          case "lam":
-            break;
-          default:
-            hoverInfo.push({
-              start: v.start,
-              end: v.end,
-              msg: `${v.term._}(${pretty(v.type)})`,
-            });
-        }
-        const msg = `${v.start}-${v.end} is a ${v.term._} with type ${pretty(
-          v.type
-        )}; ctx at this location is ${printCtx(v.ctx)}`;
-        console.debug(
-          printDiagnostic(src, TypecheckError(msg, v.start, v.end))
-        );
+  // Process definitions
+  for (const [_, def] of defs) {
+    const spans = inspect(def, defs, offset);
+    for (const v of spans) {
+      switch (v.term._) {
+        case "lam":
+          break;
+        default:
+          hoverInfo.push({
+            start: v.start,
+            end: v.end,
+            msg: `${v.term._}(${pretty(v.type)})`,
+          });
       }
-    } else {
-      const spans = inspectASTNodes(node);
-      for (const [k, v] of spans) {
-        const msg = `${k.start}-${k.end} is a ${v.term._}`;
-        console.debug(
-          printDiagnostic(src, TypecheckError(msg, k.start, k.end))
-        );
+      const msg = `${v.start}-${v.end} is a ${v.term._} with type ${pretty(
+        v.type
+      )}; ctx at this location is ${printCtx(v.ctx)}`;
+      console.debug(printDiagnostic(src, TypecheckError(msg, v.start, v.end)));
+    }
+  }
 
-        switch (v.term._) {
-          case "com":
-            hoverInfo.push({ start: k.start, end: k.end, msg: v.term.text });
-            break;
-          default:
-            hoverInfo.push({ start: k.start, end: k.end, msg: msg });
-        }
+  // Process non-definition nodes (comments, etc)
+  for (const node of nondefs) {
+    const spans = inspectASTNodes(node);
+    for (const [k, v] of spans) {
+      const msg = `${k.start}-${k.end} is a ${v.term._}`;
+      console.debug(printDiagnostic(src, TypecheckError(msg, k.start, k.end)));
+
+      switch (v.term._) {
+        case "com":
+          hoverInfo.push({ start: k.start, end: k.end, msg: v.term.text });
+          break;
+        default:
+          hoverInfo.push({ start: k.start, end: k.end, msg: msg });
       }
     }
   }
@@ -729,11 +726,11 @@ export const hover = (
 
 export const hoverMessage = (
   src: string,
-  f: File,
   defs: Map<string, Def2>,
+  nondefs: ASTNode[],
   offset: number
 ): { range: { start: number; end: number }; msg: string } | null => {
-  const hoverInfo = hover(src, f, defs, offset);
+  const hoverInfo = hover(src, defs, nondefs, offset);
 
   const overlappingSpans = hoverInfo.filter(
     (hi) => hi.start <= offset && hi.end > offset
@@ -759,47 +756,42 @@ export const hoverMessage = (
 // Finds the type of the hole at this offset in the AST.
 export const inferType = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number
 ): CTerm | undefined => {
-  for (const node of f.content) {
-    if (node._ == "def") {
-      const def = node;
+  for (const [_, def] of defs) {
+    const spans = inspect(def, defs);
 
-      const spans = inspect(def, defs);
+    const overlapping = spans.filter(
+      (v) => v.start <= offset && v.end > offset
+    );
 
-      const overlapping = spans.filter(
-        (v) => v.start <= offset && v.end > offset
+    const shortest = overlapping.sort((a, b) => {
+      const lena = a.end - a.start;
+      const lenb = b.end - b.start;
+      return lena - lenb;
+    });
+
+    for (const v of shortest) {
+      console.log(
+        printMultilineDiagnostic(
+          src,
+          TypecheckError(
+            `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
+            v.start,
+            v.end
+          )
+        )
       );
 
-      const shortest = overlapping.sort((a, b) => {
-        const lena = a.end - a.start;
-        const lenb = b.end - b.start;
-        return lena - lenb;
-      });
-
-      for (const v of shortest) {
-        console.log(
-          printMultilineDiagnostic(
-            src,
-            TypecheckError(
-              `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
-              v.start,
-              v.end
-            )
-          )
-        );
-
-        return v.type;
-      }
+      return v.type;
     }
   }
 
   return undefined;
 };
 
-export const findOrigin = (term: Expression): Origin | null => {
+export const findOrigin = (term: CTerm): Origin | null => {
   if (term._ == "orig") {
     return term;
   } else if (term._ == "ann") {
@@ -812,8 +804,7 @@ export const findOrigin = (term: Expression): Origin | null => {
 
 export const definitionLocation = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number
 ): { start: number; end: number }[] => {
   var spans: Span[] = [];
@@ -894,100 +885,93 @@ const CompletionTypeParameter = 25;
 
 export const complete = (
   src: string,
-  f: File,
-  defs: Map<string, Def>,
+  defs: Map<string, Def2>,
   offset: number,
   typ: CTerm | undefined
 ): CompletionInfo[] => {
   let completionList: CompletionInfo[] = [];
 
-  for (const node of f.content) {
-    if (node._ == "def") {
-      const def = node;
+  // Collect variable completions from context at the cursor position
+  for (const [_, def] of defs) {
+    const spans = inspect(def, defs);
 
-      // const spans = inspect(def, defs, offset);
-      const spans = inspect(def, defs);
+    for (const v of spans) {
+      if (!(v.start <= offset && v.end > offset)) {
+        continue;
+      }
 
-      for (const v of spans) {
-        if (!(v.start <= offset && v.end > offset)) {
-          continue;
-        }
-
-        console.log(
-          printMultilineDiagnostic(
-            src,
-            TypecheckError(
-              `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
-              v.start,
-              v.end
-            )
+      console.log(
+        printMultilineDiagnostic(
+          src,
+          TypecheckError(
+            `${v.term._}: ${printCtx(v.ctx)} ${pretty(v.term)}`,
+            v.start,
+            v.end
           )
-        );
+        )
+      );
 
-        for (let i = 0; i < v.ctx.length; i++) {
-          const binding = v.ctx[i];
+      for (let i = 0; i < v.ctx.length; i++) {
+        const binding = v.ctx[i];
 
-          try {
-            // If this binding has the same type as the completion position,
-            // then include the suggestion.
-            if (
-              typ == undefined ||
-              equate(
-                v.ctx,
-                defs,
-                binding.typ,
-                typ,
-                Var(binding.name, v.ctx.length - i - 1)
-              ).eq
-            ) {
-              completionList.push({
-                label: binding.name,
-                kind: CompletionVariable,
-                sortText: "0",
-                detail: `var(${pretty(binding.typ)})`,
-              });
-            }
-          } catch (e) {
-            console.error(e);
+        try {
+          // If this binding has the same type as the completion position,
+          // then include the suggestion.
+          if (
+            typ == undefined ||
+            equate(
+              v.ctx,
+              defs,
+              binding.typ,
+              typ,
+              Var(binding.name, v.ctx.length - i - 1)
+            ).eq
+          ) {
+            completionList.push({
+              label: binding.name,
+              kind: CompletionVariable,
+              sortText: "0",
+              detail: `var(${pretty(binding.typ)})`,
+            });
           }
+        } catch (e) {
+          console.error(e);
         }
       }
     }
   }
 
   // Add all top-level definitions as completions.
-  for (const node of f.content) {
-    if (node._ == "def") {
-      try {
-        if (
-          typ == undefined ||
-          equate(
-            [],
-            defs,
-            node.term.type,
-            typ,
-            Star() // does it matter that this is star?
-          ).eq
-        ) {
-          if (node.term.type._ == "star") {
-            completionList.push({
-              label: node.name,
-              kind: CompletionStruct,
-              sortText: "1",
-              detail: `ref(${pretty(node.term.type)})`,
-            });
-          } else {
-            completionList.push({
-              label: node.name,
-              kind: CompletionFunction,
-              sortText: "1",
-              detail: `ref(${pretty(node.term.type)})`,
-            });
-          }
+  for (const [_, def] of defs) {
+    try {
+      if (
+        typ == undefined ||
+        equate(
+          [],
+          defs,
+          def.term.type,
+          typ,
+          Star() // does it matter that this is star?
+        ).eq
+      ) {
+        if (def.term.type._ == "star") {
+          completionList.push({
+            label: def.name,
+            kind: CompletionStruct,
+            sortText: "1",
+            detail: `ref(${pretty(def.term.type)})`,
+          });
+        } else {
+          completionList.push({
+            label: def.name,
+            kind: CompletionFunction,
+            sortText: "1",
+            detail: `ref(${pretty(def.term.type)})`,
+          });
         }
-      } catch (e) {
-        console.error(e);
       }
+    } catch (e) {
+      console.error(e);
     }
   }
 
@@ -999,12 +983,9 @@ export const complete = (
 export const astToHtml = (src: string, built: BuildResult): string => {
   // Loop over every def in the source and compute all of the spans.
   const spans: Span[] = [];
-  for (const node of built.file.content) {
-    if (node._ == "def") {
-      const def = node;
-      const spans1 = inspect(def, built.defs);
-      spans.push(...spans1);
-    }
+  for (const [_, def] of built.defs) {
+    const spans1 = inspect(def, built.defs);
+    spans.push(...spans1);
   }
 
   const lines = src.split("\n");

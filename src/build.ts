@@ -24,6 +24,7 @@ export type BuildResult = {
   _: "buildresult";
   file: File;
   defs: Map<string, Def2>;
+  nondefs: ASTNode[];
   adts: Map<string, ADT>;
   checkerErrors: TypecheckError[];
   parseErrors: TypecheckError[];
@@ -113,6 +114,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     _: "buildresult",
     file: { _: "file", content: [...nondefs, ...checkedMap.values()] },
     defs: checkedMap,
+    nondefs: nondefs,
     adts: adts,
     checkerErrors: checkerErrors,
     parseErrors: parseErrors,
