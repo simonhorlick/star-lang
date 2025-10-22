@@ -1,0 +1,11 @@
+{
+  // Enable TypeScript checking for the entire project
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  
+  // Show all TypeScript errors, not just open files
+  "typescript.validate.enable": true,
+  
+  // Experimental: enable project-wide IntelliSense
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true
+}
