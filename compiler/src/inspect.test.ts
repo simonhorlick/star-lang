@@ -323,4 +323,39 @@ describe("inspect", () => {
       },
     ]);
   });
+
+  test("should cons lists successfully", () => {
+    const src = `// Package list contains an implementation of cons lists.
+package list
+
+// TODO: Add imports
+type Nat = zero | succ(x Nat)
+func add:Nat->Nat->Nat = λn λm case n of
+  | zero => m
+  | succ => succ(add(n.x,m))
+
+type List(A *) = nil | cons(head A, tail List(A))
+
+type Bool = true | false
+
+func head:List(Nat)->Nat = λxs
+  case xs of
+  | nil => 0
+  | cons => xs.head
+
+func empty:List(Nat)->Bool = λxs case xs of
+  | nil => true
+  | cons => false
+
+func sum:List(Nat)->Nat = λxs case xs of
+  | nil => 0
+  | cons => add(xs.head, sum(xs.tail))
+
+func numbers:List(Nat) = [1,2,3]
+
+func main:Nat = sum(numbers)`;
+
+    const result = build(src, false);
+    expect(result.checkerErrors).toEqual([]);
+  });
 });

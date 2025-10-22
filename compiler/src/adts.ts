@@ -20,6 +20,8 @@ import {
   Term,
   Var,
   Expression,
+  Cons,
+  Nil,
 } from "./pratt";
 import { Context, addTermToCtx } from "./context";
 import {
@@ -334,6 +336,13 @@ export const desugarTerm = (
       return t;
     // case "rel":
     //   throw "desugarTerm: unexpected Rel";
+    case "cons":
+      return Cons(
+        desugarTerm(t.head, undefined, ctx),
+        desugarTerm(t.tail, undefined, ctx)
+      );
+    case "nil":
+      return t;
     default:
       throw new Error(`desugarTerm: unexpected ${t._}`);
   }

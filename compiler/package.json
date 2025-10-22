@@ -16,11 +16,13 @@
     "./evaluation": "./dist/evaluation.js",
     "./inspect": "./dist/inspect.js",
     "./parser": "./dist/parser.js",
+    "./pratt": "./dist/pratt.js",
     "./pretty": "./dist/pretty.js",
     "./print_ast": "./dist/print_ast.js",
     "./relevance": "./dist/relevance.js",
     "./strings": "./dist/strings.js",
     "./substitution": "./dist/substitution.js",
+    "./sugar": "./dist/sugar.js",
     "./typecheck": "./dist/typecheck.js"
   },
   "scripts": {
