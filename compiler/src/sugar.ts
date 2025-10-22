@@ -416,11 +416,14 @@ export const desugarExpression = (expression: Expression): CTerm => {
       );
     case "cons":
       return App(
-        App(Ref("cons"), desugarExpression(expression.head)),
+        App(
+          App(Ref("cons"), Hole(Math.random())),
+          desugarExpression(expression.head)
+        ),
         desugarExpression(expression.tail)
       );
     case "nil":
-      return Ref("nil");
+      return App(Ref("nil"), Hole(Math.random()));
     case "comp":
       // Should this be a function? Or just compose directly?
       return App(

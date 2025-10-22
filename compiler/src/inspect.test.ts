@@ -324,11 +324,10 @@ describe("inspect", () => {
     ]);
   });
 
-  test("should cons lists successfully", () => {
+  test("should build cons lists successfully", () => {
     const src = `// Package list contains an implementation of cons lists.
 package list
 
-// TODO: Add imports
 type Nat = zero | succ(x Nat)
 func add:Nat->Nat->Nat = λn λm case n of
   | zero => m
