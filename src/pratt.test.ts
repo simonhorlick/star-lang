@@ -41,6 +41,16 @@ const st = (s: string): string => serialise(strip(result(term(ts(s)))));
 const success = <T>(x: Result<T>) => x._ == "outputvalue";
 
 describe("pratt", () => {
+  test("should parse lambda body greedily", () => {
+    const src = `λn n(λp Nat)`;
+    const t = term({ src, idx: 0 });
+    if (t._ == "parseerror") {
+      throw parseErrorDiagnostic(t);
+    }
+    // Expect the parser to consume the input.
+    expect(t.stream.idx).toBe(src.length);
+  });
+
   test("should return an error node for unparseable terms", () =>
     expect(serialise(strip(result(identifier2(ts("&")))))).toBe(
       "ParseError(expected identifier; got &)"
@@ -179,6 +189,17 @@ describe("pratt", () => {
     // f(x,y) === (f(x))(y)
     expect(st("f(x,y)")).toBe(`App(App(Ref("f"), Ref("x")), Ref("y"))`));
 
+  test("should parse function application with three comma-separated arguments", () =>
+    // This is the same as the previous test.
+    expect(st("f(x,y,z)")).toBe(
+      `App(App(App(Ref("f"), Ref("x")), Ref("y")), Ref("z"))`
+    ));
+
+  test("should parse function application with additional parens", () =>
+    expect(st("(b(v))(w)")).toBe(`App(App(Ref("b"), Ref("v")), Ref("w"))`));
+
+  test("should parse empty list", () => expect(st("[]")).toBe(`Nil()`));
+
   test("should parse list literal", () =>
     // [1,2,3]
     expect(st("[1,2,3]")).toBe(
@@ -192,8 +213,26 @@ describe("pratt", () => {
     // a -> b -> c === a -> (b -> c)
     expect(st("a->b->c")).toBe(`Pi("", Ref("a"), Pi("", Ref("b"), Ref("c")))`));
 
+  test("should parse arrow with left bracketing", () =>
+    expect(st("A->(B->C)")).toBe(
+      `Pi("", Ref("A"), Pi("", Ref("B"), Ref("C")))`
+    ));
+
+  test("should parse arrow with right bracketing", () =>
+    expect(st("(A->B)->C")).toStrictEqual(
+      `Pi("", Pi("", Ref("A"), Ref("B")), Ref("C"))`
+    ));
+
+  test("should parse arrow with multiple bracketing", () =>
+    expect(st("(A->B)->(C->D)")).toStrictEqual(
+      `Pi("", Pi("", Ref("A"), Ref("B")), Pi("", Ref("C"), Ref("D")))`
+    ));
+
   test("should parse arrow ending with star", () =>
     expect(st("A->*")).toBe(`Pi("", Ref("A"), Star())`));
+
+  test("should parse arrow type * -> *", () =>
+    expect(st(`* -> *`)).toBe(`Pi("", Star(), Star())`));
 
   test("should parse type annotation", () =>
     // a:A:B === (a:A):B
@@ -246,12 +285,6 @@ describe("pratt", () => {
     expect(st("if x then y else z")).toBe(
       `If(Ann(Ref("x"), Ref("Bool")), Ref("y"), Ref("z"))`
     );
-  });
-
-  test("should parse if statement", () => {
-    expect(
-      serialise(strip(result(ifStatement(ts("if x then y else z")))))
-    ).toBe(`If(Ann(Ref("x"), Ref("Bool")), Ref("y"), Ref("z"))`);
   });
 
   test("should parse multiline if statement", () =>
