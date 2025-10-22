@@ -1,0 +1,22 @@
+{
+  "name": "star-vscode",
+  "description": "A VSCode plugin for the star programming language",
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "version": "0.0.1",
+  "publisher": "simonhorlick",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simonhorlick/star-lang"
+  },
+  "engines": {
+    "vscode": "^1.44.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "8.1.0",
+    "vscode-languageserver-protocol": "3.17.3"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.77.0"
+  }
+}

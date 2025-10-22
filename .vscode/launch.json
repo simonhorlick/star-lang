@@ -1,0 +1,21 @@
+// A launch configuration that compiles the extension and then opens it inside a new window
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Launch VSCode with LSP",
+      "runtimeExecutable": "${execPath}",
+      "args": ["--extensionDevelopmentPath=${workspaceRoot}/plugin"],
+      "outFiles": [
+        "${workspaceRoot}/plugin/client/out/**/*.js",
+        "${workspaceRoot}/plugin/server/out/**/*.js",
+        "${workspaceRoot}/plugin/server/node_modules/star/**/*.js",
+        "${workspaceRoot}/dist/**/*.js"
+      ],
+      "autoAttachChildProcesses": true,
+      "preLaunchTask": "compile-plugin"
+    }
+  ]
+}

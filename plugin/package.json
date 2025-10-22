@@ -1,0 +1,72 @@
+{
+  "name": "star-lsp",
+  "description": "A star language server and client for Visual Studio Code",
+  "author": "Simon Horlick",
+  "license": "MIT",
+  "version": "0.6.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simonhorlick/star-lang"
+  },
+  "publisher": "simonhorlick",
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "multi-root ready"
+  ],
+  "engines": {
+    "vscode": "^1.44.0"
+  },
+  "activationEvents": [
+    "workspaceContains:**/*.st"
+  ],
+  "languages": [
+    {
+      "id": "star",
+      "aliases": [
+        "Star",
+        "star"
+      ],
+      "extensions": [
+        ".st"
+      ]
+    }
+  ],
+  "main": "./client/out/extension",
+  "contributes": {
+    "languages": [
+      {
+        "id": "star",
+        "aliases": [
+          "Star",
+          "star"
+        ],
+        "extensions": [
+          ".st"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[languageId]": {
+        "editor.semanticHighlighting.enabled": true
+      }
+    }
+  },
+  "scripts": {
+    "build": "",
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
+    "test": "sh ./scripts/e2e.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "star-lang": "file:../compiler"
+  }
+}

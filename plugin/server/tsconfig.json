@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "lib": ["es2020"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "sourceMap": true,
+    "strict": true,
+    "outDir": "out",
+    "rootDir": ".",
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    ".vscode-test",
+    "node_modules",
+  ]
+}
