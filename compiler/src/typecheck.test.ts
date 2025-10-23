@@ -355,6 +355,24 @@ describe("typechecker", () => {
       );
     });
 
+    test("should error when reference type doesn't match expected type", () => {
+      const definitions = defs([
+        bool,
+        nat,
+        Def(
+          "id",
+          Ann(Abs("z", Var("z", 0)), Ref("Bool")),
+          undefined,
+          undefined
+        ),
+      ]);
+
+      // check id:Nat - it should fail
+      expect(() =>
+        check(definitions, adts(), [], Ref("id"), Ref("Nat"))
+      ).toThrow();
+    });
+
     test("should infer type from annotation", () => {
       // Γ=[A::*]  (λa:A. a):A->A
       const program = Ann(
