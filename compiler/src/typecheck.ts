@@ -23,6 +23,7 @@ import {
   Branch,
   Self,
   Let,
+  ParseError,
 } from "./sugar";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
@@ -390,6 +391,28 @@ export const check = (
   } else if (val._ == "err") {
     // Parse errors always check against their desired types.
     return Result(Ann(val, tty), tty, []);
+  } else if (val._ == "ref") {
+    // For references, check if they exist before inferring their type.
+    // If they don't exist, annotate with the expected type for tooling.
+    const match = defs.get(val.name);
+    if (match == undefined) {
+      // Return an annotated error term instead of the reference, so the
+      // expected type information is preserved for tooling.
+      return Result(Ann(val, tty), tty, []);
+    }
+    // Reference exists, check it normally.
+    var inf = infer(defs, adts, ctx, val, os, oe);
+    const eq = equate(ctx, defs, inf.type, typ, val);
+    if (!eq.eq) {
+      const ptyp = pretty(tty);
+      const pinf = pretty(inf.type);
+      throw TypecheckError(
+        `typecheck failed: ${ptyp} is not ${pinf} in ctx ${printCtx(ctx)}`,
+        os,
+        oe
+      );
+    }
+    return Result(val, tty, inf.holes.concat(eq.holes));
   } else {
     // infer the type of the term and check that it's equal to the supplied
     // type.
@@ -405,11 +428,7 @@ export const check = (
       );
     }
 
-    // Don't return expanded refs - if they're expanded the reference
-    // information for the LSP isn't kept.
-    const rval = val._ == "ref" ? val : inf.term;
-
-    return Result(rval, tty, inf.holes.concat(eq.holes));
+    return Result(inf.term, tty, inf.holes.concat(eq.holes));
   }
 };
 

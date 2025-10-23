@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { equate, TypecheckError } from "./typecheck";
 import {
@@ -32,13 +32,13 @@ const ensureBuild = (src: string): BuildResult => {
 // };
 
 describe("inspect", () => {
-  test("should not display anything when hovering comments", () => {
+  it("should not display anything when hovering comments", () => {
     const result = ensureBuild(`// comment`);
     const expected = [{ start: 0, end: 10, msg: " comment" }];
     expect(hover("", result.defs, result.nondefs, 5)).toEqual(expected);
   });
 
-  test("should display the type when hovering a function definition", () => {
+  it("should display the type when hovering a function definition", () => {
     // hovering over `not` should return `Bool->Bool`
     // hovering over `b` (the parameter and the case variable) should return `Bool`
     // hovering over `false` should give a Ref back to the type definition
@@ -71,7 +71,7 @@ describe("inspect", () => {
     expect(actual).toEqual(expected);
   });
 
-  test("should desugar the definitions", () => {
+  it("should desugar the definitions", () => {
     const src = `
     type Bool = false | true
     func not:Bool->Bool = λb
@@ -85,7 +85,7 @@ describe("inspect", () => {
     );
   });
 
-  // test("should give diagnostic that case isn't fully specified", () => {
+  // it("should give diagnostic that case isn't fully specified", () => {
   //   const src = `
   //   type Bool = true | false
   //   func not:Bool->Bool = λb case b of
@@ -97,7 +97,7 @@ describe("inspect", () => {
   //   );
   // });
 
-  test("should provide suggestions that fit the expected type", () => {
+  it("should provide suggestions that fit the expected type", () => {
     const srcWithToken = `
     type Bool = true | false
     func not:Bool->Bool = λb case b of
@@ -115,7 +115,7 @@ describe("inspect", () => {
     expect(equ.eq).toBeTruthy();
   });
 
-  test("should provide suggestions for if condition", () => {
+  it("should provide suggestions for if condition", () => {
     const srcWithToken = `
     type Bool = true | false
     func not:Bool->Bool = λb if $HERE$ then todo else todo
@@ -131,7 +131,7 @@ describe("inspect", () => {
   });
 
   // // TODO: Implement this.
-  // test("should display the type when hovering a function definition Nat", () => {
+  // it("should display the type when hovering a function definition Nat", () => {
   //   const srcWithToken = `
   // type Nat = zero | succ(x Nat)
   // func f$HERE$:Nat = zero`;
@@ -148,7 +148,7 @@ describe("inspect", () => {
   //   });
   // });
 
-  test("should return a list of available completions", () => {
+  it("should return a list of available completions", () => {
     const srcWithToken = `
     type Nat = zero | succ(x Nat)
     func prev:Nat->Nat = λn
@@ -180,7 +180,7 @@ describe("inspect", () => {
     expect(completionLabels).toContain("n.x");
   });
 
-  test("should display type of function on hover", () => {
+  it("should display type of function on hover", () => {
     const srcWithToken = `
     type Nat = zero | succ(x Nat)
     func f:Nat = su$HERE$cc(zero)`;
@@ -195,7 +195,7 @@ describe("inspect", () => {
     });
   });
 
-  test("should output hover information for case branch argument", () => {
+  it("should output hover information for case branch argument", () => {
     const srcWithToken = `
     type Nat = zero | succ(x Nat)
     func add:Nat->Nat->Nat = λn λm case n of
@@ -289,7 +289,7 @@ describe("inspect", () => {
     ]);
   });
 
-  test("should display type of case branch argument on hover", () => {
+  it("should display type of case branch argument on hover", () => {
     const srcWithToken = `
     type Nat = zero | succ(x Nat)
     func add:Nat->Nat->Nat = λn λm case n of
@@ -304,7 +304,7 @@ describe("inspect", () => {
     expect(hm?.msg).toEqual("var(Nat)");
   });
 
-  test("should provide source location of func reference", () => {
+  it("should provide source location of func reference", () => {
     const srcWithToken = `
     type Nat = zero | succ(x Nat)
     func add:Nat->Nat->Nat = λn λm case n of
@@ -324,7 +324,7 @@ describe("inspect", () => {
     ]);
   });
 
-  test("should build cons lists successfully", () => {
+  it("should build cons lists successfully", () => {
     const src = `// Package list contains an implementation of cons lists.
 package list
 
@@ -358,7 +358,7 @@ func main:Nat = sum(numbers)`;
     expect(result.checkerErrors).toEqual([]);
   });
 
-  test("should allow addition in integer literals", () => {
+  it("should allow addition in integer literals", () => {
     const src = `
     type Nat = zero | succ(x Nat)
     type List(A *) = nil | cons(head A, tail List(A))
@@ -368,5 +368,36 @@ func main:Nat = sum(numbers)`;
     func numbers:List(Nat) = [1+1,2,3]`;
     const result = build(src, false);
     expect(result.checkerErrors).toEqual([]);
+  });
+
+  it("should show the expected type for undefined references", () => {
+    const srcWithToken = `
+type Nat = zero | succ(x Nat)
+func prev:Nat->Nat = λn
+  case n of
+  |  zero => to$HERE$do
+  |  succ => todo
+  `;
+    const src = srcWithToken.replace("$HERE$", "");
+    const tokenLocation = srcWithToken.indexOf("$HERE$");
+    const result = build(src, false);
+
+    // The space under the cursor should have type == Nat.
+    const typ = inferType(src, result.defs, tokenLocation);
+
+    // The type checker will annotate the reference with the expected type
+    // during type checking, and inferType will return that.
+
+    const hoverInfo = hover(src, result.defs, result.nondefs, undefined)
+      // Add token for clarity in test output.
+      .map((i) => ({
+        ...i,
+        token: src.slice(i.start, i.end),
+      }))
+      .sort((a, b) => a.start - b.start);
+
+    console.log(JSON.stringify(hoverInfo, null, 2));
+
+    expect(pretty(typ)).toEqual("(λ Nat)(zero)");
   });
 });

@@ -409,16 +409,26 @@ export const inspect = (
         // obviously a Bool.
         // The fix is to keep it as a ref - we can always follow refs here in
         // inspect to get the pi type.
-        const ref = defs.get(t.name)!;
-        // TODO: Add reference information.
-        if (ref && start != undefined && end != undefined) {
-          spans.push({
-            start: start,
-            end: end,
-            term: t,
-            type: ref.term.type,
-            ctx: ctx,
-          });
+        const ref = defs.get(t.name);
+        if (start != undefined && end != undefined) {
+          if (ref) {
+            spans.push({
+              start: start,
+              end: end,
+              term: t,
+              type: ref.term.type,
+              ctx: ctx,
+            });
+          } else if (start != undefined && end != undefined) {
+            // Undefined reference - use the expected type if available.
+            spans.push({
+              start: start,
+              end: end,
+              term: t,
+              type: ty,
+              ctx: ctx,
+            });
+          }
         }
         return t;
       }
