@@ -10,7 +10,7 @@ import {
   Def2,
   Origin2,
 } from "./ast";
-import { TypecheckError, fill, infer } from "./typecheck";
+import { TypecheckError, check, fill, infer } from "./typecheck";
 import { foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
 import { processADTs, desugar } from "./adts";
@@ -92,7 +92,8 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
 
   let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
-    console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
+    // console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
+    let checks = true;
     try {
       const result = infer(defsMap, adts, [], def.term, 0, src.length);
       const filled = fill(result);
@@ -101,6 +102,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       }
       checkedMap.set(def.name, Def2(def.name, filled.term, def.start, def.end));
     } catch (e) {
+      checks = false;
       if ((e as any)._ !== undefined) {
         const result = e as TypecheckError;
         console.error(typecheckErrorDiagnostic(src, result));
@@ -113,6 +115,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       // information when inspecting.
       checkedMap.set(def.name, Def2(def.name, def.term, def.start, def.end));
     }
+    console.log(checks ? `✅ ${def.name}` : `❌ ${def.name}`);
   }
 
   const parseErrors: TypecheckError[] = [];

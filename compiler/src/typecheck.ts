@@ -33,6 +33,10 @@ import { Set } from "immutable";
 import { ADT, Argument, Constructor, Def, Def2 } from "./ast";
 import { identifier2str } from "./pratt";
 
+import { createLogger } from "./logger";
+
+const logger = createLogger("typecheck");
+
 type Term = CTerm;
 type Type = CTerm;
 
@@ -158,10 +162,10 @@ export const infer = (
       // substitute the argument into the pi to get the type.
       let typ = substTop(arg.term, funcTyp2.body, funcTyp2.name);
 
-      console.log(`Γ ⊢ ${pretty(term.func)} => ${pretty(funcTyp2)}`);
-      console.log(`Γ ⊢ ${pretty(term.arg)} <= ${pretty(funcTyp2.from)}`);
-      console.log(`------------------- app`);
-      console.log(`Γ ⊢ ${pretty(term)} => ${pretty(typ)}`);
+      logger.debug(`Γ ⊢ ${pretty(term.func)} => ${pretty(funcTyp2)}`);
+      logger.debug(`Γ ⊢ ${pretty(term.arg)} <= ${pretty(funcTyp2.from)}`);
+      logger.debug(`------------------- app`);
+      logger.debug(`Γ ⊢ ${pretty(term)} => ${pretty(typ)}`);
 
       return Result(App(inf.term, arg.term), typ, arg.holes.concat(inf.holes));
     }
@@ -335,9 +339,9 @@ export const check = (
   const pval = pretty(val);
   const ptty = pretty(tty);
   const pctx = printCtx(ctx);
-  console.log(`cx ${pctx}`);
-  console.log(`ch ${pval}`);
-  console.log(`<= ${ptty}`);
+  logger.debug(`cx ${pctx}`);
+  logger.debug(`ch ${pval}`);
+  logger.debug(`<= ${ptty}`);
 
   // Desugar let expressions.
   if (val._ == "let") {
@@ -736,8 +740,8 @@ export const equate = (
   const lhs = pretty(ty1);
   const rhs = pretty(ty2);
   if (verbose) {
-    console.log(`eq ${lhs}`);
-    console.log(`== ${rhs}`);
+    logger.debug(`eq ${lhs}`);
+    logger.debug(`== ${rhs}`);
   }
 
   // FIXME: There must be a better way of doing this.
@@ -783,14 +787,14 @@ export const equate = (
   } else if (ty1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
     // hole substitution.
-    console.log(`ho ${ty1.id}`);
-    console.log(`== ${rhs}`);
+    logger.debug(`ho ${ty1.id}`);
+    logger.debug(`== ${rhs}`);
     // It's important that we return the non-reduced term here, otherwise the
     // hole filling will resolve some long term the user isn't expecting.
     return { eq: true, holes: [{ id: ty1.id, term: ty2 }] };
   } else if (ty2._ == "hole") {
-    console.log(`ho ${ty2.id}`);
-    console.log(`== ${lhs}`);
+    logger.debug(`ho ${ty2.id}`);
+    logger.debug(`== ${lhs}`);
     return { eq: true, holes: [{ id: ty2.id, term: ty1 }] };
   }
 
