@@ -588,17 +588,21 @@ export const desugarCaseStatement = (
   // For dependent pattern matching (when scrutinee is a variable that appears in tty),
   // P should substitute its argument for the scrutinee variable.
   // For non-dependent cases, P just returns the expected type.
+
+  // Strip origin/syntax/label nodes to check the actual term structure
+  const strippedName = strip(caseStmt.name);
+
   let P: Term;
-  if (caseStmt.name._ === "var") {
+  if (strippedName._ === "var") {
     // Dependent pattern matching: P = λx. tty[scrutinee := x]
     P = Abs(
       "",
       subst(
-        caseStmt.name.index + 1,
-        Var(caseStmt.name.name, 0),
+        strippedName.index + 1,
+        Var(strippedName.name, 0),
         0,
         shift(1, 0, tty),
-        caseStmt.name.name
+        strippedName.name
       )
     );
   } else {
