@@ -150,30 +150,14 @@ case destructuring
 ```
 
 ```
-case returnTy of
-  a => y => z
-  b => z =>
-  a => c
-↑
-ambiguous case? (mandate parentheses for multi-line expressions?)
-```
-
-```
-case returnTy of
-  a => y => z
-  b => (z =>
-  a => c)
-```
-
-```gleam
-  let result = case x {
-    // Match specific values
-    0 -> "Zero"
-    1 -> "One"
-
-    // Match any other value
-    _ -> "Other"
-  }
+case n of
+  | zero => true
+  | succ => (
+    case m of
+      | zero => false
+      | succ => lte(n.n,m.n))
+    ↑
+    nested case destructuring
 ```
 
 ```
@@ -195,13 +179,6 @@ type-of-types
 ```
 
 ```
-ιx t
-↑
-self type
-[internal only: to be removed]
-```
-
-```
 type Bool = true | false
 ↑
 sum type
@@ -214,36 +191,20 @@ type List(A \*) = nil | cons(head A, tail List(A))
 ↑
 with type parameters
 
+type List(A \*) = nil | cons(head A, tail List(A))
+↑
+with type parameters
+
+type VectBool(sz Nat) = 
+  vbnil : VectBool(zero) | 
+  vbext(n Nat, head Bool, tail VectBool(n)) : VectBool(succ(n))
+↑
+indexed type
 ```
 
 ```
-
 func not:Bool->Bool = λb if b then false else true
 func not(b Bool) Bool = if b then false else true
 ↑
 definition
-
 ```
-
-```
-
-func sub(n Nat, m Nat) Nat =
-  case m of
-    zero => n
-    succ => (
-      case n of
-        zero => 0
-        succ => sub(n.x,m.x)
-    )
-↑
-nested case expressions
-
-```
-
-```
-type TypeName(index IndexType) =
-   constructor1 : TypeName(specificIndex1)
- | constructor2(args...) : TypeName(specificIndex2)
-                           ↑
-                           indexed types
- ```
