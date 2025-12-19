@@ -74,6 +74,21 @@ export const Result = (
   holes: holes,
 });
 
+// Helper function to create a better error message when a polymorphic constructor
+// is missing type arguments.
+const makeMissingTypeArgError = (val: Term, infType: Type): string | null => {
+  // Check if the inferred type is a Pi type starting with a type parameter (ΠA:★ ...)
+  // This indicates a polymorphic constructor
+  if (infType._ === "pi" && infType.from._ === "star" && val._ === "ref") {
+    // Extract the constructor name
+    const constructorName = val.name;
+
+    return `missing type argument to polymorphic constructor '${constructorName}'. This constructor requires a type parameter`;
+  }
+
+  return null;
+};
+
 // infer the type of a term
 export const infer = (
   defs: Map<string, Def2>,
@@ -406,6 +421,13 @@ export const check = (
     if (!eq.eq) {
       const ptyp = pretty(tty);
       const pinf = pretty(inf.type);
+
+      // Check if this is a missing type argument error
+      const betterError = makeMissingTypeArgError(val, inf.type);
+      if (betterError) {
+        throw TypecheckError(betterError, os, oe);
+      }
+
       throw TypecheckError(
         `typecheck failed: ${ptyp} is not ${pinf} in ctx ${printCtx(ctx)}`,
         os,
@@ -421,6 +443,13 @@ export const check = (
     if (!eq.eq) {
       const ptyp = pretty(tty);
       const pinf = pretty(inf.type);
+
+      // Check if this is a missing type argument error
+      const betterError = makeMissingTypeArgError(val, inf.type);
+      if (betterError) {
+        throw TypecheckError(betterError, os, oe);
+      }
+
       throw TypecheckError(
         `typecheck failed: ${ptyp} is not ${pinf} in ctx ${printCtx(ctx)}`,
         os,
