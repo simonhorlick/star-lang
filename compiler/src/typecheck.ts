@@ -589,26 +589,20 @@ export const desugarCaseStatement = (
   // P should substitute its argument for the scrutinee variable.
   // For non-dependent cases, P just returns the expected type.
   let P: Term;
-
   if (caseStmt.name._ === "var") {
     // Dependent pattern matching: P = λx. tty[scrutinee := x]
-    // We need to:
-    // 1. Shift tty's free variables up by 1 to account for the new lambda binder
-    // 2. Substitute the scrutinee variable (now at index scrutinee.index + 1) with the lambda parameter (at index 0)
-    const scrutineeIndex = caseStmt.name.index;
-    const scrutineeName = caseStmt.name.name;
-    const shiftedTty = shift(1, 0, tty);
-    const substituted = subst(
-      scrutineeIndex + 1, // The scrutinee's index after shifting
-      Var(scrutineeName, 0), // Replace with the lambda parameter (keeping the name)
-      0, // Cutoff for substitution
-      shiftedTty,
-      scrutineeName
+    P = Abs(
+      "",
+      subst(
+        caseStmt.name.index + 1,
+        Var(caseStmt.name.name, 0),
+        0,
+        shift(1, 0, tty),
+        caseStmt.name.name
+      )
     );
-    P = Abs("", substituted);
   } else {
     // Non-dependent case or complex scrutinee expression
-    // Just return the expected type (with free variables shifted for the lambda)
     P = Abs("", shift(1, 0, tty));
   }
 
