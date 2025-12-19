@@ -14,6 +14,7 @@
     {
       "type": "npm",
       "script": "watch",
+      "path": "plugin/",
       "isBackground": true,
       "group": {
         "kind": "build",
