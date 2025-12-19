@@ -20,17 +20,14 @@ import {
   CTerm,
   strip,
   fixupRefs,
-  Branch,
-  Self,
-  Let,
-  ParseError,
+  Var,
 } from "./sugar";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
-import { shift, substHole, substTop } from "./substitution";
+import { shift, substHole, substTop, subst } from "./substitution";
 import { Set } from "immutable";
-import { ADT, Argument, Constructor, Def, Def2 } from "./ast";
+import { ADT, Argument, Constructor, Def2 } from "./ast";
 import { identifier2str } from "./pratt";
 
 import { createLogger } from "./logger";
@@ -587,9 +584,33 @@ export const desugarCaseStatement = (
   // The case statement desugars to
   //  val(λP tty)(λval.arg1 ... λval.argN branch1)...(λval.arg1 ... λval.argN branchN)
 
-  // Leave this binder empty so that dependently typed expressions don't
-  // throw binder mismatch errors.
-  const P = Abs("", shift(0, 0, tty)); // P just returns the expected type
+  // Create the motive function P.
+  // For dependent pattern matching (when scrutinee is a variable that appears in tty),
+  // P should substitute its argument for the scrutinee variable.
+  // For non-dependent cases, P just returns the expected type.
+  let P: Term;
+
+  if (caseStmt.name._ === "var") {
+    // Dependent pattern matching: P = λx. tty[scrutinee := x]
+    // We need to:
+    // 1. Shift tty's free variables up by 1 to account for the new lambda binder
+    // 2. Substitute the scrutinee variable (now at index scrutinee.index + 1) with the lambda parameter (at index 0)
+    const scrutineeIndex = caseStmt.name.index;
+    const scrutineeName = caseStmt.name.name;
+    const shiftedTty = shift(1, 0, tty);
+    const substituted = subst(
+      scrutineeIndex + 1, // The scrutinee's index after shifting
+      Var(scrutineeName, 0), // Replace with the lambda parameter (keeping the name)
+      0, // Cutoff for substitution
+      shiftedTty,
+      scrutineeName
+    );
+    P = Abs("", substituted);
+  } else {
+    // Non-dependent case or complex scrutinee expression
+    // Just return the expected type (with free variables shifted for the lambda)
+    P = Abs("", shift(1, 0, tty));
+  }
 
   const desugared = branches.reduce<Term>((acc: Term, branch) => {
     return App(acc, branch);

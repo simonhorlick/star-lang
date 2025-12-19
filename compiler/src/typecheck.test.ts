@@ -45,6 +45,7 @@ import {
   unt,
   listADT,
   boolADT,
+  natADT,
 } from "./test_defs";
 import {
   and,
@@ -58,8 +59,14 @@ import {
 } from "./test_defs2";
 import { reduce } from "./equal";
 import { Context } from "./context";
-import { desugar } from "./adts";
+import {
+  desugar,
+  buildType,
+  GenerateConstructorTerm,
+  GenerateConstructorType,
+} from "./adts";
 import { Stream, parseErrorDiagnostic, Result as ParserResult } from "./parser";
+import { Par } from "./pratt";
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,
@@ -688,6 +695,80 @@ describe("typechecker", () => {
 
   const reflTrue = pdef(`func rt: equal(Bool,true,true) = refl(Bool,true)`);
 
+  test("dependent pattern matching with identity function", () => {
+    // λn:Nat case n of | zero => refl(Nat, zero) | succ => refl(Nat, succ(n.n))
+    const term = Abs(
+      "n",
+      Case(Var("n", 0), [
+        Branch(
+          Identifier("zero"),
+          App(App(Ref("refl"), Ref("Nat")), Ref("zero"))
+        ),
+        Branch(
+          Identifier("succ"),
+          App(App(Ref("refl"), Ref("Nat")), App(Ref("succ"), Ref("n.n")))
+        ),
+      ])
+    );
+
+    // Πn:Nat equal(Nat, n, n) - the return type depends on n
+    const typ = Pi(
+      "n",
+      Ref("Nat"),
+      App(App(App(Ref("equal"), Ref("Nat")), Var("n", 0)), Var("n", 0))
+    );
+
+    const result = check(
+      defs([nat, zero, succ, equal, refl]),
+      adts([natADT]),
+      [],
+      term,
+      typ
+    );
+
+    // Verify the motive function contains 'n'
+    expect(pretty(result.term)).toContain("equal(Nat,n,n)");
+  });
+
+  test("dependent pattern matching preserves scrutinee name in motive", () => {
+    // Test: λb:Bool. case b of | false => refl(Bool, false) | true => refl(Bool, true)
+    // Return type: equal(Bool, b, b)
+
+    const term = Abs(
+      "b",
+      Case(Var("b", 0), [
+        Branch(
+          Identifier("false"),
+          App(App(Ref("refl"), Ref("Bool")), Ref("false"))
+        ),
+        Branch(
+          Identifier("true"),
+          App(App(Ref("refl"), Ref("Bool")), Ref("true"))
+        ),
+      ])
+    );
+
+    // Πb:Bool. equal(Bool, b, b)
+    const typ = Pi(
+      "b",
+      Ref("Bool"),
+      App(App(App(Ref("equal"), Ref("Bool")), Var("b", 0)), Var("b", 0))
+    );
+
+    const result = check(
+      defs([bool, tru, fls, equal, refl]),
+      adts([boolADT]),
+      [],
+      term,
+      typ
+    );
+
+    // The desugared term should have the motive function with 'b' preserved
+    expect(pretty(result.term)).toBe(
+      "λb b(λ equal(Bool,b,b),refl(Bool,false),refl(Bool,true))"
+    );
+  });
+
   test("reflexivity of true has type equal(Bool,true,true)", () =>
     check(
       defs([bool, tru, fls, not, equal, refl]),
@@ -1076,5 +1157,51 @@ describe("type equality", () => {
     const t2 = Origin(0, 1, Origin(0, 1, Origin(0, 1, Hole(2))));
     const e = equate([], defs(), t1, t2, Ref("y"));
     expect(e.eq).toBeTruthy();
+  });
+
+  test("polymorphic pattern matching with type parameter", () => {
+    // Test: λT:*. λxs:List(T). λys:List(T). case xs of | nil => ys | cons => cons(T, xs.head, xs.tail)
+    // This tests that type parameters (T) are correctly handled when they appear in the return type
+
+    // λT:*. λxs:List(T). λys:List(T). case xs of | nil => ys | cons => cons(T, xs.head, xs.tail)
+    const term = Abs(
+      "T",
+      Abs(
+        "xs",
+        Abs(
+          "ys",
+          Case(Var("xs", 1), [
+            Branch(Identifier("nil"), Var("ys", 0)),
+            Branch(
+              Identifier("cons"),
+              App(
+                App(App(Ref("cons"), Var("T", 2)), Ref("xs.head")),
+                Ref("xs.tail")
+              )
+            ),
+          ])
+        )
+      )
+    );
+
+    const typ = Pi(
+      "T",
+      Star(),
+      Pi(
+        "xs",
+        App(Ref("List"), Var("T", 0)),
+        Pi("ys", App(Ref("List"), Var("T", 1)), App(Ref("List"), Var("T", 2)))
+      )
+    );
+
+    const result = check(
+      defs([list, nil, cons]),
+      adts([listADT]),
+      [],
+      term,
+      typ
+    );
+
+    expect(result.term).toBeDefined();
   });
 });
