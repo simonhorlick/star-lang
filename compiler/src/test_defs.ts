@@ -209,3 +209,69 @@ export const ppair = desugar(
     )
   )
 );
+
+const vectBoolParams = [{ name: "sz", type: Ref("Nat") }];
+
+const vectBoolConstructors: Constructor[] = [
+  {
+    name: Identifier("vbnil"),
+    args: [],
+    // vbnil : VectBool(zero)
+    typ: App(Ref("VectBool"), Ref("zero")),
+  },
+  {
+    name: Identifier("vbext"),
+    args: [
+      {
+        name: "n",
+        type: Ref("Nat"),
+      },
+      {
+        name: "head",
+        type: Ref("Bool"),
+      },
+      {
+        name: "tail",
+        type: App(Ref("VectBool"), Par("n")),
+      },
+    ],
+    // vbext : (n:Nat) -> (head:Bool) -> (tail:VectBool(n)) -> VectBool(succ(n))
+    typ: App(Ref("VectBool"), App(Ref("succ"), Par("n"))),
+  },
+];
+
+export const vectBoolADT = ADT(
+  Identifier("VectBool"),
+  vectBoolParams,
+  vectBoolConstructors
+);
+
+export const vectBool = desugar(buildType(vectBoolADT));
+
+export const vbnil = desugar(
+  Def(
+    "vbnil",
+    Ann(
+      GenerateConstructorTerm(vectBoolParams, vectBoolConstructors, 0),
+      GenerateConstructorType(
+        "VectBool",
+        vectBoolParams,
+        vectBoolConstructors[0]
+      )
+    )
+  )
+);
+
+export const vbext = desugar(
+  Def(
+    "vbext",
+    Ann(
+      GenerateConstructorTerm(vectBoolParams, vectBoolConstructors, 1),
+      GenerateConstructorType(
+        "VectBool",
+        vectBoolParams,
+        vectBoolConstructors[1]
+      )
+    )
+  )
+);

@@ -190,24 +190,21 @@ describe("ast", () => {
     );
   });
 
-  // TODO: implement
-  //   test("should parse data types with dependent annotations", () => {
-  //     // TODO: Figure out syntax.
-  //     // TODO: Need the return type to be arguments to Vector, not some other
-  //     //  random type, i.e. App(Ref("Vector"), ...)
-  //     const ast = stripAST(
-  //       result(
-  //         adt(
-  //           ts(`
-  //             type Vector(T ★, n Nat) =
-  //               | vnil : Vector(T, 0)
-  //               | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))`)
-  //         )
-  //       )
-  //     );
-  //     if (ast._ != "adt") {
-  //       throw `unexpected ${ast._}`;
-  //     }
-  //     expect(serialiseAST(ast)).toBe(`ADT(List)`);
-  //   });
+  test("should parse indexed types with type annotations on constructors", () => {
+    const ast = stripAST(
+      result(
+        adt(
+          ts(
+            `type VectBool(sz Nat) = vbnil:VectBool(zero) | vbext(n Nat, head Bool, tail VectBool(n)):VectBool(succ(n))`
+          )
+        )
+      )
+    );
+    if (ast._ != "adt") {
+      throw `unexpected ${ast._}`;
+    }
+    expect(serialiseAST(ast)).toBe(
+      `ADT(VectBool, constructors=vbnil():App(Ref("VectBool"), Ref("zero"))|vbext(n:Ref("Nat"),head:Ref("Bool"),tail:App(Ref("VectBool"), Ref("n"))):App(Ref("VectBool"), App(Ref("succ"), Ref("n"))))`
+    );
+  });
 });

@@ -239,3 +239,11 @@ func sub(n Nat, m Nat) Nat =
 nested case expressions
 
 ```
+
+```
+type TypeName(index IndexType) =
+   constructor1 : TypeName(specificIndex1)
+ | constructor2(args...) : TypeName(specificIndex2)
+                           ↑
+                           indexed types
+ ```

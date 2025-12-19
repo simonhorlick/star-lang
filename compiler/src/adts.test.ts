@@ -12,6 +12,9 @@ import {
   nat,
   nil,
   tru,
+  vbnil,
+  vbext,
+  vectBool,
 } from "./test_defs";
 import { Abs, App, Pi, Ref, Self, Star, Var, CTerm } from "./sugar";
 import {
@@ -455,54 +458,156 @@ describe("adts", () => {
       )
     ));
 
-  // TODO: implement
-  // test("should generate term for Vector", () => {
-  // type List(A *) = nil | cons(head A, tail List(A))
-  // made explicit:
-  // type List(A *) =
-  //   | nil : Vector(A)
-  //   | cons(head A, tail List(A)) : Vector(A)
-  //
-  // List : ΠA:★ ★
-  //      = λA ιt
-  //        ΠP:(List(A)→*)
-  //        Πcnil:P(nil(A))
-  //        Πccons:(Πhead:A Πtail:List(A) P(cons(A)(head)(tail)))
-  //        P(t)
-  //
-  // type Vector(T *, n Nat) =
-  //   | vnil : Vector(T, 0)
-  //   | ext(head T, tail Vector(T, n)) : Vector(T, succ(n))
-  //
-  //
-  // VectBool : Πsz:Nat ★
-  //          = λsz ιt
-  //            ΠP:(Πn:Nat Πx:Vect(n) ★)
-  //            Πcnil:P(zero)(vnil)
-  //            Πcext:(Πn:Nat Πhead:Bool Πtail:Vect(n) P(succ(n))(ext(n)(head)(tail))
-  //            P(sz)(t)
+  /*
+    // VectBool is a singly-linked list of booleans of size sz.
+    type VectBool(sz Nat) =
+      // vnil constructs an empty vector.
+      vnil : VectBool(zero) |
+      // ext constructs a vector by passing a head element and an
+      // existing (though possibly empty) vector.
+      ext(
+        // head is the first element of the vector.
+        head T,
+        // tail is the remaining elements in the vector.
+        tail VectBool(n)) : VectBool(succ(sz))
 
-  // In List, A is static (i.e. not passed to P), but for Vector we have
-  // different sz for each branch.
+    This creates the following functions (in the final language design:
+      vnil : (sz Nat) → VectBool(zero)
+      cons : (sz Nat) → (head T) → (tail VectBool(sz)) → VectBool(succ(sz))
 
-  // const list = buildType(Identifier("List"), listParams, listConstructors);
+    The parser generates:
+        func VectBool : (sz:Nat) -> *
+                  = λsz ιt
+                    (P:((n:Nat) -> (x:VectBool(n)) -> *)) ->
+                    (vbnil:((n:Nat) -> P(zero,vbnil)) ->
+                    (vbext:((n:Nat) -> (head:Bool) -> (tail:VectBool(n)) -> P(succ(n),vbext(n,head,tail)))) ->
+                    P(sz,t)
 
-  // const nil = Def(
-  //   "nil",
-  //   Ann(
-  //     GenerateConstructorTerm(listParams, listConstructors, 0),
-  //     GenerateConstructorType("List", listParams, listConstructors[0])
-  //   )
-  // );
+      // should this have sz Nat as a parameter?
+      func vnil : (n:Nat) -> VectBool(zero)
+          = λn λP λvbnil λvbext vbnil
 
-  // const cons = Def(
-  //   "cons",
-  //   Ann(
-  //     GenerateConstructorTerm(listParams, listConstructors, 1),
-  //     GenerateConstructorType("List", listParams, listConstructors[1])
-  //   )
-  // );
+      func ext : (n:Nat) -> (head:Bool) -> (tail:VectBool(n)) -> VectBool(succ(n))
+          = λn λhead λtail λP λvbnil λvbext vbext(n,head,tail)
 
-  // expect(true).toBe(false);
-  // });
+
+    Example values of this type:
+      vnil(zero) : VectBool(zero)
+      ext(zero, true, vnil(zero)) : VectBool(succ(zero))
+      ext(succ(zero), false, ext(zero, true, vnil(zero))) : VectBool(succ(succ(zero)))
+  */
+  test("should generate term for VectBool", () =>
+    // func VectBool : (sz:Nat) -> *
+    //   = λsz ιt
+    //     (P:((sz:Nat) -> (x:VectBool(sz)) -> *)) ->
+    //     P(zero,vbnil) ->
+    //     ((n:Nat) -> (head:Bool) -> (tail:VectBool(n)) -> P(succ(n),vbext(n,head,tail))) ->
+    //     P(sz,t)
+    expect(pretty(vectBool.term.term)).toBe(
+      pretty(
+        Abs(
+          "sz",
+          Self(
+            "t",
+            Pi(
+              "P",
+              Pi(
+                "sz",
+                Ref("Nat"),
+                Pi("x", App(Ref("VectBool"), Var("sz", 0)), Star())
+              ),
+              Pi(
+                "",
+                App(App(Var("P", 0), Ref("zero")), Ref("vbnil")),
+                Pi(
+                  "",
+                  Pi(
+                    "n",
+                    Ref("Nat"),
+                    Pi(
+                      "head",
+                      Ref("Bool"),
+                      Pi(
+                        "tail",
+                        App(Ref("VectBool"), Var("n", 1)),
+                        App(
+                          App(Var("P", 4), App(Ref("succ"), Var("n", 2))),
+                          App(
+                            App(App(Ref("vbext"), Var("n", 2)), Var("head", 1)),
+                            Var("tail", 0)
+                          )
+                        )
+                      )
+                    )
+                  ),
+                  App(App(Var("P", 2), Var("sz", 4)), Var("t", 3))
+                )
+              )
+            )
+          )
+        )
+      )
+    ));
+
+  // func vbnil : VectBool(zero)
+  //     = λP λvbnil λvbext vbnil
+  test("type of vbnil is generated correctly", () =>
+    expect(pretty(vbnil.term.type)).toBe(
+      pretty(App(Ref("VectBool"), Ref("zero")))
+    ));
+
+  test("vbnil is generated correctly", () =>
+    expect(pretty(vbnil.term.term)).toBe(
+      pretty(Abs("P", Abs("vbnil", Abs("vbext", Var("vbnil", 1)))))
+    ));
+
+  // func vbext : (n:Nat) -> (head:Bool) -> (tail:VectBool(n)) -> VectBool(succ(n))
+  //     = λn λhead λtail λP λvbnil λvbext vbext(n,head,tail)
+  test("type of vbext is generated correctly", () =>
+    expect(pretty(vbext.term.type)).toBe(
+      pretty(
+        Pi(
+          "n",
+          Ref("Nat"),
+          Pi(
+            "head",
+            Ref("Bool"),
+            Pi(
+              "tail",
+              App(Ref("VectBool"), Var("n", 1)),
+              App(Ref("VectBool"), App(Ref("succ"), Var("n", 2)))
+            )
+          )
+        )
+      )
+    ));
+
+  //     = λn λhead λtail λP λvbnil λvbext vbext(n,head,tail)
+  test("vbext is generated correctly", () =>
+    expect(pretty(vbext.term.term)).toBe(
+      pretty(
+        Abs(
+          "n",
+          Abs(
+            "head",
+            Abs(
+              "tail",
+              Abs(
+                "P",
+                Abs(
+                  "vbnil",
+                  Abs(
+                    "vbext",
+                    App(
+                      App(App(Var("vbext", 0), Var("n", 5)), Var("head", 4)),
+                      Var("tail", 3)
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    ));
 });
