@@ -371,7 +371,7 @@ export const desugarExpression = (expression: Expression): CTerm => {
       );
     case "cat":
       return App(
-        App(Ref("cat"), desugarExpression(expression.lhs)),
+        App(Ref("append"), desugarExpression(expression.lhs)),
         desugarExpression(expression.rhs)
       );
     case "gt":
