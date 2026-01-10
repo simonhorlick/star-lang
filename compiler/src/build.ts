@@ -100,7 +100,11 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       if (filled.term._ != "ann") {
         throw "expected annotated term for definition body";
       }
-      checkedMap.set(def.name, Def2(def.name, filled.term, def.start, def.end));
+      const checkedDef = Def2(def.name, filled.term, def.start, def.end);
+      checkedMap.set(def.name, checkedDef);
+      // Update defsMap with the checked/desugared version so that subsequent
+      // definitions can reduce this one during type-checking.
+      defsMap.set(def.name, checkedDef);
     } catch (e) {
       checks = false;
       if ((e as any)._ !== undefined) {
