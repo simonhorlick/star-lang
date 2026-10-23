@@ -42,33 +42,20 @@ import {
 import { Context, addTermToCtx } from "./context";
 import {
   ADT,
-  Argument,
   ASTNode,
+  Classification,
   Constructor,
   Def,
   Def2,
   File,
   Origin2,
+  classifyParams,
+  typeArguments,
 } from "./ast";
 import { desugarExpression, Ann as Ann2 } from "./sugar";
+import { TypecheckError } from "./typecheck";
 
 const reverse = <T>(l: Array<T>) => [...l].reverse();
-
-// Extract the index arguments from a constructor's return type
-// For VectBool(zero), returns [zero]
-// For VectBool(succ(n)), returns [succ(n)]
-const extractIndices = (returnType: Expression): Term[] => {
-  const indices: Term[] = [];
-  let current = returnType;
-
-  // Walk down the App chain to collect all the arguments
-  while (current._ === "app") {
-    indices.unshift(current.arg as Term);
-    current = current.func;
-  }
-
-  return indices;
-};
 
 const wrapOrigin = (
   term: Expression,
@@ -81,11 +68,45 @@ const wrapOrigin = (
   }
 };
 
-const processNode = (n: ASTNode): ASTNode[] => {
+// validateADT checks that an ADT declaration is well-formed, throwing a
+// TypecheckError if it isn't.
+export const validateADT = (adt: ADT): void => {
+  const cls = classifyParams(adt);
+  if (cls.indices.length == 0) {
+    return;
+  }
+  const typeName = identifier2str(adt.name);
+  for (const con of adt.constructors) {
+    // The indices of a type aren't in scope in its constructors, so a
+    // constructor can only return the type by supplying values for them.
+    if (con.typ === null) {
+      const origin = con.name._ == "orig" ? con.name : adt.name;
+      throw TypecheckError(
+        `constructor ${identifier2str(con.name)} must declare its return type ` +
+          `as ${typeName} is an indexed type (${cls.indices
+            .map((i) => i.name)
+            .join(", ")})`,
+        origin._ == "orig" ? origin.start : 0,
+        origin._ == "orig" ? origin.end : 0
+      );
+    }
+  }
+};
+
+const processNode = (n: ASTNode, errors: TypecheckError[]): ASTNode[] => {
   switch (n._) {
-    case "adt":
+    case "adt": {
       // Generates type definition and constructors for an ADT.
       const adt = ADT(n.name, n.params, n.constructors);
+      try {
+        validateADT(adt);
+      } catch (e) {
+        if ((e as TypecheckError)._ == "typecheckerror") {
+          errors.push(e as TypecheckError);
+          return [];
+        }
+        throw e;
+      }
       const td = buildType(adt);
       const defs = n.constructors.map((con, i) => {
         return Def(
@@ -93,19 +114,13 @@ const processNode = (n: ASTNode): ASTNode[] => {
           // This is used for tooling to be able to provide jump-to-definition
           // for type constructors.
           Ann(
-            wrapOrigin(
-              GenerateConstructorTerm(n.params, n.constructors, i),
-              con.name
-            ),
-            GenerateConstructorType(
-              identifier2str(n.name),
-              n.params,
-              n.constructors[i]
-            )
+            wrapOrigin(GenerateConstructorTerm(adt, i), con.name),
+            GenerateConstructorType(adt, i)
           )
         );
       });
       return [td].concat(defs);
+    }
     default:
       return [n];
   }
@@ -140,57 +155,50 @@ export const buildConstructor = (
   return Abs("P", wrapN(constructors.length));
 };
 
-// a1 → a2 → P(constructor1)
-// For indexed types: a1 → a2 → P(index)(constructor1)
+// Build the type of the branch for one constructor in the eliminator:
+//
+//   Πa:A. Πb:B. P(constructorN(p1,...,pm,a,b))
+//
+// where p1...pm are the parameters of the type. For indexed types the motive
+// is also applied to the index values from the constructor's return type:
+//
+//   Πa:A. Πb:B. P(i1,...,ik,constructorN(p1,...,pm,a,b))
 const buildTypeArgSignature = (
-  parameters: Argument[],
+  cls: Classification,
   constructor: Constructor,
   acc: Term
 ): Term => {
-  // Build the syntax tree for the type Πa:A. Πb:B. P(constructorN(a,b)).
-  // For indexed types: Πa:A. Πb:B. P(index)(constructorN(a,b))
-
   const constructorName = identifier2str(constructor.name);
   const args = constructor.args;
-  const isIndexed = constructor.typ !== null;
 
-  // Apply all type parameters to the constructor first (for non-indexed types).
-  // For indexed types, don't apply params since they're indices, not type params.
-  const cNParams = isIndexed
-    ? Ref(constructorName)
-    : parameters.reduce(
-        (acc: Term, curr) =>
-          // We need to add args.length as there will be that many Pi nodes wrapping this.
-          App(acc, Par(curr.name)),
-        Ref(constructorName)
-      );
-
-  // Build constructorN(a,b,...) which is
-  //   App(App(Ref(constructor), Var(a)), Var(b))
-  const cN = args.reduce(
-    (acc: Term, curr) => App(acc, Par(curr.name)),
-    cNParams
+  // constructorN(p1,...,pm,a,b,...): the constructor applied to the parameters
+  // of the type, then to its own arguments.
+  const cN = args.reduce<Term>(
+    (acc, curr) => App(acc, Par(curr.name)),
+    cls.parameters.reduce<Term>(
+      (acc, curr) => App(acc, Par(curr.name)),
+      Ref(constructorName)
+    )
   );
 
-  // For indexed types, we need to extract the index from the return type
-  // and apply P to it first
-  // P(index)(constructorN(a,b,...))
-  // For non-indexed: P(constructorN(a,b,...))
-  const PcN =
-    isIndexed && constructor.typ
-      ? // Extract indices from return type and apply P to them first, then to constructor
-        // P(zero)(vbnil) or P(succ(n))(vbext(n,head,tail))
-        App(
-          extractIndices(constructor.typ).reduce<Term>(
-            (acc, index) => App(acc, index),
-            Par("P")
-          ),
-          cN
-        )
-      : App(Par("P"), cN);
+  // The index values come from the constructor's return type, so for
+  // vext(n Nat, ...) : VectBool(succ(n)) the index value is succ(n). A
+  // constructor without a return type can only exist in a type without
+  // indices.
+  const indexValues =
+    constructor.typ !== null
+      ? (typeArguments(constructor.typ).filter(
+          (_, i) => cls.isIndex[i]
+        ) as Term[])
+      : [];
 
-  // Build Πa:A. Πb:B. ... P(constructorN(a,b,...))
-  // Pi("a", A, Pi("b", B, App(P, App(App(Ref(constructorN), a), b))))
+  // P(i1,...,ik,constructorN(...))
+  const PcN = App(
+    indexValues.reduce<Term>((acc, index) => App(acc, index), Par("P")),
+    cN
+  );
+
+  // Build Πa:A. Πb:B. ... P(...)
   const Pis = reverse(args).reduce(
     (acc: Term, curr) => Pi(curr.name, curr.type, acc),
     PcN
@@ -206,40 +214,57 @@ const buildTypeArgSignature = (
     ...
     P(constructorN) →
     P(t)
-    
-    For indexed types:
-    T : Type = λindex. ιt. ΠP:(Πn:Index (Πx:T(n) ★)).
-    P(index1)(constructor1) →
-    P(index2)(constructor2) →
-    ...
-    P(indexN)(constructorN) →
-    P(index)(t)
+
+    For a type with parameters p1..pm and indices i1..ik (see classifyParams):
+
+    T : Π(p1:P1) ... Π(ik:Ik) ★
+      = λp1 ... λik ιt. ΠP:(Πi1:I1 ... Πik:Ik Πx:T(p1,...,ik) ★).
+        (Πargs1. P(index values of constructor1, constructor1(p1,...,pm,args1))) →
+        ...
+        (ΠargsN. P(index values of constructorN, constructorN(p1,...,pm,argsN))) →
+        P(i1,...,ik,t)
+
+    For example, VectBool(sz Nat) has a single index sz:
+
+    VectBool : Πsz:Nat ★
+      = λsz ιt. ΠP:(Πsz:Nat Πx:VectBool(sz) ★).
+        P(zero,vnil) →
+        (Πn:Nat Πhead:Bool Πtail:VectBool(n) P(succ(n),vext(n,head,tail))) →
+        P(sz,t)
+
+    and Equal(A *, a A, b A) has parameters A and a and index b:
+
+    Equal : ΠA:★ Πa:A Πb:A ★
+      = λA λa λb ιt. ΠP:(Πb:A Πx:Equal(A,a,b) ★).
+        P(a,refl(A,a)) →
+        P(b,t)
   */
 export const buildType = (adt: ADT): Def => {
-  // Check if this is an indexed type (any constructor has explicit return type)
-  const isIndexed = adt.constructors.some((c) => c.typ !== null);
+  const cls = classifyParams(adt);
+  const typeName = identifier2str(adt.name);
 
-  // T(A,B,C)
+  // T(h1,...,hn): the type applied to every header variable.
   const typ = adt.params.reduce<Term>(
     (acc, paramN) => App(acc, Par(paramN.name)),
-    Ref(identifier2str(adt.name))
+    Ref(typeName)
   );
 
-  // For indexed types, the motive P is indexed:
-  // P : (Πn:Nat (Πx:VectBool(n) ★))
-  // For non-indexed types, the motive is simple:
-  // P : T → ★
-  const motiveType = isIndexed
-    ? adt.params.reduceRight<Term>(
-        (acc, paramN) =>
-          Pi(
-            paramN.name,
-            paramN.type as Term,
-            Pi("x", App(Ref(identifier2str(adt.name)), Par(paramN.name)), acc)
-          ),
-        Star()
-      )
-    : Pi("", typ, Star());
+  // The motive abstracts over the indices and the value being eliminated:
+  //   Πi1:I1 ... Πik:Ik Πx:T(h1,...,hn) ★
+  // For a type without indices this is simply T(h1,...,hn) → ★.
+  const motiveType = reverse(cls.indices).reduce<Term>(
+    (acc, index) => Pi(index.name, index.type as Term, acc),
+    Pi(cls.indices.length > 0 ? "x" : "", typ, Star())
+  );
+
+  // P(i1,...,ik,t)
+  const Pt = App(
+    cls.indices.reduce<Term>(
+      (acc, index) => App(acc, Par(index.name)),
+      Par("P")
+    ),
+    Par("t")
+  );
 
   const self = // ιt.
     Self(
@@ -249,25 +274,14 @@ export const buildType = (adt: ADT): Def => {
         motiveType,
         // P(constructor1) → (Πa:A. P(constructor2(a))) → ... P(constructorN) → P(t)
         reverse(adt.constructors).reduce<Term>(
-          (acc, constructorN) =>
-            buildTypeArgSignature(adt.params, constructorN, acc),
-          // For indexed types: P(index1)...(indexN)(t)
-          // For non-indexed: P(t)
-          isIndexed
-            ? App(
-                adt.params.reduce<Term>(
-                  (acc, paramN) => App(acc, Par(paramN.name)),
-                  Par("P")
-                ),
-                Par("t")
-              )
-            : App(Par("P"), Par("t"))
+          (acc, constructorN) => buildTypeArgSignature(cls, constructorN, acc),
+          Pt
         )
       )
     );
 
   return Def(
-    identifier2str(adt.name),
+    typeName,
     // This is used for tooling to be able to provide jump-to-definition for
     // types. `name` contains the source location where the constructor was
     // defined, so any refs that mention this constructor can follow this origin
@@ -293,8 +307,17 @@ export const buildType = (adt: ADT): Def => {
   );
 };
 
-export const processADTs = (f: File): File => {
-  return { _: "file", content: f.content.flatMap((node) => processNode(node)) };
+// processADTs replaces every ADT declaration in the file with the generated
+// type definition and constructor functions. Declarations that are not
+// well-formed are dropped and the error is appended to errors.
+export const processADTs = (
+  f: File,
+  errors: TypecheckError[] = []
+): File => {
+  return {
+    _: "file",
+    content: f.content.flatMap((node) => processNode(node, errors)),
+  };
 };
 
 // TODO: Re-think this. There's a lot of places where we're doing thing kind of
@@ -594,69 +617,63 @@ export const processPars = (t: Expression, ctx: Context): Expression => {
   }
 };
 
-export const GenerateConstructorType = (
-  typeName: string,
-  params: Argument[],
-  constructor: Constructor
-) => {
+export const GenerateConstructorType = (adt: ADT, i: number): Expression => {
   // nil : (T *) → List(T)
   // cons : (T *) → (head T) → (tail List(T)) → List(T)
 
-  // For indexed types:
-  // vbnil : VectBool(zero)
-  // vbext : (n:Nat) → (head:Bool) → (tail:VectBool(n)) → VectBool(succ(n))
+  // For indexed types the constructor's explicit return type is used, and
+  // only the parameters of the type are prepended:
+  // vnil : VectBool(zero)
+  // vext : (n:Nat) → (head:Bool) → (tail:VectBool(n)) → VectBool(succ(n))
+  // refl : (A:*) → (a:A) → Equal(A,a,a)
+  const cls = classifyParams(adt);
+  const constructor = adt.constructors[i];
 
-  // Use the constructor's explicit type if provided (for indexed types)
-  // Otherwise use the default: type applied to all params
   const returnType: Term =
     constructor.typ !== null
-      ? (constructor.typ as Term) // Indexed types specify exact return type
-      : params.reduce<Term>(
+      ? (constructor.typ as Term)
+      : adt.params.reduce<Term>(
           (acc, curr) => App(acc, Par(curr.name)),
-          Ref(typeName)
+          Ref(identifier2str(adt.name))
         );
 
   // For example
   // (head T) → (tail List(T)) → List(T)
-  // or
-  // (n:Nat) → (head:Bool) → (tail:VectBool(n)) → VectBool(succ(n))
-  const prependConstructorArgs = constructor.args.reduceRight<Term>(
+  const withArgs = constructor.args.reduceRight<Term>(
     (acc, curr) => Pi(curr.name, curr.type as Term, acc),
     returnType
   );
 
-  // Prepend type parameters for non-indexed types
-  // For indexed types (where typ is specified), params become constructor arguments, not type params
-  const typeParams =
-    constructor.typ !== null
-      ? prependConstructorArgs // Indexed: no type params to prepend
-      : params.reduceRight<Term>(
-          (acc, curr) => Pi(curr.name, curr.type as Term, acc),
-          prependConstructorArgs
-        );
+  // Prepend the parameters of the type.
+  const withParams = cls.parameters.reduceRight<Term>(
+    (acc, curr) => Pi(curr.name, curr.type as Term, acc),
+    withArgs
+  );
 
-  return processPars(typeParams, []);
+  return processPars(withParams, []);
 };
 
-export const GenerateConstructorTerm = (
-  params: Argument[],
-  constructors: Constructor[],
-  i: number
-): Expression => {
+export const GenerateConstructorTerm = (adt: ADT, i: number): Expression => {
   /*
     cons = <A> (head) (tail) <P> (nil) (cons) cons(head)(tail)
     nil = <A> <P> (nil) (cons) nil
-    
-    For indexed types:
-    vbnil = <P> (vbnil) (vbext) vbnil
-    vbext = (n) (head) (tail) <P> (vbnil) (vbext) vbext(n)(head)(tail)
+
+    For indexed types the parameters of the type are abstracted but the
+    indices are not, as they are determined by the constructor:
+    vnil = <P> (vnil) (vext) vnil
+    vext = (n) (head) (tail) <P> (vnil) (vext) vext(n)(head)(tail)
+    refl = <A> (a) <P> (refl) refl
   */
+  const cls = classifyParams(adt);
+  const constructors = adt.constructors;
+  const constructor = constructors[i];
+
   // Working from right to left.
 
   // Apply all arguments to the constructor
-  const apps = constructors[i].args.reduce<Term>(
+  const apps = constructor.args.reduce<Term>(
     (acc, curr) => App(acc, Par(curr.name)),
-    Par(identifier2str(constructors[i].name))
+    Par(identifier2str(constructor.name))
   );
 
   // Abstract constructors
@@ -672,17 +689,16 @@ export const GenerateConstructorTerm = (
   const absP = Abs("P", absConstructors);
 
   // Abstract arguments
-  const absArgs = constructors[i].args.reduceRight<Term>(
+  const absArgs = constructor.args.reduceRight<Term>(
     (acc, curr) => Abs(curr.name, acc),
     absP
   );
 
-  // For indexed types (where constructor has explicit return type),
-  // don't prepend the ADT params as lambdas - they're indices, not type params
-  const absParams =
-    constructors[i].typ !== null
-      ? absArgs // Indexed: params are indices, not abstracted
-      : params.reduceRight<Term>((acc, curr) => Abs(curr.name, acc), absArgs);
+  // Abstract the parameters of the type.
+  const absParams = cls.parameters.reduceRight<Term>(
+    (acc, curr) => Abs(curr.name, acc),
+    absArgs
+  );
 
   return processPars(absParams, []);
 };

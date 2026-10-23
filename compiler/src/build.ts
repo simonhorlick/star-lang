@@ -59,8 +59,10 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     adts.set(identifier2str(adt.name), adt);
   }
 
+  let checkerErrors: TypecheckError[] = [];
+
   // generate syntax nodes for ADTs, etc
-  const f = processADTs(t.value);
+  const f = processADTs(t.value, checkerErrors);
 
   // desugar each definition, keeping track of Origin nodes so we can assign
   // origins to the defs.
@@ -90,7 +92,6 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     defsMap.set(def.name, def);
   }
 
-  let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
     // console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
     let checks = true;

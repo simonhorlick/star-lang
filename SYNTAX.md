@@ -200,6 +200,14 @@ type VectBool(sz Nat) =
   vbext(n Nat, head Bool, tail VectBool(n)) : VectBool(succ(n))
 ↑
 indexed type
+
+type Equal(A *, a A, b A) = refl : Equal(A, a, a)
+↑
+indexed type with parameters
+a type argument that every constructor returns unchanged (A and a) is a
+parameter and is in scope in every constructor; one that varies between
+constructors (b) is an index, which every constructor must supply in its
+return type.
 ```
 
 ```

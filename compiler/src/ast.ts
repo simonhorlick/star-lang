@@ -105,6 +105,70 @@ export const ADT = (
   constructors: constructors,
 });
 
+// Unwrap the tooling nodes (origins, syntax and labels) around an expression.
+const unwrap = (e: Expression): Expression =>
+  e._ == "orig" || e._ == "syn" || e._ == "label" ? unwrap(e.child) : e;
+
+// typeArguments returns the arguments of a type constructor application, so
+// for Vect(A, succ(n)) it returns [A, succ(n)].
+export const typeArguments = (t: Expression): Expression[] => {
+  const u = unwrap(t);
+  return u._ == "app" ? typeArguments(u.func).concat([u.arg]) : [];
+};
+
+export type Classification = {
+  // For each header variable of the type, whether it is an index.
+  isIndex: boolean[];
+  // The header variables that are parameters, in order.
+  parameters: Argument[];
+  // The header variables that are indices, in order.
+  indices: Argument[];
+};
+
+// classifyParams splits the header variables of a type into parameters and
+// indices. A header variable is a parameter when every constructor's return
+// type has exactly that variable in its position, i.e. it is fixed across the
+// whole type and is in scope for every constructor. Otherwise it is an index,
+// which each constructor must supply a value for in its return type. For
+// example, in
+//
+//   type Equal(A *, a A, b A) = refl : Equal(A, a, a)
+//
+// A and a are parameters and b is an index, and in
+//
+//   type Vect(A *, sz Nat) = vnil : Vect(A, zero) | vext(n Nat, head A, tail Vect(A, n)) : Vect(A, succ(n))
+//
+// A is a parameter and sz is an index. A constructor without an explicit
+// return type returns the type applied to all of its header variables, so a
+// type where no constructor has a return type has only parameters.
+export const classifyParams = (adt: ADT): Classification => {
+  const isIndex = adt.params.map(
+    (param, i) =>
+      !adt.constructors.every((con) => {
+        // A constructor argument with the same name shadows the header
+        // variable, so any use of the name in the return type refers to the
+        // argument rather than the header variable.
+        if (con.args.some((arg) => arg.name == param.name)) {
+          return false;
+        }
+        if (con.typ === null) {
+          return true;
+        }
+        const args = typeArguments(con.typ);
+        if (i >= args.length) {
+          return false;
+        }
+        const arg = unwrap(args[i]);
+        return (arg._ == "ref" || arg._ == "par") && arg.name == param.name;
+      })
+  );
+  return {
+    isIndex: isIndex,
+    parameters: adt.params.filter((_, i) => !isIndex[i]),
+    indices: adt.params.filter((_, i) => isIndex[i]),
+  };
+};
+
 // A top-level definition.
 export type Def = {
   _: "def";

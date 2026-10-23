@@ -15,6 +15,10 @@ import {
   vbnil,
   vbext,
   vectBool,
+  natADT,
+  listADT,
+  vectBoolADT,
+  boolADT,
 } from "./test_defs";
 import { Abs, App, Pi, Ref, Self, Star, Var, CTerm } from "./sugar";
 import {
@@ -22,8 +26,15 @@ import {
   GenerateConstructorTerm,
   GenerateConstructorType,
 } from "./adts";
-import { Ann, Expression } from "./pratt";
-import { Def } from "./ast";
+import {
+  Ann,
+  Expression,
+  Identifier,
+  App as PApp,
+  Ref as PRef,
+  Star as PStar,
+} from "./pratt";
+import { ADT, Argument, Constructor, Def, classifyParams } from "./ast";
 
 // Ensure indices are printed so we can differentiate between refs and vars.
 const pretty = (x: Expression) => origPretty(x, true, false);
@@ -89,8 +100,8 @@ describe("adts", () => {
     const d = Def(
       "false",
       Ann(
-        GenerateConstructorTerm([], boolConstructors, 0),
-        GenerateConstructorType("Bool", [], boolConstructors[0])
+        GenerateConstructorTerm(boolADT, 0),
+        GenerateConstructorType(boolADT, 0)
       )
     );
 
@@ -610,4 +621,64 @@ describe("adts", () => {
         )
       )
     ));
+});
+
+describe("parameters and indices", () => {
+  // A header variable is a parameter when every constructor's return type has
+  // exactly that variable in its position, otherwise it is an index.
+  test("a type without header variables has no parameters or indices", () => {
+    const c = classifyParams(natADT);
+    expect(c.isIndex).toEqual([]);
+    expect(c.parameters).toEqual([]);
+    expect(c.indices).toEqual([]);
+  });
+
+  test("a non-indexed type has only parameters", () => {
+    const c = classifyParams(listADT);
+    expect(c.isIndex).toEqual([false]);
+    expect(c.parameters.map((p) => p.name)).toEqual(["A"]);
+    expect(c.indices).toEqual([]);
+  });
+
+  test("a header variable that varies between constructors is an index", () => {
+    const c = classifyParams(vectBoolADT);
+    expect(c.isIndex).toEqual([true]);
+    expect(c.parameters).toEqual([]);
+    expect(c.indices.map((p) => p.name)).toEqual(["sz"]);
+  });
+
+  test("Equal has two parameters and one index", () => {
+    // type Equal(A *, a A, b A) = refl : Equal(A, a, a)
+    const equal = ADT(
+      Identifier("Equal"),
+      [Argument("A", PStar()), Argument("a", PRef("A")), Argument("b", PRef("A"))],
+      [
+        Constructor(
+          Identifier("refl"),
+          [],
+          PApp(PApp(PApp(PRef("Equal"), PRef("A")), PRef("a")), PRef("a"))
+        ),
+      ]
+    );
+    const c = classifyParams(equal);
+    expect(c.isIndex).toEqual([false, false, true]);
+    expect(c.parameters.map((p) => p.name)).toEqual(["A", "a"]);
+    expect(c.indices.map((p) => p.name)).toEqual(["b"]);
+  });
+
+  test("a header variable shadowed by a constructor argument is an index", () => {
+    // type Foo(n Nat) = mk(n Nat) : Foo(n)
+    const foo = ADT(
+      Identifier("Foo"),
+      [Argument("n", PRef("Nat"))],
+      [
+        Constructor(
+          Identifier("mk"),
+          [Argument("n", PRef("Nat"))],
+          PApp(PRef("Foo"), PRef("n"))
+        ),
+      ]
+    );
+    expect(classifyParams(foo).isIndex).toEqual([true]);
+  });
 });

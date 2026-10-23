@@ -27,7 +27,7 @@ import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
 import { shift, substHole, substTop, subst } from "./substitution";
 import { Set } from "immutable";
-import { ADT, Argument, Constructor, Def2 } from "./ast";
+import { ADT, Argument, Constructor, Def2, classifyParams } from "./ast";
 import { identifier2str } from "./pratt";
 
 import { createLogger } from "./logger";
@@ -593,17 +593,18 @@ export const desugarCaseStatement = (
   const strippedName = strip(caseStmt.name);
 
   // For indexed types the motive also abstracts over each index of the type,
-  // as the type of the motive is (Πi:I (Πx:T(i) ★)). The index arguments are
-  // taken from the type of the scrutinee, i.e. for xs:VectBool(n) the index
-  // argument is n.
+  // as the type of the motive is (Πi:I (Πx:T(p,i) ★)) where p are the
+  // parameters of the type and i its indices (see classifyParams). The index
+  // arguments are taken from the type of the scrutinee, i.e. for
+  // xs:Vect(Bool,n) the index argument is n.
   //
   //   P = λi1 ... λik λx. tty[scrutinee := x, n1 := i1, ..., nk := ik]
   //
   // Only indices that are plain variables are substituted. If the index is a
   // more complex expression, such as succ(n), then the motive is constant in
   // that index.
-  const isIndexed = adtDef.constructors.some((c) => c.typ !== null);
-  const indexArgs = isIndexed ? getTypeArguments(xTyp.type) : [];
+  const isIndex = classifyParams(adtDef).isIndex;
+  const indexArgs = getTypeArguments(xTyp.type).filter((_, i) => isIndex[i]);
   const k = indexArgs.length;
 
   // The motive binds k index variables followed by the scrutinee variable, so
