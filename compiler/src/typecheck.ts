@@ -592,23 +592,49 @@ export const desugarCaseStatement = (
   // Strip origin/syntax/label nodes to check the actual term structure
   const strippedName = strip(caseStmt.name);
 
-  let P: Term;
+  // For indexed types the motive also abstracts over each index of the type,
+  // as the type of the motive is (Πi:I (Πx:T(i) ★)). The index arguments are
+  // taken from the type of the scrutinee, i.e. for xs:VectBool(n) the index
+  // argument is n.
+  //
+  //   P = λi1 ... λik λx. tty[scrutinee := x, n1 := i1, ..., nk := ik]
+  //
+  // Only indices that are plain variables are substituted. If the index is a
+  // more complex expression, such as succ(n), then the motive is constant in
+  // that index.
+  const isIndexed = adtDef.constructors.some((c) => c.typ !== null);
+  const indexArgs = isIndexed ? getTypeArguments(xTyp.type) : [];
+  const k = indexArgs.length;
+
+  // The motive binds k index variables followed by the scrutinee variable, so
+  // inside the motive body every free variable of tty is shifted up by k+1.
+  let body = shift(k + 1, 0, tty);
+
   if (strippedName._ === "var") {
-    // Dependent pattern matching: P = λx. tty[scrutinee := x]
-    P = Abs(
-      "",
-      subst(
-        strippedName.index + 1,
-        Var(strippedName.name, 0),
-        0,
-        shift(1, 0, tty),
-        strippedName.name
-      )
+    // Dependent pattern matching: substitute the scrutinee variable by the
+    // motive's own argument (Var 0).
+    body = subst(
+      strippedName.index + k + 1,
+      Var(strippedName.name, 0),
+      0,
+      body,
+      strippedName.name
     );
-  } else {
-    // Non-dependent case or complex scrutinee expression
-    P = Abs("", shift(1, 0, tty));
   }
+
+  // Substitute each index variable by the corresponding motive argument. The
+  // j-th index (from the left) is bound by the j-th lambda so has de Bruijn
+  // index k-j inside the body.
+  indexArgs.forEach((index, j) => {
+    const idx = strip(index);
+    if (idx._ !== "var") return;
+    body = subst(idx.index + k + 1, Var(idx.name, k - j), 0, body, idx.name);
+  });
+
+  const P: Term = indexArgs.reduceRight<Term>(
+    (acc) => Abs("", acc),
+    Abs("", body)
+  );
 
   const desugared = branches.reduce<Term>((acc: Term, branch) => {
     return App(acc, branch);
@@ -616,6 +642,17 @@ export const desugarCaseStatement = (
 
   return check(defs, adts, ctx, desugared, tty, os, oe);
 };
+
+// given an ast of the form App(App(App(X,y),z),w) return the arguments [y,z,w].
+function getTypeArguments(t: Term): Term[] {
+  const s = strip(t);
+  switch (s._) {
+    case "app":
+      return getTypeArguments(s.func).concat([s.arg]);
+    default:
+      return [];
+  }
+}
 
 // given an ast of the form App(App(App(X,y),z),w) return the leftmost ref X.
 function getTypeNameFromTypeConstructor(t: Term): Ref {

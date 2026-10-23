@@ -1244,3 +1244,115 @@ func refl: (A:*) -> (x:A) -> equal(A,x,x) = λA λx λP λp p
     expect(result.checkerErrors).toHaveLength(1);
   });
 });
+
+describe("indexed types", () => {
+  const prelude = `
+type Nat = zero | succ(x Nat)
+type Bool = true | false
+type Unit = unit
+type VectBool(sz Nat) =
+  vnil : VectBool(zero) |
+  vext(n Nat, head Bool, tail VectBool(n)) : VectBool(succ(n))
+func add:Nat->Nat->Nat = λn λm case n of
+  | zero => m
+  | succ => succ(add(n.x,m))
+`;
+
+  test("should construct values of an indexed type", () => {
+    const result = build(
+      prelude +
+        `func v2 : VectBool(2) = vext(1, false, vext(0, true, vnil))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should reject values with the wrong index", () => {
+    const result = build(
+      prelude + `func v1 : VectBool(1) = vext(1, true, vnil)`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+
+  test("should allow case on an indexed type with a constant result", () => {
+    const result = build(
+      prelude +
+        `func isEmpty : (n:Nat) -> (xs:VectBool(n)) -> Bool = λn λxs case xs of
+  | vnil => true
+  | vext => false`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    expect(pretty(result.defs.get("isEmpty")!.term.term)).toBe(
+      "λn λxs xs(λ λ Bool,true,λxs.n λxs.head λxs.tail false)"
+    );
+  });
+
+  test("should allow case on an indexed type with a result depending on the index", () => {
+    const result = build(
+      prelude +
+        `func Head : Nat -> * = λn case n of
+  | zero => Unit
+  | succ => Bool
+func vhead : (n:Nat) -> (xs:VectBool(n)) -> Head(n) = λn λxs case xs of
+  | vnil => unit
+  | vext => xs.head`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    // The motive abstracts over the index n as well as the scrutinee.
+    expect(pretty(result.defs.get("vhead")!.term.term)).toBe(
+      "λn λxs xs(λ λ Head(n),unit,λxs.n λxs.head λxs.tail xs.head)"
+    );
+  });
+
+  test("should reject a branch whose type doesn't match the index", () => {
+    const result = build(
+      prelude +
+        `func Head : Nat -> * = λn case n of
+  | zero => Unit
+  | succ => Bool
+func vhead : (n:Nat) -> (xs:VectBool(n)) -> Head(n) = λn λxs case xs of
+  | vnil => true
+  | vext => xs.head`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+
+  test("should allow case on an indexed type whose index is not a variable", () => {
+    const result = build(
+      prelude +
+        `func vhead : (n:Nat) -> (xs:VectBool(succ(n))) -> Bool = λn λxs case xs of
+  | vnil => true
+  | vext => xs.head`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should allow case on an indexed type with a result depending on the scrutinee", () => {
+    const result = build(
+      prelude +
+        `func equal: (A:*) -> (a:A) -> (b:A) -> * = λA λa λb (P:(A->*)) -> (p:P(a)) -> P(b)
+func refl: (A:*) -> (x:A) -> equal(A,x,x) = λA λx λP λp p
+func same : (n:Nat) -> (xs:VectBool(n)) -> equal(VectBool(n), xs, xs) = λn λxs case xs of
+  | vnil => refl(VectBool(zero), vnil)
+  | vext => refl(VectBool(succ(xs.n)), vext(xs.n, xs.head, xs.tail))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should allow recursive functions over indexed types", () => {
+    const result = build(
+      prelude +
+        `func vappend : (n:Nat) -> (m:Nat) -> (xs:VectBool(n)) -> (ys:VectBool(m)) -> VectBool(add(n,m)) = λn λm λxs λys case xs of
+  | vnil => ys
+  | vext => vext(add(xs.n, m), xs.head, vappend(xs.n, m, xs.tail, ys))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+});

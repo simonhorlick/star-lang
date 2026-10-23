@@ -43,8 +43,14 @@ export const dbgCheckIndices = (
       }
       let x = ctx[ctx.length - t.index - 1];
       // For debugging - this can only happen if the wrong index is used in a
-      // hand-crafted expression.
-      if (t.name && x.name && x.name != t.name) {
+      // hand-crafted expression. Constructor arguments are bound as `xs.n` in
+      // case branches but referenced as `n` in the constructor's type, so
+      // accept a binder that ends with the variable name (as lookupType does).
+      if (
+        t.name &&
+        x.name &&
+        !(x.name == t.name || x.name.endsWith("." + t.name))
+      ) {
         throw `name mismatch: looking up ${t.index} got ${x.name}; expected ${
           t.name
         }. ctx is ${printCtx(ctx, true)}`;
