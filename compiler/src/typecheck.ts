@@ -745,11 +745,21 @@ export const equate = (
   checking: Set<string> = Set()
 ): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
   // Ignore origins.
-  if (ty1._ == "orig" || ty1._ == "syn") {
+  if (ty1._ == "orig" || ty1._ == "syn" || ty1._ == "label") {
     return equate(ctx, defs, ty1.child, ty2, val, depth + 1, checking);
   }
-  if (ty2._ == "orig" || ty2._ == "syn") {
+  if (ty2._ == "orig" || ty2._ == "syn" || ty2._ == "label") {
     return equate(ctx, defs, ty1, ty2.child, val, depth + 1, checking);
+  }
+  // Ignore annotations (the checker wraps every lambda it has checked in an
+  // Ann node). Comparing the annotated term directly avoids a spurious cycle
+  // detection below, as stripping an annotation doesn't change the printed
+  // form of the term.
+  if (ty1._ == "ann") {
+    return equate(ctx, defs, ty1.term, ty2, val, depth + 1, checking);
+  }
+  if (ty2._ == "ann") {
+    return equate(ctx, defs, ty1, ty2.term, val, depth + 1, checking);
   }
 
   if (aeq(ty1, ty2)) {

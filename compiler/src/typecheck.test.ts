@@ -67,6 +67,7 @@ import {
 } from "./adts";
 import { Stream, parseErrorDiagnostic, Result as ParserResult } from "./parser";
 import { Par } from "./pratt";
+import { build } from "./build";
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,
@@ -1203,5 +1204,43 @@ describe("type equality", () => {
     );
 
     expect(result.term).toBeDefined();
+  });
+});
+
+describe("proofs", () => {
+  // Proving 1 + 1 = 2 requires the checker to see that add(succ(zero),succ(zero))
+  // reduces to succ(succ(zero)) when comparing the type of refl against the
+  // declared type.
+  const prelude = `
+type Nat = zero | succ(x Nat)
+func add:Nat->Nat->Nat = λn λm case n of
+  | zero => m
+  | succ => succ(add(n.x,m))
+func equal: (A:*) -> (a:A) -> (b:A) -> * = λA λa λb (P:(A->*)) -> (p:P(a)) -> P(b)
+func refl: (A:*) -> (x:A) -> equal(A,x,x) = λA λx λP λp p
+`;
+
+  test("should prove one plus one equals two", () => {
+    const result = build(
+      prelude + `func onePlusOne: equal(Nat, 1+1, 2) = refl(Nat, 2)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should prove one plus one equals two using refl on the sum", () => {
+    const result = build(
+      prelude + `func onePlusOne: equal(Nat, 1+1, 2) = refl(Nat, 1+1)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should not prove one plus one equals three", () => {
+    const result = build(
+      prelude + `func onePlusOne: equal(Nat, 1+1, 3) = refl(Nat, 3)`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
   });
 });
