@@ -1,4 +1,5 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# Installs the compiler's dependencies, builds it and runs its tests, reporting
+# coverage on pull requests.
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
 
 name: Node.js CI
@@ -8,6 +9,12 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+
+# The compiler is an npm package in its own directory and there is no
+# package.json at the repository root, so every npm command runs there.
+defaults:
+  run:
+    working-directory: compiler
 
 jobs:
   build:
@@ -20,17 +27,25 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js 20.x
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v5
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: 24.x
           cache: "npm"
+          # setup-node looks for the lockfile at the repository root unless
+          # told otherwise.
+          cache-dependency-path: compiler/package-lock.json
       - run: npm ci
       - run: npm run build --if-present
-      - run: npm run test:ci
-      - name: "Report Coverage"
-        # Set if: always() to also generate the report if tests are failing
-        # Only works if you set `reportOnFailure: true` in your vite config as specified above
-        if: always()
+      - name: Run tests
+        id: test
+        run: npm run test:ci
+      - name: Report coverage
+        # Also report when the tests fail, which works because the vitest config
+        # sets reportOnFailure, but not when they never ran: a failed install
+        # would otherwise be reported as a missing coverage file.
+        if: ${{ !cancelled() && steps.test.outcome != 'skipped' }}
         uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: compiler
