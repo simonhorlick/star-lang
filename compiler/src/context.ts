@@ -2,6 +2,9 @@ import { identifier2str } from "./pratt";
 import { printCtx } from "./pretty";
 import { shift } from "./substitution";
 import { CTerm, Star } from "./sugar";
+import { createLogger } from "./logger";
+
+const logger = createLogger("context");
 
 type Type = CTerm;
 
@@ -42,12 +45,22 @@ export const dbgCheckIndices = (
         throw `variable ${t.name} not found in context`;
       }
       let x = ctx[ctx.length - t.index - 1];
-      // For debugging - this can only happen if the wrong index is used in a
-      // hand-crafted expression.
-      if (t.name && x.name && x.name != t.name) {
-        throw `name mismatch: looking up ${t.index} got ${x.name}; expected ${
-          t.name
-        }. ctx is ${printCtx(ctx, true)}`;
+      // Names are informational only. A mismatch is usually a sign that the
+      // wrong index is used in a hand-crafted expression, but it also happens
+      // legitimately: a lambda may name its binder differently from the pi
+      // type it is checked against, and constructor arguments are bound as
+      // `xs.n` in case branches but referenced as `n` in the constructor's
+      // type. So only log it.
+      if (
+        t.name &&
+        x.name &&
+        !(x.name == t.name || x.name.endsWith("." + t.name))
+      ) {
+        logger.debug(
+          `name mismatch: looking up ${t.index} got ${x.name}; expected ${
+            t.name
+          }. ctx is ${printCtx(ctx, true)}`
+        );
       }
       return t;
     case "lam":

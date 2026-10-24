@@ -7,5 +7,9 @@
   "typescript.validate.enable": true,
 
   // Experimental: enable project-wide IntelliSense
-  "typescript.tsserver.experimental.enableProjectDiagnostics": true
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true,
+
+  // Vitest configuration
+  "vitest.enable": true,
+  "vitest.workspaceConfig": "compiler/vitest.config.ts"
 }

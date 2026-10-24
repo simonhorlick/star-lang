@@ -45,6 +45,7 @@ import {
   unt,
   listADT,
   boolADT,
+  natADT,
 } from "./test_defs";
 import {
   and,
@@ -58,8 +59,15 @@ import {
 } from "./test_defs2";
 import { reduce } from "./equal";
 import { Context } from "./context";
-import { desugar } from "./adts";
+import {
+  desugar,
+  buildType,
+  GenerateConstructorTerm,
+  GenerateConstructorType,
+} from "./adts";
 import { Stream, parseErrorDiagnostic, Result as ParserResult } from "./parser";
+import { Par } from "./pratt";
+import { build } from "./build";
 
 export const ts = (s: string): Stream => ({
   src: `parsed${s}`,
@@ -688,6 +696,80 @@ describe("typechecker", () => {
 
   const reflTrue = pdef(`func rt: equal(Bool,true,true) = refl(Bool,true)`);
 
+  test("dependent pattern matching with identity function", () => {
+    // λn:Nat case n of | zero => refl(Nat, zero) | succ => refl(Nat, succ(n.n))
+    const term = Abs(
+      "n",
+      Case(Var("n", 0), [
+        Branch(
+          Identifier("zero"),
+          App(App(Ref("refl"), Ref("Nat")), Ref("zero"))
+        ),
+        Branch(
+          Identifier("succ"),
+          App(App(Ref("refl"), Ref("Nat")), App(Ref("succ"), Ref("n.n")))
+        ),
+      ])
+    );
+
+    // Πn:Nat equal(Nat, n, n) - the return type depends on n
+    const typ = Pi(
+      "n",
+      Ref("Nat"),
+      App(App(App(Ref("equal"), Ref("Nat")), Var("n", 0)), Var("n", 0))
+    );
+
+    const result = check(
+      defs([nat, zero, succ, equal, refl]),
+      adts([natADT]),
+      [],
+      term,
+      typ
+    );
+
+    // Verify the motive function contains 'n'
+    expect(pretty(result.term)).toContain("equal(Nat,n,n)");
+  });
+
+  test("dependent pattern matching preserves scrutinee name in motive", () => {
+    // Test: λb:Bool. case b of | false => refl(Bool, false) | true => refl(Bool, true)
+    // Return type: equal(Bool, b, b)
+
+    const term = Abs(
+      "b",
+      Case(Var("b", 0), [
+        Branch(
+          Identifier("false"),
+          App(App(Ref("refl"), Ref("Bool")), Ref("false"))
+        ),
+        Branch(
+          Identifier("true"),
+          App(App(Ref("refl"), Ref("Bool")), Ref("true"))
+        ),
+      ])
+    );
+
+    // Πb:Bool. equal(Bool, b, b)
+    const typ = Pi(
+      "b",
+      Ref("Bool"),
+      App(App(App(Ref("equal"), Ref("Bool")), Var("b", 0)), Var("b", 0))
+    );
+
+    const result = check(
+      defs([bool, tru, fls, equal, refl]),
+      adts([boolADT]),
+      [],
+      term,
+      typ
+    );
+
+    // The desugared term should have the motive function with 'b' preserved
+    expect(pretty(result.term)).toBe(
+      "λb b(λ equal(Bool,b,b),refl(Bool,false),refl(Bool,true))"
+    );
+  });
+
   test("reflexivity of true has type equal(Bool,true,true)", () =>
     check(
       defs([bool, tru, fls, not, equal, refl]),
@@ -1076,5 +1158,472 @@ describe("type equality", () => {
     const t2 = Origin(0, 1, Origin(0, 1, Origin(0, 1, Hole(2))));
     const e = equate([], defs(), t1, t2, Ref("y"));
     expect(e.eq).toBeTruthy();
+  });
+
+  test("polymorphic pattern matching with type parameter", () => {
+    // Test: λT:*. λxs:List(T). λys:List(T). case xs of | nil => ys | cons => cons(T, xs.head, xs.tail)
+    // This tests that type parameters (T) are correctly handled when they appear in the return type
+
+    // λT:*. λxs:List(T). λys:List(T). case xs of | nil => ys | cons => cons(T, xs.head, xs.tail)
+    const term = Abs(
+      "T",
+      Abs(
+        "xs",
+        Abs(
+          "ys",
+          Case(Var("xs", 1), [
+            Branch(Identifier("nil"), Var("ys", 0)),
+            Branch(
+              Identifier("cons"),
+              App(
+                App(App(Ref("cons"), Var("T", 2)), Ref("xs.head")),
+                Ref("xs.tail")
+              )
+            ),
+          ])
+        )
+      )
+    );
+
+    const typ = Pi(
+      "T",
+      Star(),
+      Pi(
+        "xs",
+        App(Ref("List"), Var("T", 0)),
+        Pi("ys", App(Ref("List"), Var("T", 1)), App(Ref("List"), Var("T", 2)))
+      )
+    );
+
+    const result = check(
+      defs([list, nil, cons]),
+      adts([listADT]),
+      [],
+      term,
+      typ
+    );
+
+    expect(result.term).toBeDefined();
+  });
+});
+
+describe("proofs", () => {
+  // Proving 1 + 1 = 2 requires the checker to see that add(succ(zero),succ(zero))
+  // reduces to succ(succ(zero)) when comparing the type of refl against the
+  // declared type.
+  const prelude = `
+type Nat = zero | succ(x Nat)
+func add:Nat->Nat->Nat = λn λm case n of
+  | zero => m
+  | succ => succ(add(n.x,m))
+func equal: (A:*) -> (a:A) -> (b:A) -> * = λA λa λb (P:(A->*)) -> (p:P(a)) -> P(b)
+func refl: (A:*) -> (x:A) -> equal(A,x,x) = λA λx λP λp p
+`;
+
+  test("should prove one plus one equals two", () => {
+    const result = build(
+      prelude + `func onePlusOne: equal(Nat, 1+1, 2) = refl(Nat, 2)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should prove one plus one equals two using refl on the sum", () => {
+    const result = build(
+      prelude + `func onePlusOne: equal(Nat, 1+1, 2) = refl(Nat, 1+1)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should not prove one plus one equals three", () => {
+    const result = build(
+      prelude + `func onePlusOne: equal(Nat, 1+1, 3) = refl(Nat, 3)`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+});
+
+describe("indexed types", () => {
+  const prelude = `
+type Nat = zero | succ(x Nat)
+type Bool = true | false
+type Unit = unit
+type VectBool(sz Nat) =
+  vnil : VectBool(zero) |
+  vext(n Nat, head Bool, tail VectBool(n)) : VectBool(succ(n))
+func add:Nat->Nat->Nat = λn λm case n of
+  | zero => m
+  | succ => succ(add(n.x,m))
+`;
+
+  test("should construct values of an indexed type", () => {
+    const result = build(
+      prelude +
+        `func v2 : VectBool(2) = vext(1, false, vext(0, true, vnil))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should reject values with the wrong index", () => {
+    const result = build(
+      prelude + `func v1 : VectBool(1) = vext(1, true, vnil)`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+
+  test("should allow case on an indexed type with a constant result", () => {
+    const result = build(
+      prelude +
+        `func isEmpty : (n:Nat) -> (xs:VectBool(n)) -> Bool = λn λxs case xs of
+  | vnil => true
+  | vext => false`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    expect(pretty(result.defs.get("isEmpty")!.term.term)).toBe(
+      "λn λxs xs(λ λ Bool,true,λxs.n λxs.head λxs.tail false)"
+    );
+  });
+
+  test("should allow case on an indexed type with a result depending on the index", () => {
+    const result = build(
+      prelude +
+        `func Head : Nat -> * = λn case n of
+  | zero => Unit
+  | succ => Bool
+func vhead : (n:Nat) -> (xs:VectBool(n)) -> Head(n) = λn λxs case xs of
+  | vnil => unit
+  | vext => xs.head`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    // The motive abstracts over the index n as well as the scrutinee.
+    expect(pretty(result.defs.get("vhead")!.term.term)).toBe(
+      "λn λxs xs(λ λ Head(n),unit,λxs.n λxs.head λxs.tail xs.head)"
+    );
+  });
+
+  test("should reject a branch whose type doesn't match the index", () => {
+    const result = build(
+      prelude +
+        `func Head : Nat -> * = λn case n of
+  | zero => Unit
+  | succ => Bool
+func vhead : (n:Nat) -> (xs:VectBool(n)) -> Head(n) = λn λxs case xs of
+  | vnil => true
+  | vext => xs.head`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+
+  test("should allow case on an indexed type whose index is not a variable", () => {
+    const result = build(
+      prelude +
+        `func vhead : (n:Nat) -> (xs:VectBool(succ(n))) -> Bool = λn λxs case xs of
+  | vnil => true
+  | vext => xs.head`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should allow case on an indexed type with a result depending on the scrutinee", () => {
+    const result = build(
+      prelude +
+        `func equal: (A:*) -> (a:A) -> (b:A) -> * = λA λa λb (P:(A->*)) -> (p:P(a)) -> P(b)
+func refl: (A:*) -> (x:A) -> equal(A,x,x) = λA λx λP λp p
+func same : (n:Nat) -> (xs:VectBool(n)) -> equal(VectBool(n), xs, xs) = λn λxs case xs of
+  | vnil => refl(VectBool(zero), vnil)
+  | vext => refl(VectBool(succ(xs.n)), vext(xs.n, xs.head, xs.tail))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should allow recursive functions over indexed types", () => {
+    const result = build(
+      prelude +
+        `func vappend : (n:Nat) -> (m:Nat) -> (xs:VectBool(n)) -> (ys:VectBool(m)) -> VectBool(add(n,m)) = λn λm λxs λys case xs of
+  | vnil => ys
+  | vext => vext(add(xs.n, m), xs.head, vappend(xs.n, m, xs.tail, ys))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+});
+
+describe("parameters and indices", () => {
+  // A header variable of a type is a parameter when every constructor returns
+  // exactly that variable in its position, otherwise it is an index. For
+  // Equal, A and a are parameters and b is the only index.
+  const prelude = `
+type Nat = zero | succ(x Nat)
+type Bool = true | false
+type Unit = unit
+func add:Nat->Nat->Nat = λn λm case n of
+  | zero => m
+  | succ => succ(add(n.x,m))
+type Equal(A *, a A, b A) = refl : Equal(A, a, a)
+`;
+
+  test("should generate the encoding of Equal", () => {
+    const result = build(prelude, false);
+    expect(result.checkerErrors).toEqual([]);
+    const equal = result.defs.get("Equal")!.term;
+    expect(pretty(equal.type)).toBe("(ΠA:★ (Πa:A (Πb:A ★)))");
+    expect(pretty(equal.term)).toBe(
+      "λA λa λb ιt. (ΠP:(Πb:A (Πx:Equal(A,a,b) ★)) P(a,refl(A,a))→P(b,t))"
+    );
+    const refl = result.defs.get("refl")!.term;
+    expect(pretty(refl.type)).toBe("(ΠA:★ (Πa:A Equal(A,a,a)))");
+    expect(pretty(refl.term)).toBe("λA λa λP λrefl refl");
+  });
+
+  test("should prove one plus one equals two with the Equal type", () => {
+    const result = build(
+      prelude + `func onePlusOne : Equal(Nat, 1+1, 2) = refl(Nat, 2)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should not prove one plus one equals three with the Equal type", () => {
+    const result = build(
+      prelude + `func bad : Equal(Nat, 1+1, 3) = refl(Nat, 3)`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+
+  test("should prove symmetry of Equal by case", () => {
+    const result = build(
+      prelude +
+        `func sym : (A:*) -> (a:A) -> (b:A) -> (e:Equal(A,a,b)) -> Equal(A,b,a) = λA λa λb λe case e of
+  | refl => refl(A, a)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    expect(pretty(result.defs.get("sym")!.term.term)).toBe(
+      "λA λa λb λe e(λ λ Equal(A,b,a),refl(A,a))"
+    );
+  });
+
+  test("should prove transitivity of Equal by case", () => {
+    const result = build(
+      prelude +
+        `func trans : (A:*) -> (a:A) -> (b:A) -> (c:A) -> (e1:Equal(A,a,b)) -> (e2:Equal(A,b,c)) -> Equal(A,a,c) = λA λa λb λc λe1 λe2 case e2 of
+  | refl => e1`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should prove substitution of Equal by case", () => {
+    const result = build(
+      prelude +
+        `func subst : (A:*) -> (P:(A -> *)) -> (a:A) -> (b:A) -> (e:Equal(A,a,b)) -> (p:P(a)) -> P(b) = λA λP λa λb λe λp case e of
+  | refl => p`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should prove congruence of succ by case", () => {
+    // This requires A and a to be parameters: with A as an index the motive
+    // would bind a fresh a:A which can't be passed to succ.
+    const result = build(
+      prelude +
+        `func cong : (a:Nat) -> (b:Nat) -> (e:Equal(Nat,a,b)) -> Equal(Nat,succ(a),succ(b)) = λa λb λe case e of
+  | refl => refl(Nat, succ(a))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should reject a wrong proof by case", () => {
+    const result = build(
+      prelude +
+        `func wrong : (a:Nat) -> (b:Nat) -> (e:Equal(Nat,a,b)) -> Equal(Nat,succ(a),b) = λa λb λe case e of
+  | refl => refl(Nat, succ(a))`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+
+  const vect = `
+type Nat = zero | succ(x Nat)
+type Bool = true | false
+type Vect(A *, sz Nat) =
+  vnil : Vect(A, zero) |
+  vext(n Nat, head A, tail Vect(A, n)) : Vect(A, succ(n))
+`;
+
+  test("should generate the encoding of a type with a parameter and an index", () => {
+    const result = build(vect, false);
+    expect(result.checkerErrors).toEqual([]);
+    const v = result.defs.get("Vect")!.term;
+    expect(pretty(v.type)).toBe("(ΠA:★ (Πsz:Nat ★))");
+    expect(pretty(v.term)).toBe(
+      "λA λsz ιt. (ΠP:(Πsz:Nat (Πx:Vect(A,sz) ★)) P(zero,vnil(A))→(Πn:Nat (Πhead:A (Πtail:Vect(A,n) P(succ(n),vext(A,n,head,tail)))))→P(sz,t))"
+    );
+    expect(pretty(result.defs.get("vnil")!.term.type)).toBe(
+      "(ΠA:★ Vect(A,zero))"
+    );
+    expect(pretty(result.defs.get("vext")!.term.type)).toBe(
+      "(ΠA:★ (Πn:Nat (Πhead:A (Πtail:Vect(A,n) Vect(A,succ(n))))))"
+    );
+    expect(pretty(result.defs.get("vext")!.term.term)).toBe(
+      "λA λn λhead λtail λP λvnil λvext vext(n,head,tail)"
+    );
+  });
+
+  test("should construct values of a type with a parameter and an index", () => {
+    const result = build(
+      vect +
+        `func v2 : Vect(Bool, 2) = vext(Bool, 1, false, vext(Bool, 0, true, vnil(Bool)))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should reject values with the wrong parameter", () => {
+    const result = build(
+      vect + `func v1 : Vect(Nat, 1) = vext(Bool, 0, true, vnil(Bool))`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+  });
+
+  test("should allow case on a type with a parameter and an index", () => {
+    // The head of the vector has the parameter type, so vhead only checks if
+    // A is treated as a parameter rather than an index.
+    const result = build(
+      vect +
+        `func vhead : (A:*) -> (n:Nat) -> (xs:Vect(A, succ(n))) -> (d:A) -> A = λA λn λxs λd case xs of
+  | vnil => d
+  | vext => xs.head
+func one : Nat = vhead(Nat, 0, vext(Nat, 0, 1, vnil(Nat)), 0)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    expect(pretty(result.defs.get("vhead")!.term.term)).toBe(
+      "λA λn λxs λd xs(λ λ A,d,λxs.n λxs.head λxs.tail xs.head)"
+    );
+  });
+
+  test("should allow recursion over a type with a parameter and an index", () => {
+    const result = build(
+      vect +
+        `func add:Nat->Nat->Nat = λn λm case n of
+  | zero => m
+  | succ => succ(add(n.x,m))
+func vappend : (A:*) -> (n:Nat) -> (m:Nat) -> (xs:Vect(A,n)) -> (ys:Vect(A,m)) -> Vect(A,add(n,m)) = λA λn λm λxs λys case xs of
+  | vnil => ys
+  | vext => vext(A, add(xs.n, m), xs.head, vappend(A, xs.n, m, xs.tail, ys))`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+  });
+
+  test("should require a return type on every constructor of an indexed type", () => {
+    const result = build(
+      `
+type Nat = zero | succ(x Nat)
+type Foo(n Nat) = a | b : Foo(zero)
+`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+    expect(result.checkerErrors[0].msg).toContain("return type");
+  });
+});
+
+describe("case branch matching", () => {
+  // The eliminator of a type takes one branch per constructor in declaration
+  // order, so the branches of a case statement must be matched to the
+  // constructors by name rather than by the order they were written in.
+  const prelude = `
+type Nat = zero | succ(x Nat)
+type Bool = true | false
+type VectBool(sz Nat) =
+  vnil : VectBool(zero) |
+  vext(n Nat, head Bool, tail VectBool(n)) : VectBool(succ(n))
+type Equal(A *, a A, b A) = refl : Equal(A, a, a)
+`;
+
+  test("branches written in a different order than the constructors are matched by name", () => {
+    const result = build(
+      prelude +
+        `func not : Bool -> Bool = λb case b of
+  | false => true
+  | true => false
+func pf : Equal(Bool, not(true), false) = refl(Bool, false)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    // Bool = true | false, so the true branch comes first in the eliminator.
+    expect(pretty(result.defs.get("not")!.term.term)).toBe(
+      "λb b(λ Bool,false,true)"
+    );
+  });
+
+  test("branches with constructor arguments follow their constructor when reordered", () => {
+    const result = build(
+      prelude +
+        `func isEmpty : (n:Nat) -> (xs:VectBool(n)) -> Bool = λn λxs case xs of
+  | vext => false
+  | vnil => true`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    expect(pretty(result.defs.get("isEmpty")!.term.term)).toBe(
+      "λn λxs xs(λ λ Bool,true,λxs.n λxs.head λxs.tail false)"
+    );
+  });
+
+  test("a duplicated branch is an error at the duplicate", () => {
+    const src =
+      prelude +
+      `func f : Bool -> Bool = λb case b of
+  | true => false
+  | true => true`;
+    const result = build(src, false);
+    expect(result.checkerErrors).toHaveLength(1);
+    expect(result.checkerErrors[0].msg).toBe(
+      "duplicate branch for constructor true"
+    );
+    // The error points at the second `true`.
+    expect(src.slice(result.checkerErrors[0].start, result.checkerErrors[0].end)).toBe("true");
+    expect(result.checkerErrors[0].start).toBe(src.lastIndexOf("true =>"));
+  });
+
+  test("a missing branch is an error naming the missing constructor", () => {
+    const result = build(
+      prelude +
+        `func f : Bool -> Bool = λb case b of
+  | true => false`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+    expect(result.checkerErrors[0].msg).toBe(
+      "case statement doesn't handle all cases: missing false"
+    );
+  });
+
+  test("a branch for an unknown constructor is an error at the branch", () => {
+    const src =
+      prelude +
+      `func f : Bool -> Bool = λb case b of
+  | true => false
+  | maybe => true`;
+    const result = build(src, false);
+    expect(result.checkerErrors).toHaveLength(1);
+    expect(result.checkerErrors[0].msg).toBe("constructor not found: maybe");
+    expect(src.slice(result.checkerErrors[0].start, result.checkerErrors[0].end)).toBe("maybe");
   });
 });

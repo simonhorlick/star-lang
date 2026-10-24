@@ -10,7 +10,7 @@ import {
   Def2,
   Origin2,
 } from "./ast";
-import { TypecheckError, fill, infer } from "./typecheck";
+import { TypecheckError, check, fill, infer } from "./typecheck";
 import { foldTreeCtx, typecheckErrorDiagnostic } from "./inspect";
 import { pretty } from "./pretty";
 import { processADTs, desugar } from "./adts";
@@ -59,8 +59,10 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     adts.set(identifier2str(adt.name), adt);
   }
 
+  let checkerErrors: TypecheckError[] = [];
+
   // generate syntax nodes for ADTs, etc
-  const f = processADTs(t.value);
+  const f = processADTs(t.value, checkerErrors);
 
   // desugar each definition, keeping track of Origin nodes so we can assign
   // origins to the defs.
@@ -90,17 +92,22 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
     defsMap.set(def.name, def);
   }
 
-  let checkerErrors: TypecheckError[] = [];
   for (const def of defs) {
-    console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
+    // console.log(`\n# checking definition ${def.name}: ${pretty(def.term)}`);
+    let checks = true;
     try {
       const result = infer(defsMap, adts, [], def.term, 0, src.length);
       const filled = fill(result);
       if (filled.term._ != "ann") {
         throw "expected annotated term for definition body";
       }
-      checkedMap.set(def.name, Def2(def.name, filled.term, def.start, def.end));
+      const checkedDef = Def2(def.name, filled.term, def.start, def.end);
+      checkedMap.set(def.name, checkedDef);
+      // Update defsMap with the checked/desugared version so that subsequent
+      // definitions can reduce this one during type-checking.
+      defsMap.set(def.name, checkedDef);
     } catch (e) {
+      checks = false;
       if ((e as any)._ !== undefined) {
         const result = e as TypecheckError;
         console.error(typecheckErrorDiagnostic(src, result));
@@ -113,6 +120,7 @@ export const build = (src: string, stripDefs: boolean = false): BuildResult => {
       // information when inspecting.
       checkedMap.set(def.name, Def2(def.name, def.term, def.start, def.end));
     }
+    console.log(checks ? `✅ ${def.name}` : `❌ ${def.name}`);
   }
 
   const parseErrors: TypecheckError[] = [];

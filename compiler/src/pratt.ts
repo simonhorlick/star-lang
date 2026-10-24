@@ -986,62 +986,72 @@ export const expression =
       };
     }
 
+    let acc: Result<Expression>;
+
     let quo = char(`"`)(s);
     if (quo._ != "parseerror") {
       // resume parsing from the `"`.
-      return stringLiteral(s);
-    }
+      const strResult = stringLiteral(s);
+      if (strResult._ == "parseerror") {
+        return strResult;
+      }
+      acc = strResult;
+    } else {
+      // Peek for an opening square bracket.
+      let lst = char("[")(s);
+      if (lst._ != "parseerror") {
+        // resume parsing from the `[`.
+        const listResult = listLiteral(s);
+        if (listResult._ == "parseerror") {
+          return listResult;
+        }
+        acc = listResult;
+      } else {
+        // a case destructuring `case x of ...`
+        let cse = str("case")(s);
+        if (cse._ != "parseerror") {
+          return caseStatement(s);
+        }
 
-    // Peek for an opening square bracket.
-    let lst = char("[")(s);
-    if (lst._ != "parseerror") {
-      // resume parsing from the `[`.
-      return listLiteral(s);
-    }
+        // a let statement `let x = ... in ...`
+        let lt = str("let")(s);
+        if (lt._ != "parseerror") {
+          return letStatement(s);
+        }
 
-    // a case destructuring `case x of ...`
-    let cse = str("case")(s);
-    if (cse._ != "parseerror") {
-      return caseStatement(s);
-    }
+        // if-then-else statement `if x then y else z`
+        let cond = str("if")(s);
+        if (cond._ != "parseerror") {
+          return ifStatement(s);
+        }
 
-    // a let statement `let x = ... in ...`
-    let lt = str("let")(s);
-    if (lt._ != "parseerror") {
-      return letStatement(s);
-    }
+        // TODO: remove from user-facing syntax
+        // abstraction `λx t`
+        let abs = str("λ")(s);
+        if (abs._ != "parseerror") {
+          return abstraction(s);
+        }
 
-    // if-then-else statement `if x then y else z`
-    let cond = str("if")(s);
-    if (cond._ != "parseerror") {
-      return ifStatement(s);
-    }
+        // TODO: remove from user-facing syntax
+        // self-type `ιx t`
+        let slf = str("ι")(s);
+        if (slf._ != "parseerror") {
+          return self(s);
+        }
 
-    // TODO: remove from user-facing syntax
-    // abstraction `λx t`
-    let abs = str("λ")(s);
-    if (abs._ != "parseerror") {
-      return abstraction(s);
-    }
-
-    // TODO: remove from user-facing syntax
-    // self-type `ιx t`
-    let slf = str("ι")(s);
-    if (slf._ != "parseerror") {
-      return self(s);
-    }
-
-    let acc: Result<Expression> = any5(
-      parenthesis(spc(expression(0))),
-      star,
-      integerLiteral,
-      reference,
-      // if nothing parses then skip past these characters and present a
-      // ParseError AST node.
-      resync2("expected term")
-    )(s);
-    if (acc._ == "parseerror") {
-      return acc;
+        acc = any5(
+          parenthesis(spc(expression(0))),
+          star,
+          integerLiteral,
+          reference,
+          // if nothing parses then skip past these characters and present a
+          // ParseError AST node.
+          resync2("expected term")
+        )(s);
+        if (acc._ == "parseerror") {
+          return acc;
+        }
+      }
     }
 
     // Now parse many `op a op b op c ...`

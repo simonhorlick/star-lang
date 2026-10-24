@@ -20,8 +20,8 @@ export const fls = desugar(
   Def(
     "false",
     Ann(
-      GenerateConstructorTerm([], boolConstructors, 0),
-      GenerateConstructorType("Bool", [], boolConstructors[0])
+      GenerateConstructorTerm(boolADT, 0),
+      GenerateConstructorType(boolADT, 0)
     )
   )
 );
@@ -30,8 +30,8 @@ export const tru = desugar(
   Def(
     "true",
     Ann(
-      GenerateConstructorTerm([], boolConstructors, 1),
-      GenerateConstructorType("Bool", [], boolConstructors[1])
+      GenerateConstructorTerm(boolADT, 1),
+      GenerateConstructorType(boolADT, 1)
     )
   )
 );
@@ -48,8 +48,8 @@ export const unt = desugar(
   Def(
     "unit",
     Ann(
-      GenerateConstructorTerm([], unitConstructors, 0),
-      GenerateConstructorType("Unit", [], unitConstructors[0])
+      GenerateConstructorTerm(unitADT, 0),
+      GenerateConstructorType(unitADT, 0)
     )
   )
 );
@@ -71,8 +71,8 @@ export const zero = desugar(
   Def(
     "zero",
     Ann(
-      GenerateConstructorTerm([], natConstructors, 0),
-      GenerateConstructorType("Nat", [], natConstructors[0])
+      GenerateConstructorTerm(natADT, 0),
+      GenerateConstructorType(natADT, 0)
     )
   )
 );
@@ -81,8 +81,8 @@ export const succ = desugar(
   Def(
     "succ",
     Ann(
-      GenerateConstructorTerm([], natConstructors, 1),
-      GenerateConstructorType("Nat", [], natConstructors[1])
+      GenerateConstructorTerm(natADT, 1),
+      GenerateConstructorType(natADT, 1)
     )
   )
 );
@@ -115,8 +115,8 @@ export const nil = desugar(
   Def(
     "nil",
     Ann(
-      GenerateConstructorTerm(listParams, listConstructors, 0),
-      GenerateConstructorType("List", listParams, listConstructors[0])
+      GenerateConstructorTerm(listADT, 0),
+      GenerateConstructorType(listADT, 0)
     )
   )
 );
@@ -125,8 +125,8 @@ export const cons = desugar(
   Def(
     "cons",
     Ann(
-      GenerateConstructorTerm(listParams, listConstructors, 1),
-      GenerateConstructorType("List", listParams, listConstructors[1])
+      GenerateConstructorTerm(listADT, 1),
+      GenerateConstructorType(listADT, 1)
     )
   )
 );
@@ -159,8 +159,8 @@ export const mnull = desugar(
   Def(
     "null",
     Ann(
-      GenerateConstructorTerm(maybeParams, maybeConstructors, 0),
-      GenerateConstructorType("Maybe", maybeParams, maybeConstructors[0])
+      GenerateConstructorTerm(maybeADT, 0),
+      GenerateConstructorType(maybeADT, 0)
     )
   )
 );
@@ -169,8 +169,8 @@ export const just = desugar(
   Def(
     "just",
     Ann(
-      GenerateConstructorTerm(maybeParams, maybeConstructors, 1),
-      GenerateConstructorType("Maybe", maybeParams, maybeConstructors[1])
+      GenerateConstructorTerm(maybeADT, 1),
+      GenerateConstructorType(maybeADT, 1)
     )
   )
 );
@@ -204,8 +204,66 @@ export const ppair = desugar(
   Def(
     "pair",
     Ann(
-      GenerateConstructorTerm(pairParams, pairConstructors, 0),
-      GenerateConstructorType("Pair", pairParams, pairConstructors[0])
+      GenerateConstructorTerm(pairADT, 0),
+      GenerateConstructorType(pairADT, 0)
+    )
+  )
+);
+
+const vectBoolParams = [{ name: "sz", type: Ref("Nat") }];
+
+const vectBoolConstructors: Constructor[] = [
+  {
+    name: Identifier("vbnil"),
+    args: [],
+    // vbnil : VectBool(zero)
+    typ: App(Ref("VectBool"), Ref("zero")),
+  },
+  {
+    name: Identifier("vbext"),
+    args: [
+      {
+        name: "n",
+        type: Ref("Nat"),
+      },
+      {
+        name: "head",
+        type: Ref("Bool"),
+      },
+      {
+        name: "tail",
+        type: App(Ref("VectBool"), Par("n")),
+      },
+    ],
+    // vbext : (n:Nat) -> (head:Bool) -> (tail:VectBool(n)) -> VectBool(succ(n))
+    typ: App(Ref("VectBool"), App(Ref("succ"), Par("n"))),
+  },
+];
+
+export const vectBoolADT = ADT(
+  Identifier("VectBool"),
+  vectBoolParams,
+  vectBoolConstructors
+);
+
+export const vectBool = desugar(buildType(vectBoolADT));
+
+export const vbnil = desugar(
+  Def(
+    "vbnil",
+    Ann(
+      GenerateConstructorTerm(vectBoolADT, 0),
+      GenerateConstructorType(vectBoolADT, 0)
+    )
+  )
+);
+
+export const vbext = desugar(
+  Def(
+    "vbext",
+    Ann(
+      GenerateConstructorTerm(vectBoolADT, 1),
+      GenerateConstructorType(vectBoolADT, 1)
     )
   )
 );

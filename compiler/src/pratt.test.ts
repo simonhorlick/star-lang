@@ -208,6 +208,19 @@ describe("pratt", () => {
       `Cons(IntLit(1), Cons(IntLit(2), Cons(IntLit(3), Nil())))`
     ));
 
+  test("should parse list concatenation operator", () => {
+    const src = "[1,2,3] ++ [4,5,6]";
+    const t = term({ src, idx: 0 });
+    if (t._ == "parseerror") {
+      throw parseErrorDiagnostic(t);
+    }
+    // Expect the parser to consume the entire input
+    expect(t.stream.idx).toBe(src.length);
+    expect(st(src)).toBe(
+      `Cat(Cons(IntLit(1), Cons(IntLit(2), Cons(IntLit(3), Nil()))), Cons(IntLit(4), Cons(IntLit(5), Cons(IntLit(6), Nil()))))`
+    );
+  });
+
   test("should parse arrow", () =>
     expect(st("A->B")).toBe(`Pi("", Ref("A"), Ref("B"))`));
 

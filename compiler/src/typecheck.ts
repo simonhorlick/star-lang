@@ -20,18 +20,20 @@ import {
   CTerm,
   strip,
   fixupRefs,
+  Var,
   Branch,
-  Self,
-  Let,
-  ParseError,
 } from "./sugar";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
-import { shift, substHole, substTop } from "./substitution";
+import { shift, substHole, substTop, subst } from "./substitution";
 import { Set } from "immutable";
-import { ADT, Argument, Constructor, Def, Def2 } from "./ast";
+import { ADT, Argument, Def2, classifyParams } from "./ast";
 import { identifier2str } from "./pratt";
+
+import { createLogger } from "./logger";
+
+const logger = createLogger("typecheck");
 
 type Term = CTerm;
 type Type = CTerm;
@@ -158,10 +160,10 @@ export const infer = (
       // substitute the argument into the pi to get the type.
       let typ = substTop(arg.term, funcTyp2.body, funcTyp2.name);
 
-      console.log(`Γ ⊢ ${pretty(term.func)} => ${pretty(funcTyp2)}`);
-      console.log(`Γ ⊢ ${pretty(term.arg)} <= ${pretty(funcTyp2.from)}`);
-      console.log(`------------------- app`);
-      console.log(`Γ ⊢ ${pretty(term)} => ${pretty(typ)}`);
+      logger.debug(`Γ ⊢ ${pretty(term.func)} => ${pretty(funcTyp2)}`);
+      logger.debug(`Γ ⊢ ${pretty(term.arg)} <= ${pretty(funcTyp2.from)}`);
+      logger.debug(`------------------- app`);
+      logger.debug(`Γ ⊢ ${pretty(term)} => ${pretty(typ)}`);
 
       return Result(App(inf.term, arg.term), typ, arg.holes.concat(inf.holes));
     }
@@ -335,9 +337,9 @@ export const check = (
   const pval = pretty(val);
   const ptty = pretty(tty);
   const pctx = printCtx(ctx);
-  console.log(`cx ${pctx}`);
-  console.log(`ch ${pval}`);
-  console.log(`<= ${ptty}`);
+  logger.debug(`cx ${pctx}`);
+  logger.debug(`ch ${pval}`);
+  logger.debug(`<= ${ptty}`);
 
   // Desugar let expressions.
   if (val._ == "let") {
@@ -461,15 +463,6 @@ export const check = (
   }
 };
 
-const findConstructor = (name: string, adt: ADT, os: number, oe: number) => {
-  for (const con of adt.constructors) {
-    if (identifier2str(con.name) == name) {
-      return con;
-    }
-  }
-  throw TypecheckError(`constructor not found: ${name}`, os, oe);
-};
-
 // The case statement is used for destructuring ADTs. Syntactically, we
 // specify what should happen for every constructor, then when the statement
 // is evaluated one of the branches is picked.
@@ -537,24 +530,50 @@ export const desugarCaseStatement = (
     throw TypecheckError(`type not found: ${ref.name}`, os, oe);
   }
 
-  // Ensure all branches are covered.
-  if (caseStmt.branches.length < adtDef.constructors.length) {
-    throw TypecheckError(`case statement doesn't handle all cases`, os, oe);
-  } else if (caseStmt.branches.length > adtDef.constructors.length) {
-    throw TypecheckError(`case statement has too many cases`, os, oe);
+  // Match each branch to its constructor by name. The eliminator takes one
+  // branch per constructor in declaration order, so the branches are emitted
+  // in that order however they were written in the source. Matching by
+  // position would silently pair a branch with the wrong constructor, so
+  // `case b of | false => true | true => false` would compile to the identity.
+  const branchOrigin = (branch: Branch) =>
+    branch.constructor._ == "orig"
+      ? { start: branch.constructor.start, end: branch.constructor.end }
+      : { start: os, end: oe };
+
+  const branchFor = new Map<string, Branch>();
+  for (const branch of caseStmt.branches) {
+    const name = identifier2str(branch.constructor);
+    const { start, end } = branchOrigin(branch);
+    if (!adtDef.constructors.some((con) => identifier2str(con.name) == name)) {
+      throw TypecheckError(`constructor not found: ${name}`, start, end);
+    }
+    if (branchFor.has(name)) {
+      throw TypecheckError(
+        `duplicate branch for constructor ${name}`,
+        start,
+        end
+      );
+    }
+    branchFor.set(name, branch);
+  }
+
+  const missing = adtDef.constructors
+    .map((con) => identifier2str(con.name))
+    .filter((name) => !branchFor.has(name));
+  if (missing.length > 0) {
+    throw TypecheckError(
+      `case statement doesn't handle all cases: missing ${missing.join(", ")}`,
+      os,
+      oe
+    );
   }
 
   const caseName = pretty(caseStmt.name);
 
   // Desugar each branch of the case statement and emit lambdas for the
   // constructor arguments.
-  const branches = caseStmt.branches.map((branch) => {
-    var constructor: Constructor | undefined = findConstructor(
-      identifier2str(branch.constructor),
-      adtDef,
-      os,
-      oe
-    );
+  const branches = adtDef.constructors.map((constructor) => {
+    const branch = branchFor.get(identifier2str(constructor.name))!;
 
     // Make constructor arguments available on each branch. Any free Vars inside
     // the branch term must be bumped as we add these Abs nodes to the tree.
@@ -583,9 +602,58 @@ export const desugarCaseStatement = (
   // The case statement desugars to
   //  val(λP tty)(λval.arg1 ... λval.argN branch1)...(λval.arg1 ... λval.argN branchN)
 
-  // Leave this binder empty so that dependently typed expressions don't
-  // throw binder mismatch errors.
-  const P = Abs("", shift(0, 0, tty)); // P just returns the expected type
+  // Create the motive function P.
+  // For dependent pattern matching (when scrutinee is a variable that appears in tty),
+  // P should substitute its argument for the scrutinee variable.
+  // For non-dependent cases, P just returns the expected type.
+
+  // Strip origin/syntax/label nodes to check the actual term structure
+  const strippedName = strip(caseStmt.name);
+
+  // For indexed types the motive also abstracts over each index of the type,
+  // as the type of the motive is (Πi:I (Πx:T(p,i) ★)) where p are the
+  // parameters of the type and i its indices (see classifyParams). The index
+  // arguments are taken from the type of the scrutinee, i.e. for
+  // xs:Vect(Bool,n) the index argument is n.
+  //
+  //   P = λi1 ... λik λx. tty[scrutinee := x, n1 := i1, ..., nk := ik]
+  //
+  // Only indices that are plain variables are substituted. If the index is a
+  // more complex expression, such as succ(n), then the motive is constant in
+  // that index.
+  const isIndex = classifyParams(adtDef).isIndex;
+  const indexArgs = getTypeArguments(xTyp.type).filter((_, i) => isIndex[i]);
+  const k = indexArgs.length;
+
+  // The motive binds k index variables followed by the scrutinee variable, so
+  // inside the motive body every free variable of tty is shifted up by k+1.
+  let body = shift(k + 1, 0, tty);
+
+  if (strippedName._ === "var") {
+    // Dependent pattern matching: substitute the scrutinee variable by the
+    // motive's own argument (Var 0).
+    body = subst(
+      strippedName.index + k + 1,
+      Var(strippedName.name, 0),
+      0,
+      body,
+      strippedName.name
+    );
+  }
+
+  // Substitute each index variable by the corresponding motive argument. The
+  // j-th index (from the left) is bound by the j-th lambda so has de Bruijn
+  // index k-j inside the body.
+  indexArgs.forEach((index, j) => {
+    const idx = strip(index);
+    if (idx._ !== "var") return;
+    body = subst(idx.index + k + 1, Var(idx.name, k - j), 0, body, idx.name);
+  });
+
+  const P: Term = indexArgs.reduceRight<Term>(
+    (acc) => Abs("", acc),
+    Abs("", body)
+  );
 
   const desugared = branches.reduce<Term>((acc: Term, branch) => {
     return App(acc, branch);
@@ -593,6 +661,17 @@ export const desugarCaseStatement = (
 
   return check(defs, adts, ctx, desugared, tty, os, oe);
 };
+
+// given an ast of the form App(App(App(X,y),z),w) return the arguments [y,z,w].
+function getTypeArguments(t: Term): Term[] {
+  const s = strip(t);
+  switch (s._) {
+    case "app":
+      return getTypeArguments(s.func).concat([s.arg]);
+    default:
+      return [];
+  }
+}
 
 // given an ast of the form App(App(App(X,y),z),w) return the leftmost ref X.
 function getTypeNameFromTypeConstructor(t: Term): Ref {
@@ -722,11 +801,21 @@ export const equate = (
   checking: Set<string> = Set()
 ): { eq: boolean; holes: Array<{ id: number; term: Term }> } => {
   // Ignore origins.
-  if (ty1._ == "orig" || ty1._ == "syn") {
+  if (ty1._ == "orig" || ty1._ == "syn" || ty1._ == "label") {
     return equate(ctx, defs, ty1.child, ty2, val, depth + 1, checking);
   }
-  if (ty2._ == "orig" || ty2._ == "syn") {
+  if (ty2._ == "orig" || ty2._ == "syn" || ty2._ == "label") {
     return equate(ctx, defs, ty1, ty2.child, val, depth + 1, checking);
+  }
+  // Ignore annotations (the checker wraps every lambda it has checked in an
+  // Ann node). Comparing the annotated term directly avoids a spurious cycle
+  // detection below, as stripping an annotation doesn't change the printed
+  // form of the term.
+  if (ty1._ == "ann") {
+    return equate(ctx, defs, ty1.term, ty2, val, depth + 1, checking);
+  }
+  if (ty2._ == "ann") {
+    return equate(ctx, defs, ty1, ty2.term, val, depth + 1, checking);
   }
 
   if (aeq(ty1, ty2)) {
@@ -736,8 +825,8 @@ export const equate = (
   const lhs = pretty(ty1);
   const rhs = pretty(ty2);
   if (verbose) {
-    console.log(`eq ${lhs}`);
-    console.log(`== ${rhs}`);
+    logger.debug(`eq ${lhs}`);
+    logger.debug(`== ${rhs}`);
   }
 
   // FIXME: There must be a better way of doing this.
@@ -783,14 +872,14 @@ export const equate = (
   } else if (ty1._ == "hole") {
     // Assume the hole is valid, if it's not the typecheck will fail after the
     // hole substitution.
-    console.log(`ho ${ty1.id}`);
-    console.log(`== ${rhs}`);
+    logger.debug(`ho ${ty1.id}`);
+    logger.debug(`== ${rhs}`);
     // It's important that we return the non-reduced term here, otherwise the
     // hole filling will resolve some long term the user isn't expecting.
     return { eq: true, holes: [{ id: ty1.id, term: ty2 }] };
   } else if (ty2._ == "hole") {
-    console.log(`ho ${ty2.id}`);
-    console.log(`== ${lhs}`);
+    logger.debug(`ho ${ty2.id}`);
+    logger.debug(`== ${lhs}`);
     return { eq: true, holes: [{ id: ty2.id, term: ty1 }] };
   }
 
