@@ -21,13 +21,14 @@ import {
   strip,
   fixupRefs,
   Var,
+  Branch,
 } from "./sugar";
 import { reduce } from "./equal";
 import { pretty, printCtx } from "./pretty";
 import { Context, addTermToCtx as cons, lookupType } from "./context";
 import { shift, substHole, substTop, subst } from "./substitution";
 import { Set } from "immutable";
-import { ADT, Argument, Constructor, Def2, classifyParams } from "./ast";
+import { ADT, Argument, Def2, classifyParams } from "./ast";
 import { identifier2str } from "./pratt";
 
 import { createLogger } from "./logger";
@@ -462,15 +463,6 @@ export const check = (
   }
 };
 
-const findConstructor = (name: string, adt: ADT, os: number, oe: number) => {
-  for (const con of adt.constructors) {
-    if (identifier2str(con.name) == name) {
-      return con;
-    }
-  }
-  throw TypecheckError(`constructor not found: ${name}`, os, oe);
-};
-
 // The case statement is used for destructuring ADTs. Syntactically, we
 // specify what should happen for every constructor, then when the statement
 // is evaluated one of the branches is picked.
@@ -538,24 +530,50 @@ export const desugarCaseStatement = (
     throw TypecheckError(`type not found: ${ref.name}`, os, oe);
   }
 
-  // Ensure all branches are covered.
-  if (caseStmt.branches.length < adtDef.constructors.length) {
-    throw TypecheckError(`case statement doesn't handle all cases`, os, oe);
-  } else if (caseStmt.branches.length > adtDef.constructors.length) {
-    throw TypecheckError(`case statement has too many cases`, os, oe);
+  // Match each branch to its constructor by name. The eliminator takes one
+  // branch per constructor in declaration order, so the branches are emitted
+  // in that order however they were written in the source. Matching by
+  // position would silently pair a branch with the wrong constructor, so
+  // `case b of | false => true | true => false` would compile to the identity.
+  const branchOrigin = (branch: Branch) =>
+    branch.constructor._ == "orig"
+      ? { start: branch.constructor.start, end: branch.constructor.end }
+      : { start: os, end: oe };
+
+  const branchFor = new Map<string, Branch>();
+  for (const branch of caseStmt.branches) {
+    const name = identifier2str(branch.constructor);
+    const { start, end } = branchOrigin(branch);
+    if (!adtDef.constructors.some((con) => identifier2str(con.name) == name)) {
+      throw TypecheckError(`constructor not found: ${name}`, start, end);
+    }
+    if (branchFor.has(name)) {
+      throw TypecheckError(
+        `duplicate branch for constructor ${name}`,
+        start,
+        end
+      );
+    }
+    branchFor.set(name, branch);
+  }
+
+  const missing = adtDef.constructors
+    .map((con) => identifier2str(con.name))
+    .filter((name) => !branchFor.has(name));
+  if (missing.length > 0) {
+    throw TypecheckError(
+      `case statement doesn't handle all cases: missing ${missing.join(", ")}`,
+      os,
+      oe
+    );
   }
 
   const caseName = pretty(caseStmt.name);
 
   // Desugar each branch of the case statement and emit lambdas for the
   // constructor arguments.
-  const branches = caseStmt.branches.map((branch) => {
-    var constructor: Constructor | undefined = findConstructor(
-      identifier2str(branch.constructor),
-      adtDef,
-      os,
-      oe
-    );
+  const branches = adtDef.constructors.map((constructor) => {
+    const branch = branchFor.get(identifier2str(constructor.name))!;
 
     // Make constructor arguments available on each branch. Any free Vars inside
     // the branch term must be bumped as we add these Abs nodes to the tree.

@@ -1542,3 +1542,88 @@ type Foo(n Nat) = a | b : Foo(zero)
     expect(result.checkerErrors[0].msg).toContain("return type");
   });
 });
+
+describe("case branch matching", () => {
+  // The eliminator of a type takes one branch per constructor in declaration
+  // order, so the branches of a case statement must be matched to the
+  // constructors by name rather than by the order they were written in.
+  const prelude = `
+type Nat = zero | succ(x Nat)
+type Bool = true | false
+type VectBool(sz Nat) =
+  vnil : VectBool(zero) |
+  vext(n Nat, head Bool, tail VectBool(n)) : VectBool(succ(n))
+type Equal(A *, a A, b A) = refl : Equal(A, a, a)
+`;
+
+  test("branches written in a different order than the constructors are matched by name", () => {
+    const result = build(
+      prelude +
+        `func not : Bool -> Bool = λb case b of
+  | false => true
+  | true => false
+func pf : Equal(Bool, not(true), false) = refl(Bool, false)`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    // Bool = true | false, so the true branch comes first in the eliminator.
+    expect(pretty(result.defs.get("not")!.term.term)).toBe(
+      "λb b(λ Bool,false,true)"
+    );
+  });
+
+  test("branches with constructor arguments follow their constructor when reordered", () => {
+    const result = build(
+      prelude +
+        `func isEmpty : (n:Nat) -> (xs:VectBool(n)) -> Bool = λn λxs case xs of
+  | vext => false
+  | vnil => true`,
+      false
+    );
+    expect(result.checkerErrors).toEqual([]);
+    expect(pretty(result.defs.get("isEmpty")!.term.term)).toBe(
+      "λn λxs xs(λ λ Bool,true,λxs.n λxs.head λxs.tail false)"
+    );
+  });
+
+  test("a duplicated branch is an error at the duplicate", () => {
+    const src =
+      prelude +
+      `func f : Bool -> Bool = λb case b of
+  | true => false
+  | true => true`;
+    const result = build(src, false);
+    expect(result.checkerErrors).toHaveLength(1);
+    expect(result.checkerErrors[0].msg).toBe(
+      "duplicate branch for constructor true"
+    );
+    // The error points at the second `true`.
+    expect(src.slice(result.checkerErrors[0].start, result.checkerErrors[0].end)).toBe("true");
+    expect(result.checkerErrors[0].start).toBe(src.lastIndexOf("true =>"));
+  });
+
+  test("a missing branch is an error naming the missing constructor", () => {
+    const result = build(
+      prelude +
+        `func f : Bool -> Bool = λb case b of
+  | true => false`,
+      false
+    );
+    expect(result.checkerErrors).toHaveLength(1);
+    expect(result.checkerErrors[0].msg).toBe(
+      "case statement doesn't handle all cases: missing false"
+    );
+  });
+
+  test("a branch for an unknown constructor is an error at the branch", () => {
+    const src =
+      prelude +
+      `func f : Bool -> Bool = λb case b of
+  | true => false
+  | maybe => true`;
+    const result = build(src, false);
+    expect(result.checkerErrors).toHaveLength(1);
+    expect(result.checkerErrors[0].msg).toBe("constructor not found: maybe");
+    expect(src.slice(result.checkerErrors[0].start, result.checkerErrors[0].end)).toBe("maybe");
+  });
+});

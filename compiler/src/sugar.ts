@@ -127,7 +127,7 @@ export const Identifier = (name: string): Identifier => ({
   name: name,
 });
 
-type Branch = {
+export type Branch = {
   constructor: Identifier | Origin;
   term: CTerm;
 };

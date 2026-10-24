@@ -147,6 +147,8 @@ case x of
   b => z
 ↑
 case destructuring
+branches are matched to constructors by name, so they may be written in any
+order; every constructor must have exactly one branch.
 ```
 
 ```
